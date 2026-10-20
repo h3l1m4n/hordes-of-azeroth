@@ -1,0 +1,135 @@
+<Window x:Class="HordesOfAzeroth.Launcher.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Hordes of Azeroth"
+        Width="1280" Height="752" MinWidth="960" MinHeight="600"
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource Background}"
+        Foreground="{StaticResource Text}"
+        FontFamily="Segoe UI"
+        UseLayoutRounding="True"
+        TextOptions.TextFormattingMode="Display">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="104" />
+        </Grid.RowDefinitions>
+
+        <Grid ClipToBounds="True">
+            <Rectangle>
+                <Rectangle.Fill>
+                    <RadialGradientBrush Center="0.6,0.55" GradientOrigin="0.6,0.55" RadiusX="0.8" RadiusY="0.9">
+                        <GradientStop Color="#5A1E10" Offset="0" />
+                        <GradientStop Color="#2A0F0B" Offset="0.55" />
+                        <GradientStop Color="#110C0C" Offset="1" />
+                    </RadialGradientBrush>
+                </Rectangle.Fill>
+            </Rectangle>
+            <Image x:Name="Art" Stretch="UniformToFill" HorizontalAlignment="Center" VerticalAlignment="Center" />
+            <Rectangle>
+                <Rectangle.Fill>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                        <GradientStop Color="#B8000000" Offset="0" />
+                        <GradientStop Color="#1A000000" Offset="0.42" />
+                        <GradientStop Color="#1A000000" Offset="0.6" />
+                        <GradientStop Color="#99000000" Offset="1" />
+                    </LinearGradientBrush>
+                </Rectangle.Fill>
+            </Rectangle>
+
+            <StackPanel Margin="36,30,0,0" HorizontalAlignment="Left" VerticalAlignment="Top">
+                <TextBlock x:Name="TitleText" Text="Hordes of Azeroth" FontSize="46" Foreground="#FFD100">
+                    <TextBlock.Effect>
+                        <DropShadowEffect Color="#000000" BlurRadius="6" ShadowDepth="2" Opacity="0.95" />
+                    </TextBlock.Effect>
+                </TextBlock>
+                <TextBlock x:Name="Tagline" Text="Survive the horde. As long as you can." FontSize="13" Foreground="#EADBB4" Margin="4,2,0,0">
+                    <TextBlock.Effect>
+                        <DropShadowEffect Color="#000000" BlurRadius="2" ShadowDepth="1" Opacity="1" />
+                    </TextBlock.Effect>
+                </TextBlock>
+            </StackPanel>
+
+            <Border Width="396" Margin="0,24,24,24" HorizontalAlignment="Right" VerticalAlignment="Top"
+                    Background="{StaticResource Card}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="6">
+                <DockPanel MaxHeight="560">
+                    <Border x:Name="NotesPager" DockPanel.Dock="Bottom" Visibility="Collapsed"
+                            BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0">
+                        <Grid Margin="8,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <Button x:Name="OlderNotes" Grid.Column="0" Style="{StaticResource PagerButton}" Click="OlderNotes_Click"
+                                    Content="‹  Older" ToolTip="Earlier patch notes" />
+                            <TextBlock x:Name="NotePageText" Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       FontSize="12" Foreground="{StaticResource Muted}" />
+                            <Button x:Name="NewerNotes" Grid.Column="2" Style="{StaticResource PagerButton}" Click="NewerNotes_Click"
+                                    Content="Newer  ›" ToolTip="Later patch notes" />
+                        </Grid>
+                    </Border>
+                    <ScrollViewer x:Name="NotesScroll" VerticalScrollBarVisibility="Auto" Style="{StaticResource OverlayScroll}">
+                        <StackPanel x:Name="NotesPanel" Margin="20,18,20,18" />
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+        </Grid>
+
+        <Border Grid.Row="1" Background="{StaticResource Bar}" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Margin="36,20,36,0">
+                    <TextBlock FontSize="14">
+                        <Ellipse x:Name="StatusDot" Width="8" Height="8" Fill="{StaticResource Ok}" Margin="0,0,7,1" Visibility="Collapsed" />
+                        <Run x:Name="StatusText" FontWeight="SemiBold" />
+                        <Run x:Name="StatusDetail" FontSize="12" Foreground="{StaticResource Muted}" />
+                    </TextBlock>
+                    <ProgressBar x:Name="Progress" Visibility="Hidden" Style="{StaticResource ThinProgress}" Margin="0,11,0,0" HorizontalAlignment="Stretch" Minimum="0" Maximum="1" Value="0" />
+                    <TextBlock FontSize="12" Foreground="{StaticResource Muted}" Margin="0,12,0,0">
+                        <Run x:Name="InstalledText" />
+                        <Run Text="  ·  " />
+                        <Hyperlink Style="{StaticResource BarLink}" Click="CheckForUpdates_Click">Check for updates</Hyperlink>
+                        <Run Text="  ·  " />
+                        <Hyperlink Style="{StaticResource BarLink}" Click="OpenGameFolder_Click">Open game folder</Hyperlink>
+                        <Run Text="  ·  " />
+                        <Hyperlink Style="{StaticResource BarLink}" Click="ReportBug_Click" ToolTip="Saves a zip of your logs on the desktop and opens the bug report form. Attach the zip to your report.">Report a bug</Hyperlink>
+                    </TextBlock>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="0,22,36,0" VerticalAlignment="Top">
+                    <Button x:Name="DiscordButton" Style="{StaticResource DiscordButton}" Width="58" Height="58" Margin="0,0,10,0" Click="Discord_Click" ToolTip="Join the Hordes of Azeroth Discord">
+                        <Viewbox Width="28" Height="28">
+                            <Path Fill="White" Data="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z" />
+                        </Viewbox>
+                    </Button>
+                    <Button x:Name="PrimaryButton" Style="{StaticResource PrimaryButton}" Width="250" Height="58" Content="Play" Click="PrimaryButton_Click" />
+                    <Button x:Name="MoreButton" Style="{StaticResource MoreButton}" Width="46" Height="58" Margin="6,0,0,0" Click="MoreButton_Click">
+                        <Canvas Width="20" Height="4">
+                            <Ellipse Width="4" Height="4" Canvas.Left="0" Fill="{StaticResource Text}" />
+                            <Ellipse Width="4" Height="4" Canvas.Left="8" Fill="{StaticResource Text}" />
+                            <Ellipse Width="4" Height="4" Canvas.Left="16" Fill="{StaticResource Text}" />
+                        </Canvas>
+                        <Button.ContextMenu>
+                            <ContextMenu x:Name="OptionsMenu" Placement="Top" Opened="OptionsMenu_Opened" Closed="OptionsMenu_Closed">
+                                <MenuItem Header="GAME WINDOW" IsEnabled="False" FontSize="11" FontWeight="Bold" />
+                                <MenuItem x:Name="WindowedItem" IsCheckable="True" Header="Window, filling the screen" Click="WindowedItem_Click" />
+                                <MenuItem x:Name="FullscreenItem" IsCheckable="True" Header="Fullscreen" Click="FullscreenItem_Click" />
+                                <MenuItem x:Name="WidescreenItem" IsCheckable="True" Header="Widescreen and ultrawide view" Click="WidescreenItem_Click" />
+                                <Separator />
+                                <MenuItem x:Name="BuildItem" IsCheckable="True" Header="Build monster paths while I play" Click="BuildItem_Click" />
+                                <MenuItem x:Name="TrayItem" IsCheckable="True" Header="Keep running in the tray" Click="TrayItem_Click" />
+                                <Separator />
+                                <MenuItem Header="Open logs folder" Click="OpenLogs_Click" />
+                                <MenuItem Header="Save logs to the desktop" Click="SaveLogs_Click" />
+                            </ContextMenu>
+                        </Button.ContextMenu>
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>
+

@@ -1,0 +1,56 @@
+# Whitelist repo: everything is ignored unless explicitly un-ignored below.
+# Base game files (WoW.exe, Data/*.MPQ, WTF/, WDB/, Logs/, ...) never get tracked.
+/*
+
+# Repo metadata
+!/.gitignore
+!/README.md
+!/BUILDING.md
+!/LICENSE
+!/THIRD-PARTY-NOTICES.md
+!/.github/
+!/VERSION
+!/CHANGELOG.md
+
+# Addons: ours live here. The client writes Blizzard_*/ key files into the
+# same folder on launch; those are game files.
+!/Interface/
+/Interface/*
+!/Interface/AddOns/
+/Interface/AddOns/Blizzard_*/
+# Disabled test addons (renamed to .off) stay local.
+/Interface/AddOns/*.off/
+# Built from the player's own client art by TelegraphKit (tools/build-telegraphs.ps1).
+/Interface/AddOns/HordesOfAzeroth/Textures/ClassCrests.tga
+/Interface/AddOns/HordesOfAzeroth/Textures/PlayerFrameNoPower.tga
+
+# Our login and hero screens. Only HordesOfAzeroth.exe (tools/patch-client.ps1)
+# loads a modified GlueXML. BonkAccount.lua holds the local login and is
+# written by tools/launch-client.ps1; mangosd writes BonkStats.lua.
+!/Interface/GlueXML/
+/Interface/GlueXML/BonkAccount.lua
+/Interface/GlueXML/BonkStats.lua
+
+# Local server tooling and settings.
+!/tools/
+/tools/telegraphs/bin/
+/tools/clientfix/build/
+/tools/launcher/bin/
+/tools/launcher/obj/
+!/config/
+!/play.bat
+
+# wow_turbo (MIT, github.com/athei/wow-mods): both builds ship with the release;
+# the launcher loads the one the CPU supports.
+!/mods/
+!/stop.bat
+
+# Under /server only the VMaNGOS fork (a submodule) is tracked. The build,
+# MariaDB and extracted client data are generated or third-party.
+!/.gitmodules
+!/server/
+/server/*
+!/server/core
+
+# To track a new top-level project folder, add a line like:
+# !/addon-src/

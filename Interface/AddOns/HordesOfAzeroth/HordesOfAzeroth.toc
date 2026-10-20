@@ -1,0 +1,43 @@
+## Interface: 11200
+## Title: Hordes of Azeroth
+## Notes: Run HUD, level-up choices and map picker for Hordes of Azeroth.
+## Author: jonhaldors
+## Version: 1
+## SavedVariables: VanillaBonkChoiceKeys, VanillaBonkMeterMode, VanillaBonkPerfLog, VanillaBonkTutorialDone, VanillaBonkDashShift, VanillaBonkPlateGuideDone, VanillaBonkControllerSettings, VanillaBonkControllerTipDone, VanillaBonkVendorTip, VanillaBonkGearTabTips, VanillaBonkOptions
+VanillaBonkUI.lua
+VanillaBonk.lua
+VanillaBonkRunMaster.lua
+VanillaBonkBars.lua
+VanillaBonkPlates.lua
+VanillaBonkBoss.lua
+VanillaBonkTracker.lua
+VanillaBonkObjectives.lua
+VanillaBonkMap.lua
+VanillaBonkShrines.lua
+VanillaBonkCards.lua
+VanillaBonkBags.lua
+VanillaBonkVendor.lua
+VanillaBonkGear.lua
+VanillaBonkGearTabs.lua
+VanillaBonkSlots.lua
+VanillaBonkHeroBar.lua
+VanillaBonkMeter.lua
+VanillaBonkResults.lua
+VanillaBonkQuests.lua
+VanillaBonkCodex.lua
+VanillaBonkCardShop.lua
+VanillaBonkPreload.lua
+VanillaBonkDash.lua
+VanillaBonkDeath.lua
+VanillaBonkTutorial.lua
+VanillaBonkHurt.lua
+VanillaBonkSelfBar.lua
+VanillaBonkTargeting.lua
+VanillaBonkMenu.lua
+VanillaBonkInterfaceOptions.lua
+VanillaBonkVault.lua
+VanillaBonkGlyphs.lua
+VanillaBonkPerf.lua
+VanillaBonkController.lua
+VanillaBonkControllerPanel.lua
+VanillaBonkControllerHud.lua

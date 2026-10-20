@@ -1,0 +1,214 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Net;
+using System.Text;
+using System.Threading.Tasks;
+using System.Web.Script.Serialization;
+
+namespace HordesOfAzeroth.Launcher
+{
+    sealed class ReleaseNote
+    {
+        public GameVersion Version;
+        public string Text;
+    }
+
+    sealed class PackageEntry
+    {
+        public string Name;
+        public string Url;
+        public string Sha256;
+        public long Size;
+        public string ContentHash;
+    }
+
+    sealed class ThirdPartyEntry
+    {
+        public string Name;
+        public string Url;
+        public string Sha256;
+        public long Size;
+        public string UnzipTo;
+        public bool StripTopFolder;
+        public string CopyTo;
+    }
+
+    sealed class NavGroup
+    {
+        public string Name;
+        public List<string> WholeMaps = new List<string>();
+        public List<KeyValuePair<string, string>> Tiles = new List<KeyValuePair<string, string>>();
+    }
+
+    sealed class Manifest
+    {
+        public GameVersion Version;
+        public long DownloadSize;
+        public string RealmName = "Hordes of Azeroth";
+        public List<string> ClientDlls = new List<string>();
+        public List<ReleaseNote> Notes = new List<ReleaseNote>();
+        public List<PackageEntry> Packages = new List<PackageEntry>();
+        public List<ThirdPartyEntry> ThirdParty = new List<ThirdPartyEntry>();
+        public List<NavGroup> NavGroups = new List<NavGroup>();
+    }
+
+    sealed class UpdateCheck
+    {
+        public static readonly string Repository = typeof(UpdateCheck).Assembly
+            .GetCustomAttributes(typeof(System.Reflection.AssemblyMetadataAttribute), false)
+            .OfType<System.Reflection.AssemblyMetadataAttribute>()
+            .FirstOrDefault(a => a.Key == "Repository")?.Value ?? "jonhaldors/hordes-of-azeroth";
+
+        static string ManifestUrl => $"https://github.com/{Repository}/releases/latest/download/manifest.json";
+
+        readonly GameFolder m_folder;
+
+        public UpdateCheck(GameFolder folder)
+        {
+            m_folder = folder;
+        }
+
+        string CachedManifest => Path.Combine(m_folder.LauncherData, "manifest.json");
+
+        public static string LocalSource;
+
+        public async Task<Manifest> FetchAsync()
+        {
+            if (LocalSource != null)
+            {
+                string json = File.ReadAllText(Path.Combine(LocalSource, "manifest.json"));
+                Directory.CreateDirectory(m_folder.LauncherData);
+                File.WriteAllText(CachedManifest, json, new UTF8Encoding(false));
+                return Parse(json);
+            }
+            ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12;
+            using (WebClient client = new WebClient())
+            {
+                client.Headers[HttpRequestHeader.UserAgent] = "HordesOfAzerothLauncher";
+                client.Encoding = Encoding.UTF8;
+                string json = await client.DownloadStringTaskAsync(new Uri(ManifestUrl));
+                Manifest manifest = Parse(json);
+                Directory.CreateDirectory(m_folder.LauncherData);
+                File.WriteAllText(CachedManifest, json, new UTF8Encoding(false));
+                return manifest;
+            }
+        }
+
+        public Manifest LoadCached()
+        {
+            try
+            {
+                return File.Exists(CachedManifest) ? Parse(File.ReadAllText(CachedManifest)) : null;
+            }
+            catch (Exception e) when (e is IOException || e is ArgumentException || e is InvalidOperationException)
+            {
+                return null;
+            }
+        }
+
+        public void PublishLatestVersion(Manifest manifest)
+        {
+            GameVersion installed = m_folder.InstalledVersion;
+            if (manifest?.Version != null && manifest.Version.IsNewerThan(installed))
+            {
+                Directory.CreateDirectory(m_folder.ServerRun);
+                File.WriteAllText(m_folder.LatestVersionFile, manifest.Version.Full + "\n");
+            }
+            else if (File.Exists(m_folder.LatestVersionFile))
+            {
+                File.Delete(m_folder.LatestVersionFile);
+            }
+        }
+
+        public List<ReleaseNote> LocalNotes()
+        {
+            string changelog = Path.Combine(m_folder.Root, "CHANGELOG.md");
+            return File.Exists(changelog) ? ParseChangelog(File.ReadAllLines(changelog)) : new List<ReleaseNote>();
+        }
+
+        public static Manifest Parse(string json)
+        {
+            Dictionary<string, object> root = (Dictionary<string, object>)new JavaScriptSerializer { MaxJsonLength = int.MaxValue }.DeserializeObject(json);
+            Manifest manifest = new Manifest { Version = GameVersion.Parse(root["version"] as string) };
+            if (root.TryGetValue("releaseNotes", out object notes) && notes is object[] list)
+                foreach (Dictionary<string, object> note in list.OfType<Dictionary<string, object>>())
+                    manifest.Notes.Add(new ReleaseNote { Version = GameVersion.Parse(note["version"] as string), Text = note["notes"] as string ?? "" });
+            if (root.TryGetValue("packages", out object packages) && packages is object[] packageList)
+            {
+                foreach (Dictionary<string, object> package in packageList.OfType<Dictionary<string, object>>())
+                    manifest.Packages.Add(new PackageEntry
+                    {
+                        Name = package["name"] as string,
+                        Url = package["url"] as string,
+                        Sha256 = package["sha256"] as string,
+                        Size = Convert.ToInt64(package["size"]),
+                        ContentHash = package["contentHash"] as string,
+                    });
+                manifest.DownloadSize = packageList.OfType<Dictionary<string, object>>()
+                    .Where(p => p.TryGetValue("release", out object release) && (release as string) == "v" + manifest.Version?.Full)
+                    .Sum(p => Convert.ToInt64(p["size"]));
+            }
+            if (root.TryGetValue("thirdParty", out object thirdParty) && thirdParty is object[] thirdPartyList)
+                foreach (Dictionary<string, object> item in thirdPartyList.OfType<Dictionary<string, object>>())
+                {
+                    Dictionary<string, object> install = item.TryGetValue("install", out object i) ? i as Dictionary<string, object> : null;
+                    manifest.ThirdParty.Add(new ThirdPartyEntry
+                    {
+                        Name = item["name"] as string,
+                        Url = item["url"] as string,
+                        Sha256 = item["sha256"] as string,
+                        Size = Convert.ToInt64(item["size"]),
+                        UnzipTo = install != null && install.TryGetValue("unzipTo", out object unzip) ? unzip as string : null,
+                        StripTopFolder = install != null && install.TryGetValue("stripTopFolder", out object strip) && strip is bool b && b,
+                        CopyTo = install != null && install.TryGetValue("copyTo", out object copy) ? copy as string : null,
+                    });
+                }
+            if (root.TryGetValue("navTiles", out object navTiles) && navTiles is object[] groups)
+                foreach (Dictionary<string, object> group in groups.OfType<Dictionary<string, object>>())
+                {
+                    NavGroup navGroup = new NavGroup { Name = group["name"] as string };
+                    if (group["maps"] is Dictionary<string, object> maps)
+                        foreach (KeyValuePair<string, object> map in maps)
+                        {
+                            if (map.Value is string)
+                                navGroup.WholeMaps.Add(map.Key);
+                            else if (map.Value is object[] tiles)
+                                navGroup.Tiles.AddRange(tiles.OfType<string>().Select(t => new KeyValuePair<string, string>(map.Key, t)));
+                        }
+                    manifest.NavGroups.Add(navGroup);
+                }
+            if (root.TryGetValue("clientDlls", out object dlls) && dlls is object[] dllList)
+                manifest.ClientDlls.AddRange(dllList.OfType<string>());
+            if (root.TryGetValue("realmName", out object realm) && realm is string realmName)
+                manifest.RealmName = realmName;
+            return manifest;
+        }
+
+        static List<ReleaseNote> ParseChangelog(string[] lines)
+        {
+            List<ReleaseNote> notes = new List<ReleaseNote>();
+            ReleaseNote current = null;
+            StringBuilder text = new StringBuilder();
+            foreach (string line in lines)
+            {
+                if (line.StartsWith("## "))
+                {
+                    if (current != null)
+                        current.Text = text.ToString().Trim();
+                    current = new ReleaseNote { Version = GameVersion.Parse(line.Substring(3)) };
+                    notes.Add(current);
+                    text.Clear();
+                }
+                else if (current != null)
+                {
+                    text.AppendLine(line);
+                }
+            }
+            if (current != null)
+                current.Text = text.ToString().Trim();
+            return notes.Where(n => n.Version != null).ToList();
+        }
+    }
+}

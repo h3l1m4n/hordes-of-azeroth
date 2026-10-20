@@ -1,0 +1,486 @@
+local UI = VanillaBonkUI
+
+local CARD_WIDTH = 118
+local CARD_HEIGHT = 168
+local CARD_GAP = 10
+local PER_ROW = 8
+local SLOT_SIZE = 52
+local CARDS_TOP = 40
+local CARDS_ROOM = 320
+local WALK_AWAY = 3
+local SAVED_LABEL = "Your saved piece"
+local RETRY, RETRIES = 0.25, 12
+local STONE_BORDER = { edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border", edgeSize = 24 }
+
+local vault = { slots = 1, chosen = {}, order = {}, finds = {} }
+local incoming
+
+local function Command(text)
+    SendChatMessage(".bonk vault " .. text, "SAY")
+end
+
+local function QualityColor(quality)
+    local color = UI.RARITY[quality - 1] or UI.RARITY[1]
+    return color.r, color.g, color.b
+end
+
+local frame = CreateFrame("Frame", "VanillaBonkVault", UIParent)
+frame:SetAllPoints(UIParent)
+frame:SetFrameStrata("DIALOG")
+frame:Hide()
+tinsert(UISpecialFrames, "VanillaBonkVault")
+
+frame.dim = frame:CreateTexture(nil, "BACKGROUND")
+frame.dim:SetTexture("Interface\\AddOns\\HordesOfAzeroth\\Textures\\OfferVignette")
+frame.dim:SetPoint("TOPLEFT", WorldFrame, "TOPLEFT", -2, 2)
+frame.dim:SetPoint("BOTTOMRIGHT", WorldFrame, "BOTTOMRIGHT", 2, -2)
+frame.dim:SetVertexColor(0, 0, 0, 1)
+
+frame.title = frame:CreateFontString(nil, "OVERLAY")
+frame.title:SetFont(UI.TITLE_FONT, 40, "OUTLINE")
+frame.title:SetPoint("CENTER", frame, "CENTER", 0, 262)
+frame.title:SetTextColor(1, 0.82, 0)
+frame.title:SetText("Extraction Vault")
+
+frame.subtitle = UI.Text(frame, 13)
+frame.subtitle:SetPoint("CENTER", frame, "CENTER", 0, 226)
+frame.subtitle:SetTextColor(0.9, 0.83, 0.64)
+
+for side = 1, 2 do
+    local line = frame:CreateTexture(nil, "ARTWORK")
+    line:SetTexture(UI.FLAT)
+    line:SetWidth(60)
+    line:SetHeight(1)
+    if side == 1 then
+        line:SetPoint("RIGHT", frame.subtitle, "LEFT", -12, 0)
+        line:SetGradientAlpha("HORIZONTAL", 1, 0.82, 0, 0, 1, 0.82, 0, 0.7)
+    else
+        line:SetPoint("LEFT", frame.subtitle, "RIGHT", 12, 0)
+        line:SetGradientAlpha("HORIZONTAL", 1, 0.82, 0, 0.7, 1, 0.82, 0, 0)
+    end
+end
+
+frame.box = CreateFrame("Frame", nil, frame)
+frame.box:SetHeight(128)
+frame.box:SetPoint("CENTER", frame, "CENTER", 0, 132)
+frame.box:SetBackdrop({
+    bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background", tile = true, tileSize = 32,
+    edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Gold-Border", edgeSize = 32,
+    insets = { left = 11, right = 12, top = 12, bottom = 11 },
+})
+frame.box.label = UI.Text(frame.box, 12)
+frame.box.label:SetPoint("TOP", frame.box, "TOP", 0, -16)
+frame.box.label:SetTextColor(1, 0.82, 0)
+frame.box.label:SetText("Mailed to you when you leave")
+frame.box.slots = {}
+
+local function CursorOnRightHalf()
+    local x = GetCursorPosition()
+    return x / UIParent:GetEffectiveScale() > GetScreenWidth() / 2
+end
+
+local function ShowSaved(find)
+    local onLeft = CursorOnRightHalf()
+    local previous = GameTooltip
+    for index = 1, min(2, getn(find.saved)) do
+        local tooltip = getglobal("ShoppingTooltip" .. index)
+        if not tooltip then
+            return
+        end
+        tooltip:SetOwner(GameTooltip, "ANCHOR_NONE")
+        tooltip:ClearAllPoints()
+        local gap = previous == GameTooltip and -10 or 0
+        if onLeft then
+            tooltip:SetPoint("TOPRIGHT", previous, "TOPLEFT", 0, gap)
+        else
+            tooltip:SetPoint("TOPLEFT", previous, "TOPRIGHT", 0, gap)
+        end
+        local link = "item:" .. find.saved[index] .. ":0:0:0"
+        tooltip:SetHyperlink(link)
+        if VanillaBonk_AddGearLines then
+            VanillaBonk_AddGearLines(tooltip, link)
+        end
+        tooltip:AddLine(" ")
+        tooltip:AddLine(SAVED_LABEL, 1, 0.82, 0)
+        tooltip:AddLine("You came into the run with it.", 0.7, 0.7, 0.7)
+        tooltip:Show()
+        previous = tooltip
+    end
+end
+
+local function ShowItemTooltip(owner, find, line)
+    GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
+    GameTooltip:SetHyperlink("item:" .. find.entry .. ":0:0:0")
+    GameTooltip:AddLine(" ")
+    GameTooltip:AddLine(line, 1, 0.82, 0)
+    GameTooltip:AddLine("Sells for " .. UI.FormatGold(find.sell) .. " if you leave it out of the vault.", 0.7, 0.7, 0.7)
+    if getn(find.saved) == 0 then
+        GameTooltip:AddLine("You have nothing saved in this slot.", 0.7, 0.7, 0.7)
+    end
+    GameTooltip:Show()
+    ShowSaved(find)
+end
+
+local function VaultSlot(index)
+    local slot = frame.box.slots[index]
+    if slot then
+        return slot
+    end
+    slot = UI.Slot(frame.box, SLOT_SIZE)
+    slot.glow = slot:CreateTexture(nil, "OVERLAY")
+    slot.glow:SetTexture("Interface\\Buttons\\UI-ActionButton-Border")
+    slot.glow:SetBlendMode("ADD")
+    slot.glow:SetWidth(SLOT_SIZE * 96 / 56)
+    slot.glow:SetHeight(SLOT_SIZE * 96 / 56)
+    slot.glow:SetPoint("CENTER", slot, "CENTER", 0, 0)
+    slot.caption = UI.Text(frame.box, 10)
+    slot.caption:SetPoint("TOP", slot, "BOTTOM", 0, -6)
+    slot.caption:SetWidth(130)
+    slot:SetScript("OnClick", function()
+        if this.find then
+            PlaySound("igMainMenuOptionCheckBoxOff")
+            Command("take " .. this.find.guid)
+        end
+    end)
+    slot:SetScript("OnEnter", function()
+        if this.find then
+            ShowItemTooltip(this, this.find, "Click to take it out of the vault.")
+        else
+            GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+            GameTooltip:AddLine("Empty", 1, 1, 1)
+            GameTooltip:AddLine("Click an item below to put it in the vault.", 1, 0.82, 0, 1)
+            GameTooltip:Show()
+        end
+    end)
+    slot:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    frame.box.slots[index] = slot
+    return slot
+end
+
+frame.cards = CreateFrame("Frame", nil, frame)
+frame.cards.list = {}
+
+local function Card(index)
+    local card = frame.cards.list[index]
+    if card then
+        return card
+    end
+    card = CreateFrame("Button", nil, frame.cards)
+    card:SetWidth(CARD_WIDTH)
+    card:SetHeight(CARD_HEIGHT)
+    card:SetBackdrop(STONE_BORDER)
+    card.bg = card:CreateTexture(nil, "BACKGROUND")
+    card.bg:SetTexture(UI.FLAT)
+    card.bg:SetPoint("TOPLEFT", card, "TOPLEFT", 7, -7)
+    card.bg:SetPoint("BOTTOMRIGHT", card, "BOTTOMRIGHT", -7, 7)
+    card.bg:SetGradientAlpha("VERTICAL", 0.02, 0.02, 0.01, 0.95, 0.12, 0.09, 0.06, 0.9)
+    card.line = CreateFrame("Frame", nil, card)
+    card.line:SetPoint("TOPLEFT", card, "TOPLEFT", 6, -6)
+    card.line:SetPoint("BOTTOMRIGHT", card, "BOTTOMRIGHT", -6, 6)
+    card.line:SetBackdrop({ edgeFile = UI.FLAT, edgeSize = 1 })
+
+    card.slot = UI.Slot(card, 40, "Frame")
+    card.slot:SetPoint("TOP", card, "TOP", 0, -22)
+    card.name = UI.Text(card, 11)
+    card.name:SetPoint("TOP", card, "TOP", 0, -72)
+    card.name:SetWidth(CARD_WIDTH - 20)
+    card.where = UI.Text(card, 10)
+    card.where:SetPoint("TOP", card, "TOP", 0, -104)
+    card.where:SetTextColor(0.63, 0.63, 0.63)
+    card.saved = UI.Text(card, 10)
+    card.saved:SetPoint("TOP", card, "TOP", 0, -118)
+    card.saved:SetWidth(CARD_WIDTH - 16)
+    card.saved:SetHeight(24)
+    card.saved:SetJustifyV("TOP")
+    card.price = UI.Text(card, 12, UI.NUMBER_FONT)
+    card.price:SetPoint("BOTTOM", card, "BOTTOM", 0, 12)
+
+    card.ribbon = card:CreateTexture(nil, "OVERLAY")
+    card.ribbon:SetTexture(UI.FLAT)
+    card.ribbon:SetVertexColor(0, 0, 0, 0.8)
+    card.ribbon:SetHeight(20)
+    card.ribbon:SetPoint("LEFT", card, "LEFT", 6, 4)
+    card.ribbon:SetPoint("RIGHT", card, "RIGHT", -6, 4)
+    card.ribbonText = UI.Text(card, 11)
+    card.ribbonText:SetPoint("CENTER", card.ribbon, "CENTER", 0, 0)
+    card.ribbonText:SetTextColor(1, 0.82, 0)
+    card.ribbonText:SetText("In the vault")
+
+    card.highlight = card:CreateTexture(nil, "HIGHLIGHT")
+    card.highlight:SetTexture("Interface\\Buttons\\UI-Panel-Button-Highlight")
+    card.highlight:SetBlendMode("ADD")
+    card.highlight:SetTexCoord(0, 0.625, 0, 0.6875)
+    card.highlight:SetAlpha(0.3)
+    card.highlight:SetAllPoints(card.bg)
+
+    card:SetScript("OnClick", function()
+        local find = this.find
+        if not find then
+            return
+        end
+        if vault.chosen[find.guid] then
+            PlaySound("igMainMenuOptionCheckBoxOff")
+            Command("take " .. find.guid)
+        else
+            PlaySound("igMainMenuOptionCheckBoxOn")
+            Command("put " .. find.guid)
+        end
+    end)
+    card:SetScript("OnEnter", function()
+        local find = this.find
+        if find then
+            ShowItemTooltip(this, find, vault.chosen[find.guid] and "Click to take it out of the vault." or "Click to put it in the vault.")
+        end
+    end)
+    card:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    frame.cards.list[index] = card
+    return card
+end
+
+frame.rest = UI.Text(frame, 12)
+frame.hint = UI.Text(frame, 11)
+frame.hint:SetTextColor(0.72, 0.72, 0.72)
+frame.done = UI.Button(frame, 100, "Done", function()
+    frame:Hide()
+end)
+
+local function SavedText(find)
+    if getn(find.saved) == 0 then
+        return "|cff9d9d9dYours: nothing|r", true
+    end
+    local names = {}
+    for _, entry in ipairs(find.saved) do
+        local name, _, quality = GetItemInfo(entry)
+        if not name then
+            return "", false
+        end
+        local r, g, b = QualityColor(quality or 2)
+        tinsert(names, format("|cff%02x%02x%02x%s|r", r * 255, g * 255, b * 255, name))
+    end
+    return "|cff9d9d9dYours:|r " .. table.concat(names, ", "), true
+end
+
+local function FillCard(card, find)
+    local name, _, _, _, _, _, _, _, texture = GetItemInfo(find.entry)
+    local r, g, b = QualityColor(find.quality)
+    card.find = find
+    card.slot.icon:SetTexture(texture or (UI.ICON_PATH .. "INV_Misc_QuestionMark"))
+    card.name:SetText(name or "")
+    card.name:SetTextColor(r, g, b)
+    card.where:SetText(find.worn and "Equipped" or "In bags")
+    local saved, savedKnown = SavedText(find)
+    card.saved:SetText(saved)
+    card.price:SetText(UI.FormatGold(find.sell))
+    card:SetBackdropBorderColor(r, g, b)
+    card.line:SetBackdropBorderColor(r, g, b, 0.8)
+    if vault.chosen[find.guid] then
+        card:SetAlpha(0.45)
+        card.ribbon:Show()
+        card.ribbonText:Show()
+    else
+        card:SetAlpha(1)
+        card.ribbon:Hide()
+        card.ribbonText:Hide()
+    end
+    return name ~= nil and savedKnown
+end
+
+local function Refresh()
+    local slots = max(1, vault.slots)
+    frame.subtitle:SetText(slots == 1 and "1 piece comes home with you. The rest sells for gold."
+        or "2 pieces come home with you. The rest sells for gold.")
+
+    local byGuid = {}
+    for _, find in ipairs(vault.finds) do
+        byGuid[find.guid] = find
+    end
+    local inVault = {}
+    for _, guid in ipairs(vault.order) do
+        if byGuid[guid] then
+            tinsert(inVault, byGuid[guid])
+        end
+    end
+    frame.box:SetWidth(slots == 1 and 220 or 300)
+    for index = 1, max(slots, getn(frame.box.slots)) do
+        local slot = VaultSlot(index)
+        if index > slots then
+            slot:Hide()
+            slot.caption:Hide()
+        else
+            local find = inVault[index]
+            slot:ClearAllPoints()
+            slot:SetPoint("TOP", frame.box, "TOP", (index - (slots + 1) / 2) * 104, -36)
+            slot.find = find
+            if find then
+                local name, _, _, _, _, _, _, _, texture = GetItemInfo(find.entry)
+                local r, g, b = QualityColor(find.quality)
+                slot.icon:SetTexture(texture or (UI.ICON_PATH .. "INV_Misc_QuestionMark"))
+                slot.icon:Show()
+                slot.glow:SetVertexColor(r, g, b)
+                slot.glow:Show()
+                slot.caption:SetText(name or "")
+                slot.caption:SetTextColor(r, g, b)
+            else
+                slot.icon:Hide()
+                slot.glow:Hide()
+                slot.caption:SetText(index == 2 and "Empty (Pack Mule)" or "Empty")
+                slot.caption:SetTextColor(0.62, 0.62, 0.62)
+            end
+            slot:Show()
+            slot.caption:Show()
+        end
+    end
+
+    local count = getn(vault.finds)
+    local perRow = max(1, min(count, PER_ROW))
+    local rows = max(1, ceil(count / perRow))
+    local width = perRow * CARD_WIDTH + (perRow - 1) * CARD_GAP
+    local height = rows * CARD_HEIGHT + (rows - 1) * CARD_GAP
+    local scale = min(1, CARDS_ROOM / height, (UIParent:GetWidth() - 60) / width)
+    frame.cards:SetScale(scale)
+    frame.cards:SetWidth(width)
+    frame.cards:SetHeight(height)
+    frame.cards:ClearAllPoints()
+    frame.cards:SetPoint("TOP", frame, "CENTER", 0, CARDS_TOP / scale)
+    local missing = false
+    local rest = 0
+    for index, find in ipairs(vault.finds) do
+        local card = Card(index)
+        local row = floor((index - 1) / perRow)
+        local column = mod(index - 1, perRow)
+        local inRow = min(perRow, count - row * perRow)
+        local x = (column - (inRow - 1) / 2) * (CARD_WIDTH + CARD_GAP)
+        card:ClearAllPoints()
+        card:SetPoint("TOP", frame.cards, "TOP", x, -row * (CARD_HEIGHT + CARD_GAP))
+        if not FillCard(card, find) then
+            missing = true
+        end
+        if not vault.chosen[find.guid] then
+            rest = rest + find.sell
+        end
+        card:Show()
+    end
+    for index = count + 1, getn(frame.cards.list) do
+        frame.cards.list[index]:Hide()
+    end
+
+    frame.rest:ClearAllPoints()
+    frame.rest:SetPoint("TOP", frame.cards, "BOTTOM", 0, -14)
+    frame.rest:SetText(count == 0 and "|cff9d9d9dNothing found this run yet.|r"
+        or ("The rest sells for " .. UI.FormatGold(rest)))
+    frame.hint:ClearAllPoints()
+    frame.hint:SetPoint("TOP", frame.rest, "BOTTOM", 0, -8)
+    frame.hint:SetText("Click an item to put it in the vault. Click it in the vault to take it out.")
+    frame.done:ClearAllPoints()
+    frame.done:SetPoint("TOP", frame.hint, "BOTTOM", 0, -12)
+
+    if missing then
+        frame.retries = frame.retries or RETRIES
+        frame.retryIn = RETRY
+    else
+        frame.retries = nil
+    end
+end
+
+local function HeroSpot()
+    if not UnitPosition then
+        return nil
+    end
+    local x, y = UnitPosition("player")
+    return x, y
+end
+
+frame:SetScript("OnUpdate", function()
+    if this.retries and this.retries > 0 then
+        this.retryIn = this.retryIn - arg1
+        if this.retryIn <= 0 then
+            this.retries = this.retries - 1
+            Refresh()
+        end
+    end
+    if this.openedAt then
+        local x, y = HeroSpot()
+        if x then
+            local dx, dy = x - this.openedAt[1], y - this.openedAt[2]
+            if dx * dx + dy * dy > WALK_AWAY * WALK_AWAY then
+                this:Hide()
+            end
+        end
+    end
+end)
+
+frame:SetScript("OnShow", function()
+    PlaySound("igMainMenuOpen")
+end)
+frame:SetScript("OnHide", function()
+    Command("close")
+    this.openedAt = nil
+    this.retries = nil
+    GameTooltip:Hide()
+    PlaySound("igMainMenuClose")
+end)
+
+local handlers = {}
+
+handlers["vaultclear"] = function()
+    incoming = {}
+end
+
+local function SavedEntries(field)
+    local entries = {}
+    for _, text in ipairs(UI.Split(field or "", ",")) do
+        local entry = tonumber(text)
+        if entry then
+            tinsert(entries, entry)
+        end
+    end
+    return entries
+end
+
+handlers["vaultitem"] = function(f)
+    local guid, entry = f[2], tonumber(f[3] or "")
+    if not incoming or not guid or guid == "" or not entry then
+        return
+    end
+    tinsert(incoming, {
+        guid = guid,
+        entry = entry,
+        quality = tonumber(f[4] or "") or 2,
+        worn = f[5] == "1",
+        sell = tonumber(f[6] or "") or 0,
+        saved = SavedEntries(f[7]),
+    })
+end
+
+handlers["vaultopen"] = function(f)
+    vault.slots = tonumber(f[2] or "") or 1
+    vault.chosen, vault.order = {}, {}
+    for _, guid in ipairs(UI.Split(f[3] or "", ",")) do
+        if guid ~= "" then
+            vault.chosen[guid] = true
+            tinsert(vault.order, guid)
+        end
+    end
+    if incoming then
+        vault.finds = incoming
+        incoming = nil
+    end
+    frame.retries = nil
+    Refresh()
+    if not frame:IsShown() then
+        local x, y = HeroSpot()
+        frame.openedAt = x and { x, y } or nil
+        frame:Show()
+    end
+end
+
+handlers["vaultclose"] = function()
+    frame:Hide()
+end
+
+handlers["end"] = function()
+    frame:Hide()
+    vault.finds, vault.chosen, vault.order = {}, {}, {}
+end
+
+UI.Listen(handlers)

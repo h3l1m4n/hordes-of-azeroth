@@ -1,0 +1,4 @@
+[submodule "server/core"]
+	path = server/core
+	url = https://github.com/jonhaldors/hordes-of-azeroth-server.git
+	branch = vanilla-bonk

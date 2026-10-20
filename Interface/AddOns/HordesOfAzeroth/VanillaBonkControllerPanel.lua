@@ -1,0 +1,305 @@
+local UI = VanillaBonkUI
+local Controller = VanillaBonkController
+
+local PANEL_WIDTH = 820
+local PANEL_HEIGHT = 646
+local ART_WIDTH = 320
+local ART_TOP = -92
+local LABEL_ROW = 34
+local LABEL_PAD = 0.03
+local LABEL_WIDTH = 190
+local GLYPH_SIZE = 24
+local COLUMN_LEFT = 34
+local COLUMN_RIGHT = 434
+local SLIDER_WIDTH = 270
+local STATUS_INTERVAL = 0.5
+local ART = {
+    xbox = { file = "Interface\\AddOns\\HordesOfAzeroth\\Textures\\ControllerXbox", height = 329 },
+    ps = { file = "Interface\\AddOns\\HordesOfAzeroth\\Textures\\ControllerPlayStation", height = 331 },
+}
+local KIND_NAMES = { xbox = "Xbox controller connected", ps = "PlayStation controller connected" }
+local LEFT_LABELS = {
+    { "lt", "Zoom", "Hold with right stick or d-pad" },
+    { "ls", "Move", "Full 360 degrees" },
+    { "view", "Run map" },
+    { "dpad", "Menus and cards", "Move the focus" },
+}
+local RIGHT_LABELS = {
+    { "rt", "Dash", "Dash where you are moving" },
+    { "y", "Character and bags" },
+    { "x", "Interact", "Talk, open, use" },
+    { "b", "Close or cancel" },
+    { "a", "Jump" },
+    { "rs", "Camera", "Press to recenter" },
+    { "menu", "Pause menu" },
+}
+local PROMPT_CHOICES = { { "auto", "Automatic" }, { "xbox", "Xbox" }, { "ps", "PlayStation" } }
+
+local panel = UI.Window("VanillaBonkControllerPanel", PANEL_WIDTH, PANEL_HEIGHT)
+panel:SetPoint("CENTER", UIParent, "CENTER", 0, 10)
+panel.title:SetText("Controller")
+panel.ART = ART
+panel.controls = {}
+panel.labels = {}
+
+panel.status = UI.Text(panel, 12)
+panel.status:SetPoint("TOP", panel, "TOP", 0, -44)
+panel.status:SetTextColor(0.78, 0.75, 0.66)
+
+panel.art = panel:CreateTexture(nil, "ARTWORK")
+panel.art:SetPoint("TOP", panel, "TOP", 0, ART_TOP)
+panel.art:SetWidth(ART_WIDTH)
+
+local function ArtHeight(style)
+    return ART_WIDTH * ART[style].height / 512
+end
+
+local function MakeLabel(rightSide)
+    local label = CreateFrame("Frame", nil, panel)
+    label.rightSide = rightSide
+    label:SetWidth(LABEL_WIDTH)
+    label:SetHeight(GLYPH_SIZE)
+    label.glyph = label:CreateTexture(nil, "ARTWORK")
+    label.glyph:SetWidth(GLYPH_SIZE)
+    label.glyph:SetHeight(GLYPH_SIZE)
+    label.title = UI.Text(label, 13)
+    label.title:SetTextColor(1, 0.82, 0)
+    label.help = UI.Text(label, 10)
+    label.help:SetTextColor(0.72, 0.69, 0.63)
+    if rightSide then
+        label.glyph:SetPoint("RIGHT", label, "RIGHT", 0, 0)
+        label.title:SetJustifyH("RIGHT")
+        label.help:SetPoint("TOPRIGHT", label.title, "BOTTOMRIGHT", 0, -1)
+        label.help:SetJustifyH("RIGHT")
+    else
+        label.glyph:SetPoint("LEFT", label, "LEFT", 0, 0)
+        label.help:SetPoint("TOPLEFT", label.title, "BOTTOMLEFT", 0, -1)
+    end
+    return label
+end
+
+local function FillLabel(label, entry)
+    label.button = entry[1]
+    label.title:SetText(entry[2])
+    label.help:SetText(entry[3] or "")
+    label.title:ClearAllPoints()
+    local rightSide = label.rightSide
+    if entry[3] then
+        label.title:SetPoint(rightSide and "BOTTOMRIGHT" or "BOTTOMLEFT", label.glyph, rightSide and "LEFT" or "RIGHT", rightSide and -6 or 6, -1)
+    else
+        label.title:SetPoint(rightSide and "RIGHT" or "LEFT", label.glyph, rightSide and "LEFT" or "RIGHT", rightSide and -6 or 6, 0)
+    end
+end
+
+local function LabelTop(index, count, height)
+    local span = height * (1 - 2 * LABEL_PAD) - LABEL_ROW
+    return ART_TOP - height * LABEL_PAD - (index - 1) * span / math.max(1, count - 1)
+end
+
+local function PlaceLabels(style)
+    local height = ArtHeight(style)
+    local artLeft = -ART_WIDTH / 2
+    for index, entry in ipairs(LEFT_LABELS) do
+        local label = panel.labels["left" .. index]
+        label:ClearAllPoints()
+        label:SetPoint("TOPLEFT", panel, "TOP", artLeft + ART_WIDTH * 0.13 - LABEL_WIDTH, LabelTop(index, table.getn(LEFT_LABELS), height))
+    end
+    for index, entry in ipairs(RIGHT_LABELS) do
+        local label = panel.labels["right" .. index]
+        label:ClearAllPoints()
+        label:SetPoint("TOPLEFT", panel, "TOP", artLeft + ART_WIDTH * 0.87, LabelTop(index, table.getn(RIGHT_LABELS), height))
+    end
+end
+
+for index, entry in ipairs(LEFT_LABELS) do
+    local label = MakeLabel(false)
+    FillLabel(label, entry)
+    panel.labels["left" .. index] = label
+end
+for index, entry in ipairs(RIGHT_LABELS) do
+    local label = MakeLabel(true)
+    FillLabel(label, entry)
+    panel.labels["right" .. index] = label
+end
+
+local SETTINGS_TOP = ART_TOP - ArtHeight("xbox") - 18
+
+panel.section = UI.Text(panel, 13)
+panel.section:SetPoint("TOPLEFT", panel, "TOPLEFT", COLUMN_LEFT, SETTINGS_TOP)
+panel.section:SetTextColor(1, 0.82, 0)
+panel.section:SetText("Settings")
+panel.rule = panel:CreateTexture(nil, "ARTWORK")
+panel.rule:SetTexture(UI.FLAT)
+panel.rule:SetVertexColor(1, 0.82, 0, 0.35)
+panel.rule:SetHeight(1)
+panel.rule:SetPoint("TOPLEFT", panel.section, "BOTTOMLEFT", 0, -3)
+panel.rule:SetPoint("RIGHT", panel, "RIGHT", -COLUMN_LEFT, 0)
+
+local function Heading(x, y, title, help)
+    local name = UI.Text(panel, 12)
+    name:SetPoint("TOPLEFT", panel, "TOPLEFT", x, y)
+    name:SetText(title)
+    local hint = UI.Text(panel, 10)
+    hint:SetPoint("TOPLEFT", name, "BOTTOMLEFT", 0, -2)
+    hint:SetTextColor(0.66, 0.63, 0.56)
+    hint:SetText(help)
+    return name
+end
+
+local function Percent(value)
+    return format("%d%%", math.floor(value * 100 + 0.5))
+end
+
+local function SliderRow(x, y, key, title, help, low, high, step, lowText, highText, shown)
+    Heading(x, y, title, help)
+    local name = "VanillaBonkControllerPanel" .. key
+    local slider = CreateFrame("Slider", name, panel, "OptionsSliderTemplate")
+    slider:SetPoint("TOPLEFT", panel, "TOPLEFT", x, y - 34)
+    slider:SetWidth(SLIDER_WIDTH)
+    slider:SetMinMaxValues(low, high)
+    slider:SetValueStep(step)
+    getglobal(name .. "Text"):SetText("")
+    getglobal(name .. "Low"):SetText(lowText)
+    getglobal(name .. "High"):SetText(highText)
+    slider.value = UI.Text(panel, 12)
+    slider.value:SetPoint("LEFT", slider, "RIGHT", 10, 0)
+    slider.value:SetTextColor(1, 0.82, 0)
+    slider.key = key
+    slider.shown = shown
+    slider:SetScript("OnValueChanged", function()
+        this.value:SetText(this.shown(this:GetValue()))
+        if not panel.loading then
+            Controller.SetSetting(this.key, this:GetValue())
+        end
+    end)
+    slider.Load = function(self)
+        self:SetValue(Controller.Setting(self.key))
+        self.value:SetText(self.shown(self:GetValue()))
+    end
+    table.insert(panel.controls, slider)
+    return 64
+end
+
+local function CheckRow(x, y, key, title, help)
+    local name = "VanillaBonkControllerPanel" .. key
+    local check = CreateFrame("CheckButton", name, panel, "OptionsCheckButtonTemplate")
+    check:SetWidth(26)
+    check:SetHeight(26)
+    check:SetPoint("TOPLEFT", panel, "TOPLEFT", x - 4, y + 4)
+    getglobal(name .. "Text"):SetText("")
+    Heading(x + 26, y, title, help)
+    check.key = key
+    check:SetScript("OnClick", function()
+        Controller.SetSetting(this.key, this:GetChecked() == 1)
+    end)
+    check.Load = function(self)
+        self:SetChecked(Controller.Setting(self.key) and 1 or nil)
+    end
+    table.insert(panel.controls, check)
+    return 44
+end
+
+local function ChoiceRow(x, y, key, title, help, choices)
+    Heading(x, y, title, help)
+    local row = { key = key, buttons = {} }
+    local left = x
+    for _, choice in ipairs(choices) do
+        local button = UI.Button(panel, 92, choice[2])
+        button:SetPoint("TOPLEFT", panel, "TOPLEFT", left, y - 30)
+        button.value = choice[1]
+        button:SetScript("OnClick", function()
+            Controller.SetSetting(key, this.value)
+            panel:Refresh()
+        end)
+        table.insert(row.buttons, button)
+        left = left + 96
+    end
+    row.Load = function(self)
+        local current = Controller.Setting(self.key)
+        for _, button in ipairs(self.buttons) do
+            if button.value == current then
+                button:LockHighlight()
+                button:SetTextColor(1, 1, 1)
+            else
+                button:UnlockHighlight()
+                button:SetTextColor(1, 0.82, 0)
+            end
+        end
+    end
+    table.insert(panel.controls, row)
+    return 64
+end
+
+local leftY = SETTINGS_TOP - 24
+leftY = leftY - SliderRow(COLUMN_LEFT, leftY, "yawSpeed", "Camera turn speed", "How fast the right stick turns the camera", 0.5, 2, 0.05, "Slow", "Fast", Percent)
+leftY = leftY - SliderRow(COLUMN_LEFT, leftY, "pitchSpeed", "Camera up and down speed", "Right stick up and down", 0.5, 2, 0.05, "Slow", "Fast", Percent)
+leftY = leftY - CheckRow(COLUMN_LEFT, leftY, "invertPitch", "Invert camera up and down", "Push up to look down")
+SliderRow(COLUMN_LEFT, leftY, "deadzone", "Stick deadzone", "Raise it if your hero drifts on its own", 0.1, 0.4, 0.01, "Small", "Large", Percent)
+
+local rightY = SETTINGS_TOP - 24
+rightY = rightY - SliderRow(COLUMN_RIGHT, rightY, "cursorSpeed", "Cursor speed", "Right stick cursor in Blizzard windows", 0.5, 2, 0.05, "Slow", "Fast", Percent)
+rightY = rightY - ChoiceRow(COLUMN_RIGHT, rightY, "prompts", "Button prompts", "Automatic follows the controller you pick up", PROMPT_CHOICES)
+CheckRow(COLUMN_RIGHT, rightY, "interactPrompts", "Show interact prompts", "\"X Talk\" above NPCs, chests and portals")
+
+panel.reset = UI.Button(panel, 150, "Reset to defaults", function()
+    Controller.ResetSettings()
+    panel:Refresh()
+end)
+panel.reset:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", COLUMN_LEFT, 22)
+panel.done = UI.Button(panel, 120, "Done", function()
+    panel:Hide()
+end)
+panel.done:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -COLUMN_LEFT, 22)
+
+local function StatusText()
+    local connected = HoAController_GetConnected and HoAController_GetConnected()
+    local text = connected and ("|cff40d040" .. KIND_NAMES[connected] .. "|r") or "No controller connected"
+    if Controller.Setting("prompts") == "auto" then
+        text = text .. "  |cff9d9d9d·|r  prompts follow your last input"
+    end
+    return text
+end
+
+function panel:Refresh()
+    local style = Controller.Style()
+    self.loading = true
+    for _, control in ipairs(self.controls) do
+        control:Load()
+    end
+    self.loading = nil
+    self.art:SetTexture(ART[style].file)
+    self.art:SetTexCoord(0, 1, 0, ART[style].height / 512)
+    self.art:SetHeight(ArtHeight(style))
+    PlaceLabels(style)
+    for _, label in pairs(self.labels) do
+        Controller.SetGlyph(label.glyph, label.button)
+    end
+    self.status:SetText(StatusText())
+    self.style = style
+end
+
+panel:SetScript("OnShow", function()
+    SetPortraitTexture(this.portrait, "player")
+    this:Refresh()
+    this.statusAt = 0
+end)
+panel:SetScript("OnUpdate", function()
+    this.statusAt = (this.statusAt or 0) + arg1
+    if this.statusAt < STATUS_INTERVAL then
+        return
+    end
+    this.statusAt = 0
+    if Controller.Style() ~= this.style then
+        this:Refresh()
+    else
+        this.status:SetText(StatusText())
+    end
+end)
+
+local BasePanelHide = panel:GetScript("OnHide")
+panel:SetScript("OnHide", function()
+    this.asBindings = nil
+    if BasePanelHide then
+        BasePanelHide()
+    end
+end)

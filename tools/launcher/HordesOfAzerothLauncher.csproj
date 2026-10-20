@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <AssemblyName>HoALauncher</AssemblyName>
+    <RootNamespace>HordesOfAzeroth.Launcher</RootNamespace>
+    <Product>Hordes of Azeroth</Product>
+    <Version>0.1.0</Version>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <OutputPath>bin\</OutputPath>
+    <DebugType>none</DebugType>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>art\icon.ico</ApplicationIcon>
+    <Repository Condition="'$(Repository)' == ''">jonhaldors/hordes-of-azeroth</Repository>
+  </PropertyGroup>
+
+  <Target Name="CopyToGameFolder" AfterTargets="Build" Condition="Exists('$(MSBuildProjectDirectory)\..\..\WoW.exe') And '$(Repository)' == 'jonhaldors/hordes-of-azeroth'">
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(MSBuildProjectDirectory)\..\.." SkipUnchangedFiles="true" />
+  </Target>
+
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>Repository</_Parameter1>
+      <_Parameter2>$(Repository)</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\telegraphs\Mpq.cs" Link="Shared\Mpq.cs" />
+    <Resource Include="art\background.jpg" />
+    <Resource Include="art\icon.ico" />
+    <Reference Include="System.Web" />
+    <Reference Include="System.Web.Extensions" />
+    <Reference Include="System.IO.Compression" />
+  </ItemGroup>
+
+</Project>

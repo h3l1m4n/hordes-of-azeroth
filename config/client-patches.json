@@ -1,0 +1,92 @@
+{
+  "source": "WoW.exe",
+  "target": "HordesOfAzeroth.exe",
+  "sourceMd5": "CCF83146DBB3D10EF826AA4DE178A5BE",
+  "patches": [
+    {
+      "offset": "0x11FB7D",
+      "original": "74 3B",
+      "patched": "EB 3B"
+    },
+    {
+      "offset": "0x06A910",
+      "original": "83 F8 03 77 34",
+      "patched": "B8 03 00 00 00"
+    },
+    {
+      "offset": "0x06A9D6",
+      "original": "74 57",
+      "patched": "EB 57"
+    },
+    {
+      "offset": "0x08FF52",
+      "original": "83 F8 03 77 34",
+      "patched": "B8 03 00 00 00"
+    },
+    {
+      "offset": "0x09003C",
+      "original": "74 0A",
+      "patched": "EB 0A"
+    },
+    {
+      "offset": "0x000126",
+      "original": "0F 01",
+      "patched": "2F 01"
+    },
+    {
+      "offset": "0x4089B4",
+      "original": "DB 0F C9 3F",
+      "patched": "66 66 F6 3F"
+    },
+    {
+      "offset": "0x40C448",
+      "original": "00 00 A0 41",
+      "patched": "00 00 24 42"
+    },
+    {
+      "offset": "0x435D38",
+      "original": "31 32 00",
+      "patched": "36 34 00"
+    },
+    {
+      "offset": "0x3A4869",
+      "original": "14",
+      "patched": "27"
+    },
+    {
+      "offset": "0x40FED8",
+      "original": "00 40 42 44",
+      "patched": "00 40 1C 46"
+    },
+    {
+      "offset": "0x467958",
+      "original": "00 00 8C 42",
+      "patched": "00 00 96 43"
+    },
+    {
+      "offset": "0x02CCD0",
+      "original": "55 8B EC 83 EC 10 8D 45 F0 50 33 C9 E8 4F 8F 00 00 50 FF 15 64 F6 7F 00 8B 45 F8 99 2B C2 8B C8 8B 45 FC 99 2B C2 D1 F8 D1 F9 50 51 89 0D 38 4E 88 00 A3 3C 4E 88 00 FF 15 5C F6 7F 00 8B E5 5D C3 90 90",
+      "patched": "55 8B 05 48 4E 88 00 8B 0D 44 4E 88 00 E9 33 90 32 00 83 C0 32 83 C1 32 3B 0D A8 EB C4 00 7E 03 83 E9 01 3B 05 AC EB C4 00 7E 03 83 E8 01 83 E9 32 83 E8 32 89 05 48 4E 88 00 89 0D 44 4E 88 00 5D EB 0D"
+    },
+    {
+      "offset": "0x02D326",
+      "original": "8B 45 F0 8B 15",
+      "patched": "E9 B1 8A 32 00"
+    },
+    {
+      "offset": "0x02D334",
+      "original": "8B 35 3C 4E 88 00",
+      "patched": "8B 35 48 4E 88 00"
+    },
+    {
+      "offset": "0x355D15",
+      "original": "CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC",
+      "patched": "83 F8 32 7D 03 83 C0 01 83 F9 32 7D 03 83 C1 01 E9 B8 6F CD FF"
+    },
+    {
+      "offset": "0x355DDC",
+      "original": "CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC",
+      "patched": "8D 4D F0 51 FF 35 00 4E 88 00 FF 15 50 F6 7F 00 8B 45 F0 8B 15 44 4E 88 00 E9 35 75 CD FF"
+    }
+  ]
+}
