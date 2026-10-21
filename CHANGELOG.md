@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.2.1
+
+### Gear
+- Gear can now be looted as well. Carry the piece in your bags to either wear it later or extract it. Found gear is still only saved if it's in the Extraction Vault.
+- You can change gear from your bags during a run. Putting on a shield or off-hand while holding a two-hander moves the two-hander to your bags.
+
+### Hearthstone
+- A Hearthstone button sits next to the hotbar while you carry one, used on T by default (Key Bindings, Use Hearthstone). Your first one found comes with a short explanation.
+- The Hearthstone's Extraction Vault holds 1 item, even with Pack Mule.
+
+### Controller
+- Moving, jumping and buttons work as soon as you enter the world, without touching the mouse or keyboard first.
+- The camera on new installs no longer swings behind your hero on its own, which made movement feel reversed and the camera sluggish.
+
+### Other changes
+- Your health now shows as numbers on your health bar. On by default, turn it off in Interface Options (Health Numbers).
+- Fixed a rare login error ("The information you have entered is not valid") when starting the game.
+
 ## 0.2.0
 
 ### Paladin

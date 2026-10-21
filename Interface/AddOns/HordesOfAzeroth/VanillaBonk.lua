@@ -2594,7 +2594,7 @@ handlers["end"] = function(f)
         "Kills: " .. f[4] .. "    Level: " .. f[6] .. "\n" ..
         "Gold earned: " .. FormatGold(f[5]) .. "\n" ..
         "Darkmoon Tickets: |cffc080ff" .. (f[8] or "0") .. "|r\n\n" ..
-        "|cffaaaaaaReturning to the outpost...|r")
+        "|cffaaaaaaReturning to the Inn...|r")
     results:Show()
 end
 
@@ -3211,7 +3211,7 @@ local function RefreshHeroStats()
     end
 
     local gear, active = GearTotals()
-    local source = VB.statsInRun and "upgrades, talents and this run's picks" or "outpost upgrades and talents"
+    local source = VB.statsInRun and "upgrades, talents and this run's picks" or "Inn upgrades and talents"
 
     for statId, line in pairs(statLines) do
         local stat = STATS[statId]
@@ -3259,7 +3259,7 @@ local function RefreshHeroStats()
         tinsert(setsLine.lines, bonus.set .. " (" .. bonus.pieces .. "): " .. bonus.text)
     end
     if getn(active) == 0 then
-        tinsert(setsLine.lines, "Wear 2 or more pieces of an epic set from the outpost's gear vendor.")
+        tinsert(setsLine.lines, "Wear 2 or more pieces of an epic set from the Inn's gear vendor.")
     end
 end
 

@@ -545,7 +545,7 @@ end
 
 local MOUSE_BUTTONS = {
     { "VanillaBonkOffer", "reroll" }, { "VanillaBonkOffer", "banish" }, { "VanillaBonkOffer", "skip" },
-    { "VanillaBonkGear", "equip" }, { "VanillaBonkGear", "equipOther" }, { "VanillaBonkGear", "salvage" },
+    { "VanillaBonkGear", "equip" }, { "VanillaBonkGear", "equipOther" }, { "VanillaBonkGear", "loot" }, { "VanillaBonkGear", "salvage" },
 }
 
 local function MouseButton(entry)
@@ -1242,7 +1242,7 @@ local function NavButton(name, windows)
     return false
 end
 
-local GEAR_SHORTCUTS = { lb = "equip", x = "equipOther", rb = "salvage" }
+local GEAR_SHORTCUTS = { lb = "equip", x = "equipOther", y = "loot", rb = "salvage" }
 
 local function GearOpen()
     return VanillaBonkGear and VanillaBonkGear.open
@@ -1262,7 +1262,7 @@ end
 
 local function GearPrompts()
     local prompts = {}
-    for _, name in ipairs({ "lb", "x", "rb" }) do
+    for _, name in ipairs({ "lb", "x", "y", "rb" }) do
         local button = VanillaBonkGear[GEAR_SHORTCUTS[name]]
         if button and button:IsVisible() then
             table.insert(prompts, { name, button:GetText() or "" })

@@ -380,7 +380,7 @@ local function Refresh()
         buildCard:Show()
     else
         menu.title:SetText("Game Menu")
-        menu.subtitle:SetText("Outpost")
+        menu.subtitle:SetText("Inn")
         runCard:Hide()
         buildCard:Hide()
         menuCard:ClearAllPoints()
@@ -399,9 +399,11 @@ local function StillOpen()
     if menu:IsShown() or StaticPopup_Visible("CAMP") or StaticPopup_Visible("QUIT") then
         return true
     end
-    local guide = getglobal("VanillaBonkPlateGuide")
-    if guide and guide:IsShown() then
-        return true
+    for _, name in ipairs({ "VanillaBonkPlateGuide", "VanillaBonkHearthTip" }) do
+        local guide = getglobal(name)
+        if guide and guide:IsShown() then
+            return true
+        end
     end
     for _, frame in ipairs({ OptionsFrame, SoundOptionsFrame, UIOptionsFrame, KeyBindingFrame }) do
         if frame and frame:IsShown() then

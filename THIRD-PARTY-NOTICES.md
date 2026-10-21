@@ -13,6 +13,7 @@ Hordes of Azeroth is not affiliated with or endorsed by Blizzard Entertainment. 
 | vanilla-tweaks | Several of the client exe patches in `config/client-patches.json` | MIT | https://github.com/brndd/vanilla-tweaks |
 | VanillaFixes | Client fixes and DLL loading | MIT | https://github.com/hannesmann/vanillafixes |
 | wow_turbo | Faster client code for crowded fights (`mods/wow_turbo`, v1.13.3, AVX and SSE builds) | MIT | https://github.com/athei/wow-mods |
+| Barlow Bold | Health numbers font in the addon (`Interface/AddOns/HordesOfAzeroth/Fonts`, licence in `Barlow-OFL.txt` beside it) | SIL Open Font License 1.1 | https://github.com/jpt/barlow |
 | DXVK | Direct3D 9 to Vulkan (ships inside the VanillaFixes DXVK download) | zlib/libpng | https://github.com/doitsujin/dxvk |
 | Microsoft Visual C++ Redistributable | Runtime DLLs next to the server and map tools | Microsoft Software License Terms (redistributable files) | https://learn.microsoft.com/cpp/windows/latest-supported-vc-redist |
 

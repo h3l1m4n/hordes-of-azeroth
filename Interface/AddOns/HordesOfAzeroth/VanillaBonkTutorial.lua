@@ -42,7 +42,7 @@ local CURRENCY_WIDTH = 400
 local CURRENCY_ICON_SIZE = 32
 local CURRENCIES = {
     { icon = "INV_Misc_Coin_02", name = "Gold", color = { 1, 0.82, 0 },
-        text = "Buys gear and upgrades at the outpost. You keep it between runs." },
+        text = "Buys gear and upgrades at the Inn. You keep it between runs." },
     { icon = "INV_Misc_Ticket_Darkmoon_01", name = "Darkmoon Tickets", color = { 0.75, 0.5, 1 },
         text = "Spent at the Darkmoon vendors. You keep them between runs." },
     { icon = "INV_Misc_Coin_04", name = "Valor", color = { 1, 0.91, 0.45 },
@@ -508,14 +508,14 @@ local GUIDES = {
     runmaster = {
         targets = RUN_MASTER_TARGETS,
         far = "Follow the arrow to find him.",
-        lost = "Look for " .. RUN_MASTER_NAME .. " <Run Master> at the outpost.",
+        lost = "Look for " .. RUN_MASTER_NAME .. " <Run Master> at the Inn.",
     },
     vendors = {
         targets = UPSTAIRS_TARGETS,
         waypoint = STAIRS_FOOT,
         toWaypoint = "Follow the arrow to the stairs.",
         far = "Follow the arrow up the stairs.",
-        lost = "Look for them on the top floor of the outpost.",
+        lost = "Look for them on the top floor of the Inn.",
     },
 }
 
@@ -884,6 +884,7 @@ function UI.ResetTutorial()
     VanillaBonkVendorTip = nil
     VanillaBonkGearTabTips = nil
     VanillaBonkPlateGuideDone = nil
+    VanillaBonkHearthTipDone = nil
     EndLesson()
     if not inRun then
         tutorial:Show()

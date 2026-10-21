@@ -625,8 +625,8 @@ handlers["mob"] = function(f)
     mobs[name] = { kind = kind, icons = icons, alive = (mob and mob.alive or 0) + 1 }
 end
 
-function VanillaBonkUI.SamplePlate(parent, kind, name, icons)
-    local size = SIZES[kind] or SIZES[0]
+function VanillaBonkUI.SamplePlate(parent, kind, name, icons, customSize)
+    local size = customSize or SIZES[kind] or SIZES[0]
     local sx, sy = size.width / 128, size.height / 15
     local health = CreateFrame("StatusBar", nil, parent)
     health:SetStatusBarTexture(BAR)

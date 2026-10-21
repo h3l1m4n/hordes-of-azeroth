@@ -525,11 +525,19 @@ namespace
         return PadState();
     }
 
+    void StampInputTime()
+    {
+        *reinterpret_cast<uint32_t*>(VAR_INPUT_TIME) = reinterpret_cast<ClientTime_t>(FUN_CLIENT_TIME)();
+    }
+
     PadState ReadPad()
     {
         PadState const pad = ReadPadState();
         if (IsActive(pad))
+        {
             s_padActiveAt = GetTickCount();
+            StampInputTime();
+        }
         if (IsActive(pad) && !s_padInUse && s_kind != PadKind::None)
         {
             s_padInUse = true;

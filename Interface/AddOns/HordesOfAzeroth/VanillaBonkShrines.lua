@@ -5,7 +5,7 @@ local MOONWELL_WIDTH = 240
 local FILL_SPEED = 6
 local FADE = 0.15
 local FLASH = 0.6
-local DONE_TEXT = { Hearthstone = "Returning to the outpost" }
+local DONE_TEXT = { Hearthstone = "Returning to the Inn" }
 
 local function Bar(width, r, g, b)
     local rim = UI.CastRim(UIParent, width)

@@ -152,10 +152,10 @@ end
 
 local function UnlockHint(entry, atSayge)
     if SoldBySayge(entry) and not atSayge then
-        return "Unlock it from Sayge at the outpost to find it during runs."
+        return "Unlock it from Sayge at the Inn to find it during runs."
     end
     if not SoldBySayge(entry) and not atKeeper then
-        return "Unlock it from the Spellbook Keeper at the outpost to find it during runs."
+        return "Unlock it from the Spellbook Keeper at the Inn to find it during runs."
     end
     return "Unlock it to find it during runs."
 end

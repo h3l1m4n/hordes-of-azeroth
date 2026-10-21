@@ -184,11 +184,11 @@ local function ShowSlotTooltip()
         local need = unlock.ranks[rank] or unlock.ranks[getn(unlock.ranks)]
         GameTooltip:AddLine("Locked " .. kind .. " slot", 1, 1, 1)
         if rank == 1 then
-            GameTooltip:AddLine("Buy " .. unlock.talent .. " from Sayge at the outpost to unlock it.", 1, 0.82, 0, 1)
+            GameTooltip:AddLine("Buy " .. unlock.talent .. " from Sayge at the Inn to unlock it.", 1, 0.82, 0, 1)
             GameTooltip:AddLine("Sayge sells it once you finish the quest \"" .. need.quest .. "\" (complete " ..
                 need.quests .. " quests).", 0.6, 0.6, 0.6, 1)
         else
-            GameTooltip:AddLine("Buy rank " .. rank .. " of " .. unlock.talent .. " from Sayge at the outpost to unlock it.", 1, 0.82, 0, 1)
+            GameTooltip:AddLine("Buy rank " .. rank .. " of " .. unlock.talent .. " from Sayge at the Inn to unlock it.", 1, 0.82, 0, 1)
             GameTooltip:AddLine("Sayge sells rank " .. rank .. " once you have completed " .. need.quests .. " quests.", 0.6, 0.6, 0.6, 1)
         end
         GameTooltip:Show()

@@ -57,6 +57,8 @@ namespace HordesOfAzeroth.Launcher
                 missing["cameraDistanceMaxFactor"] = "2";
             if (!values.ContainsKey("UnitNameNPC"))
                 missing["UnitNameNPC"] = "1";
+            if (!values.ContainsKey("cameraSmoothStyle"))
+                missing["cameraSmoothStyle"] = "0";
             if (missing.Count > 0)
                 Write(folder, missing);
         }

@@ -35,7 +35,7 @@ frame.title:SetText("Loot")
 frame.subtitle = UI.Text(frame, 13)
 frame.subtitle:SetPoint("CENTER", frame, "CENTER", 0, 172)
 frame.subtitle:SetTextColor(0.9, 0.83, 0.64)
-frame.subtitle:SetText("Wear it for the run, or salvage it for Valor")
+frame.subtitle:SetText("Wear it, carry it, or salvage it for Valor")
 for side = 1, 2 do
     local line = frame:CreateTexture(nil, "ARTWORK")
     line:SetTexture(UI.FLAT)
@@ -130,6 +130,20 @@ frame.salvage = UI.Button(frame, 160, "Salvage", function()
 end)
 frame.salvage:SetHeight(26)
 frame.salvage:SetPoint("CENTER", frame, "CENTER", 80, -186)
+frame.loot = UI.Button(frame, 90, "Loot", function()
+    Send("loot")
+end)
+frame.loot:SetHeight(26)
+frame.loot:SetScript("OnEnter", function()
+    GameTooltip:SetOwner(this, "ANCHOR_TOP")
+    GameTooltip:SetText("Loot")
+    GameTooltip:AddLine("Carry it in your bags and equip it whenever you like.", 1, 1, 1, 1)
+    GameTooltip:AddLine("Found gear is only kept if you put it in the Extraction Vault and extract.", 1, 0.82, 0, 1)
+    GameTooltip:Show()
+end)
+frame.loot:SetScript("OnLeave", function()
+    GameTooltip:Hide()
+end)
 
 local function Fill(card, entry)
     local tip = card.tip
@@ -167,9 +181,30 @@ local function Fill(card, entry)
     return card:GetHeight()
 end
 
-local function PlaceButtonUnder(button, card, below)
+local function PlaceButtonUnder(button, card, below, offset)
     button:ClearAllPoints()
-    button:SetPoint("TOP", card, "TOP", 0, -(CARD_TOP - below) - 14)
+    button:SetPoint("TOP", card, "TOP", offset or 0, -(CARD_TOP - below) - 14)
+end
+
+local function PlaceNewCardButtons(below)
+    local gap = 8
+    local width = frame.loot:GetWidth() + gap + frame.salvage:GetWidth()
+    PlaceButtonUnder(frame.loot, newCard, below, (frame.loot:GetWidth() - width) / 2)
+    PlaceButtonUnder(frame.salvage, newCard, below, (width - frame.salvage:GetWidth()) / 2)
+end
+
+local OFFHAND_LOCS = { INVTYPE_SHIELD = true, INVTYPE_WEAPONOFFHAND = true, INVTYPE_HOLDABLE = true }
+
+local function EquipLoc(entry)
+    if not entry or entry <= 0 then
+        return nil
+    end
+    local _, _, _, _, _, _, _, equipLoc = GetItemInfo(entry)
+    return equipLoc
+end
+
+local function ReplacesTwoHander()
+    return offer and OFFHAND_LOCS[EquipLoc(offer.entry) or ""] and EquipLoc(offer.replaced) == "INVTYPE_2HWEAPON"
 end
 
 local function LayoutRow(cards)
@@ -201,13 +236,13 @@ local function RefreshOneSlot()
     otherCard:Hide()
     otherCard.label:Hide()
     frame.equipOther:Hide()
-    wornCard.label:SetText("Equipped")
+    wornCard.label:SetText(ReplacesTwoHander() and "Main Hand" or "Equipped")
     frame.equip:SetText(offer.replaced > 0 and "Replace" or "Equip")
     local tallest = max(Fill(newCard, offer.entry), Fill(wornCard, offer.replaced))
     local center = LayoutRow({ wornCard, newCard })
     local below = CARD_TOP - tallest
     PlaceButtonUnder(frame.equip, wornCard, below)
-    PlaceButtonUnder(frame.salvage, newCard, below)
+    PlaceNewCardButtons(below)
     return below - 6, center
 end
 
@@ -221,7 +256,7 @@ local function RefreshTwoSlots()
     local below = CARD_TOP - tallest
     PlaceButtonUnder(frame.equip, wornCard, below)
     PlaceButtonUnder(frame.equipOther, otherCard, below)
-    PlaceButtonUnder(frame.salvage, newCard, below)
+    PlaceNewCardButtons(below)
     frame.equipOther:Show()
     return below - 6, center
 end
@@ -236,8 +271,9 @@ local function Refresh()
     else
         below, center = RefreshOneSlot()
     end
+    frame.rule:SetText(frame.ruleText .. (ReplacesTwoHander() and frame.twoHanderText or ""))
     frame.rule:ClearAllPoints()
-    frame.rule:SetPoint("CENTER", frame, "CENTER", center, below - 60)
+    frame.rule:SetPoint("TOP", frame, "CENTER", center, below - 46)
 end
 
 local function ShowSheet()
@@ -266,12 +302,13 @@ end
 
 local function Open()
     frame.salvage:SetText("Salvage  |cffffe873+" .. offer.valor .. " Valor|r")
-    local keep = "To keep it, put it in the Extraction Vault and leave through a stage portal or the Hearthstone."
+    local keep = "Worn or looted, found gear is only kept if you put it in the Extraction Vault and leave through a stage portal or the Hearthstone."
     if offer.quality >= QUALITY_EPIC then
-        frame.rule:SetText("|cffffd100" .. keep .. " A permanent copy then arrives by mail. If you die, it is lost.|r")
+        frame.ruleText = "|cffffd100" .. keep .. " A permanent copy then arrives by mail. If you die, it is lost.|r"
     else
-        frame.rule:SetText("|cffbbbbbb" .. keep .. " Otherwise it sells for gold when the run ends.|r")
+        frame.ruleText = "|cffbbbbbb" .. keep .. " Otherwise it sells for gold when the run ends.|r"
     end
+    frame.twoHanderText = "\n|cffff8040Replacing puts your two-handed weapon in your bags. You can equip it again from there.|r"
     frame.waitUntil = nil
     frame.retries = RETRIES
     frame.retryIn = RETRY

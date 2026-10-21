@@ -71,9 +71,9 @@ Updates come through the launcher. When a new version is out, **Play** turns int
 - **Challenge mode** inside raids, or **Invasions** that bring their enemies into the open world.
 - **Six classes so far**, each with their own spells and evolutions. Druid, Paladin and Warlock are on the way.
 - **Bosses you can outplay**: see their attacks coming and dodge them.
-- **Dash** out of danger: making you untouchable for a moment. Rebind it in Key Bindings, and upgrade its range and cooldown at the outpost.
+- **Dash** out of danger: making you untouchable for a moment. Rebind it in Key Bindings, and upgrade its range and cooldown at the Inn.
 - **Find gear, Darkmoon Cards and Glyphs**, and extract one item at the end of a stage.
-- **An outpost** with account-wide gold, upgrades, fortunes and class talents.
+- **An Inn** with account-wide gold, upgrades, fortunes and class talents.
 - **Controller support** for Xbox and PlayStation, switching to and from mouse and keyboard automatically.
 - **And a lot more to come.**
 
@@ -90,7 +90,7 @@ In World of Warcraft, the server decides where monsters walk, not the game on yo
 <br><br>
 The game mode uses those maps for two things. The mobs chase you around trees, up ramps and through doorways instead of walking through walls. And every monster spawns on a spot it can actually reach you from: never inside a rock or a tree, on a rooftop, or across a river or cliff.
 <br><br>
-The launcher downloads them ready-made with the game. If the download doesn’t work, it builds them from your own game files instead. That keeps your processor busy for a while, and it asks first whether to use all of your cores or half. The outpost and the Normal zones come first, so you can play while the rest finishes in the background.
+The launcher downloads them ready-made with the game. If the download doesn’t work, it builds them from your own game files instead. That keeps your processor busy for a while, and it asks first whether to use all of your cores or half. The Inn and the Normal zones come first, so you can play while the rest finishes in the background.
 </details>
 
 <details>

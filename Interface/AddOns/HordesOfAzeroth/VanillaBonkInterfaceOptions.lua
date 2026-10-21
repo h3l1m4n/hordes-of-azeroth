@@ -16,6 +16,8 @@ local OWN_OPTIONS = {
         tooltip = "Shows how much damage each of your spells has done this run.", apply = function() UI.ApplyDamageMeter() end },
     { key = "incomingNumbers", label = "Damage Taken Numbers", default = true,
         tooltip = "Shows the damage you take as numbers beside your hero." },
+    { key = "healthNumbers", label = "Health Numbers", default = true,
+        tooltip = "Shows your health as numbers on your health bars.", apply = function() UI.ApplyHealthNumbers() end },
 }
 
 local healthBar = { pending = nil }
@@ -26,7 +28,7 @@ local SECTION_ROWS = {
             name = "Hordes of Azeroth",
             height = 3 * ROW + 20,
             columns = 3,
-            own = { { 1, 1, 0 }, { 2, 1, 1 }, { 3, 1, 2 } },
+            own = { { 1, 1, 0 }, { 2, 1, 1 }, { 3, 1, 2 }, { 4, 2, 2 } },
             healthBar = { 2, 0, -22 },
         },
     },
@@ -54,8 +56,8 @@ local SECTION_ROWS = {
             height = 6 * ROW + 20,
             columns = 2,
             checks = {
-                { 12, 1, 0 }, { 2, 1, 1 }, { 39, 1, 2 },
-                { 21, 1, 3 }, { 22, 1, 4, INDENT }, { 23, 1, 5, INDENT },
+                { 12, 1, 0 }, { 39, 1, 1 },
+                { 21, 1, 2 }, { 22, 1, 3, INDENT }, { 23, 1, 4, INDENT },
                 { 30, 2, 0 }, { 67, 2, 1 }, { 31, 2, 2 }, { 20, 2, 3 },
             },
         },
