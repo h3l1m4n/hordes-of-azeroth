@@ -120,6 +120,7 @@
                                 <MenuItem x:Name="WidescreenItem" IsCheckable="True" Header="Widescreen and ultrawide view" Click="WidescreenItem_Click" />
                                 <Separator />
                                 <MenuItem x:Name="BuildItem" IsCheckable="True" Header="Build monster paths while I play" Click="BuildItem_Click" />
+                                <MenuItem Header="Monster path build speed…" Click="BuildSpeedItem_Click" />
                                 <MenuItem x:Name="TrayItem" IsCheckable="True" Header="Keep running in the tray" Click="TrayItem_Click" />
                                 <Separator />
                                 <MenuItem Header="Open logs folder" Click="OpenLogs_Click" />

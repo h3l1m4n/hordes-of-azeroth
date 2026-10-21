@@ -324,6 +324,61 @@ function Get-ThirdPartyEntry($Item) {
     }
 }
 
+function Get-NavGroupFiles($Group) {
+    $mmaps = Join-Path $DataDir 'mmaps'
+    foreach ($map in $Group.maps.PSObject.Properties) {
+        $id = '{0:D3}' -f [int]$map.Name
+        $header = Join-Path $mmaps "$id.mmap"
+        if (Test-Path $header) { [pscustomobject]@{ Source = $header; Target = "$id.mmap" } }
+        $tiles = if ($map.Value -eq 'all') {
+            Get-ChildItem $mmaps -Filter "$id*.mmtile"
+        } else {
+            foreach ($tile in $map.Value) {
+                $xy = $tile -split ','
+                $path = Join-Path $mmaps ('{0}{1:D2}{2:D2}.mmtile' -f $id, [int]$xy[1], [int]$xy[0])
+                if (Test-Path $path) { Get-Item $path }
+            }
+        }
+        foreach ($tile in $tiles) { [pscustomobject]@{ Source = $tile.FullName; Target = $tile.Name } }
+    }
+}
+
+function Get-NavFilesProblem($Group, $Files) {
+    $headers = @($Files | Where-Object { $_.Target -like '*.mmap' }).Count
+    if ($headers -lt @($Group.maps.PSObject.Properties).Count) { return "they aren't built in $(Join-Path $DataDir 'mmaps')" }
+    $commit = (git -C $RepoRoot rev-parse HEAD:server/core).Trim()
+    $generatorChanged = [DateTimeOffset]::Parse((git -C (Join-Path $ServerDir 'core') log -1 --format=%cI $commit -- contrib/mmap contrib/vmap_extractor contrib/vmap_assembler contrib/extractor).Trim())
+    $stale = @($Files | Where-Object { (Get-Item $_.Source).LastWriteTimeUtc -lt $generatorChanged.UtcDateTime })
+    if ($stale.Count) { return "$($stale.Count) files are older than the last map generator change in server/core ($($generatorChanged.ToString('yyyy-MM-dd')))" }
+}
+
+function Get-NavGroups($Previous) {
+    $previousDownloads = @{}
+    if ($Previous -and $Previous.navTiles) { foreach ($group in $Previous.navTiles) { if ($group.download) { $previousDownloads[$group.name] = $group.download } } }
+    foreach ($group in (Get-Content (Join-Path $ConfigDir 'navtiles.json') -Raw | ConvertFrom-Json).groups) {
+        $files = @(Get-NavGroupFiles $group)
+        $problem = Get-NavFilesProblem $group $files
+        if ($problem) {
+            Write-Warning "Monster paths, $($group.name): $problem. The release has no download for them, so the launcher builds them on the player's processor. Build every tile with tools\extract-client-data.ps1 -MmapsOnly -AllTiles to ship them."
+            [ordered]@{ name = $group.name; maps = $group.maps }
+            continue
+        }
+        $contentHash = Get-TextSha256 (($files | Sort-Object Target | ForEach-Object { "$($_.Target):$(Get-Sha256 $_.Source)" }) -join "`n")
+        $old = $previousDownloads[$group.name]
+        $download = if ($old -and $old.contentHash -eq $contentHash) {
+            Write-Host "monster paths, $($group.name): unchanged since $($old.release)"
+            $old
+        } else {
+            $slug = ($group.name.ToLowerInvariant() -replace '[^a-z0-9]+', '-').Trim('-')
+            $zip = New-PackageZip "navmesh-$slug" $files
+            $uploads.Add($zip.FullName)
+            Write-Host ('monster paths, {0}: {1} files, {2:N1} MB zipped' -f $group.name, $files.Count, ($zip.Length / 1MB))
+            [ordered]@{ release = $tag; url = "$baseUrl/$($zip.Name)"; size = $zip.Length; sha256 = Get-Sha256 $zip.FullName; contentHash = $contentHash }
+        }
+        [ordered]@{ name = $group.name; maps = $group.maps; download = $download }
+    }
+}
+
 if (-not (Test-DbUp)) { throw 'MariaDB is not running. Start it with tools\start-server.ps1 -DatabaseOnly.' }
 & (Join-Path $PSScriptRoot 'build-navtiles.ps1') | Out-Null
 if (git -C $RepoRoot status --porcelain -- config/navtiles.json) { throw 'config/navtiles.json did not match the run zones and has been rebuilt: commit it, then release again.' }
@@ -375,6 +430,8 @@ foreach ($package in $releaseConfig.packages) {
     Write-Host ('{0}: {1} files, {2:N1} MB zipped' -f $package.name, $listed.Count, ($zip.Length / 1MB))
 }
 
+$navGroups = @(Get-NavGroups $previous)
+
 Assert-WorldDumpMatchesServer
 
 $notes = @(Get-ReleaseNotes)
@@ -395,7 +452,7 @@ $manifest = [ordered]@{
     realmName = $releaseConfig.realmName
     clientDlls = $releaseConfig.clientDlls
     releaseNotes = $notes
-    navTiles = (Get-Content (Join-Path $ConfigDir 'navtiles.json') -Raw | ConvertFrom-Json).groups
+    navTiles = $navGroups
     thirdParty = @($releaseConfig.thirdParty | ForEach-Object { Get-ThirdPartyEntry $_ })
     packages = $packages
 }

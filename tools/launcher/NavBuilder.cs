@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -13,6 +14,7 @@ namespace HordesOfAzeroth.Launcher
         public string Group;
         public int Done;
         public int Total;
+        public bool Downloading;
     }
 
     sealed class NavBuilder
@@ -26,7 +28,7 @@ namespace HordesOfAzeroth.Launcher
 
         public Func<bool> Paused = () => false;
         public ProcessPriorityClass Priority = ProcessPriorityClass.Normal;
-        public int Workers = Math.Max(1, Environment.ProcessorCount);
+        public Func<int> Workers = () => Environment.ProcessorCount;
 
         readonly object m_recordLock = new object();
         HashSet<string> m_built;
@@ -50,7 +52,7 @@ namespace HordesOfAzeroth.Launcher
             foreach (string map in wholeMaps)
             {
                 await WaitWhilePausedAsync(cancel);
-                await RunAsync(new[] { map, "--threads", Workers.ToString() }, cancel);
+                await RunAsync(new[] { map, "--threads", Workers().ToString() }, cancel);
                 Record(map + ":all");
                 progress.Report(new NavProgress { Group = group.Name, Done = ++done, Total = total });
             }
@@ -59,7 +61,7 @@ namespace HordesOfAzeroth.Launcher
             foreach (KeyValuePair<string, string> tile in tiles)
             {
                 await WaitWhilePausedAsync(cancel);
-                while (running.Count >= Workers)
+                while (running.Count >= Workers())
                 {
                     Task finished = await Task.WhenAny(running);
                     running.Remove(finished);
@@ -74,6 +76,22 @@ namespace HordesOfAzeroth.Launcher
                     }, cancel, TaskContinuationOptions.None, TaskScheduler.Default));
             }
             await Task.WhenAll(running);
+        }
+
+        public void InstallDownloaded(NavGroup group, string zip)
+        {
+            Directory.CreateDirectory(MmapsDir);
+            using (ZipArchive archive = ZipFile.OpenRead(zip))
+                foreach (ZipArchiveEntry entry in archive.Entries)
+                {
+                    if (entry.FullName != Path.GetFileName(entry.FullName))
+                        throw new InvalidDataException($"{Path.GetFileName(zip)} contains a file outside the monster path folder.");
+                    entry.ExtractToFile(Path.Combine(MmapsDir, entry.FullName), true);
+                }
+            foreach (string map in group.WholeMaps)
+                Record(map + ":all");
+            foreach (KeyValuePair<string, string> tile in group.Tiles)
+                Record(tile.Key + ":" + tile.Value);
         }
 
         async Task WaitWhilePausedAsync(CancellationToken cancel)

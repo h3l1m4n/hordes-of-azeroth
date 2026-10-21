@@ -501,22 +501,10 @@ namespace HordesOfAzeroth.Launcher
                     return;
                 }
                 await m_installer.InstallAsync(m_latest, progress, m_installCancel.Token);
-                NavGroup first = m_latest.NavGroups.FirstOrDefault();
-                if (first != null)
+                if (m_latest.NavGroups.Count > 0)
                 {
                     ShowInstallCard(Installer.Steps.Length);
-                    StatusText.Text = "Monster paths: " + first.Name;
-                    m_nav.Priority = ProcessPriorityClass.Normal;
-                    m_nav.Workers = Math.Max(1, Environment.ProcessorCount);
-                    m_nav.Paused = () => false;
-                    await m_nav.BuildGroupAsync(first, new Progress<NavProgress>(n =>
-                    {
-                        if (m_state != LauncherState.Installing)
-                            return;
-                        Progress.IsIndeterminate = false;
-                        Progress.Value = n.Total > 0 ? (double)n.Done / n.Total : 0;
-                        StatusDetail.Text = $"   {n.Done} of {n.Total} areas";
-                    }), m_installCancel.Token);
+                    await GetInstallPathsAsync(m_latest, m_installCancel.Token);
                 }
                 m_updates.PublishLatestVersion(m_latest);
                 m_state = LauncherState.Ready;
@@ -565,20 +553,7 @@ namespace HordesOfAzeroth.Launcher
             try
             {
                 bool launcherChanged = await m_installer.UpdateAsync(manifest, progress, m_installCancel.Token);
-                NavGroup first = manifest.NavGroups.FirstOrDefault();
-                if (first != null && !m_nav.IsGroupBuilt(first))
-                {
-                    StatusText.Text = "Monster paths for the new areas";
-                    m_nav.Priority = ProcessPriorityClass.Normal;
-                    m_nav.Workers = Math.Max(1, Environment.ProcessorCount);
-                    m_nav.Paused = () => false;
-                    await m_nav.BuildGroupAsync(first, new Progress<NavProgress>(n =>
-                    {
-                        Progress.IsIndeterminate = false;
-                        Progress.Value = n.Total > 0 ? (double)n.Done / n.Total : 0;
-                        StatusDetail.Text = $"   {n.Done} of {n.Total} areas";
-                    }), m_installCancel.Token);
-                }
+                await GetInstallPathsAsync(manifest, m_installCancel.Token);
                 m_updates.PublishLatestVersion(manifest);
                 if (launcherChanged)
                 {
@@ -637,13 +612,21 @@ namespace HordesOfAzeroth.Launcher
             if (paths)
             {
                 NotesPanel.Children.Add(Paragraph("Every zone gets a map of where creatures can walk, climb and fit. Monsters use it to chase you around trees, up ramps and through doorways instead of running into walls, and the horde uses it to spawn only where it can reach you, never inside a rock or on a rooftop.", text));
-                NotesPanel.Children.Add(Paragraph("It's worked out from your own game files, one 533-yard square at a time. Westfall, The Barrens and Duskwood come first; the harder zones finish in the background while you play.", text));
+                if (m_latest != null && m_latest.NavGroups.All(g => g.Download != null))
+                {
+                    NotesPanel.Children.Add(Paragraph($"They come ready-made, a {m_latest.NavGroups.Sum(g => g.Download.Size) / 1048576} MB download for every zone.", text));
+                }
+                else
+                {
+                    NotesPanel.Children.Add(Paragraph("It's worked out from your own game files, one 533-yard square at a time. Westfall, The Barrens and Duskwood come first; the harder zones finish in the background while you play.", text));
+                    NotesPanel.Children.Add(Paragraph("This is heavy work and only happens once. Your processor can sit at 100% and your fans may spin up until it's done. To use fewer cores, open the ••• menu next to Play and choose Monster path build speed.", text));
+                }
             }
             else
             {
                 NotesPanel.Children.Add(Paragraph("The launcher builds everything from your own World of Warcraft files. You can close it and come back; it carries on where it stopped.", text));
             }
-            string[] checklist = Installer.Steps.Concat(new[] { "Monster paths: Normal zones" }).ToArray();
+            string[] checklist = Installer.Steps.Concat(new[] { "Monster paths" }).ToArray();
             for (int i = 0; i < checklist.Length; i++)
             {
                 bool done = i < current;
@@ -691,6 +674,85 @@ namespace HordesOfAzeroth.Launcher
             }
         }
 
+        void AskBuildSpeedOnce()
+        {
+            if (!m_settings.BuildSpeedChosen)
+                BuildSpeedWindow.Ask(this, m_settings);
+        }
+
+        async Task GetInstallPathsAsync(Manifest manifest, CancellationToken cancel)
+        {
+            List<NavGroup> downloads = manifest.NavGroups.Where(g => g.Download != null && !m_nav.IsGroupBuilt(g)).ToList();
+            long total = downloads.Sum(g => g.Download.Size);
+            long finished = 0;
+            foreach (NavGroup group in downloads)
+            {
+                StatusText.Text = "Downloading monster paths";
+                long before = finished;
+                try
+                {
+                    await DownloadPathsAsync(group, new Progress<long>(bytes =>
+                    {
+                        if (m_state == LauncherState.Installing)
+                            ShowPathDownloadProgress(before + bytes, total);
+                    }), cancel);
+                }
+                catch (Exception e) when (IsDownloadProblem(e))
+                {
+                }
+                finished += group.Download.Size;
+            }
+            NavGroup first = manifest.NavGroups.FirstOrDefault();
+            if (first == null || m_nav.IsGroupBuilt(first))
+                return;
+            AskBuildSpeedOnce();
+            StatusText.Text = first.Download != null
+                ? "The download didn't work, so the launcher builds the monster paths for " + first.Name
+                : "Building monster paths: " + first.Name;
+            UseInstallBuildSpeed();
+            await m_nav.BuildGroupAsync(first, new Progress<NavProgress>(n =>
+            {
+                if (m_state == LauncherState.Installing)
+                    ShowInstallBuildProgress(n);
+            }), cancel);
+        }
+
+        async Task DownloadPathsAsync(NavGroup group, IProgress<long> progress, CancellationToken cancel)
+        {
+            string zip = await m_installer.FetchAsync(group.Download.Url, group.Download.Sha256, progress.Report, cancel);
+            await Task.Run(() => m_nav.InstallDownloaded(group, zip), cancel);
+            File.Delete(zip);
+        }
+
+        static bool IsDownloadProblem(Exception e) => e is InvalidOperationException || e is InvalidDataException || e is IOException || e is UnauthorizedAccessException;
+
+        void ShowPathDownloadProgress(long bytes, long total)
+        {
+            Progress.IsIndeterminate = false;
+            Progress.Value = total > 0 ? (double)bytes / total : 0;
+            StatusDetail.Text = $"   {bytes / 1048576.0:0.0} of {total / 1048576.0:0.0} MB";
+        }
+
+        void UseInstallBuildSpeed()
+        {
+            m_nav.Priority = ProcessPriorityClass.BelowNormal;
+            m_nav.Workers = () => LauncherSettings.Workers(m_settings.InstallCores);
+            m_nav.Paused = () => false;
+        }
+
+        void ShowInstallBuildProgress(NavProgress n)
+        {
+            Progress.IsIndeterminate = false;
+            Progress.Value = n.Total > 0 ? (double)n.Done / n.Total : 0;
+            StatusDetail.Text = $"   {n.Done} of {n.Total} areas on {CoresText(m_settings.InstallCores)}. High CPU use is expected and only happens once.";
+        }
+
+        static string CoresText(CoreShare share)
+        {
+            int cores = LauncherSettings.Workers(share);
+            return cores == 1 ? "1 core" : cores + " cores";
+        }
+
         void StartBackgroundBuild()
         {
             if (m_latest == null || !IsInstalled() || (m_background != null && !m_background.IsCancellationRequested))
@@ -698,10 +760,12 @@ namespace HordesOfAzeroth.Launcher
             List<NavGroup> pending = m_latest.NavGroups.Skip(1).Where(g => !m_nav.IsGroupBuilt(g)).ToList();
             if (pending.Count == 0)
                 return;
+            if (IsVisible && pending.Any(g => g.Download == null))
+                AskBuildSpeedOnce();
             m_background = new CancellationTokenSource();
             CancellationToken cancel = m_background.Token;
             m_nav.Priority = ProcessPriorityClass.BelowNormal;
-            m_nav.Workers = Math.Max(1, Environment.ProcessorCount - 1);
+            m_nav.Workers = () => LauncherSettings.Workers(m_settings.BackgroundCores);
             m_nav.Paused = () => !m_settings.BuildWhilePlaying && m_game.IsRunning;
             IProgress<NavProgress> progress = new Progress<NavProgress>(n =>
             {
@@ -713,7 +777,7 @@ namespace HordesOfAzeroth.Launcher
                 try
                 {
                     foreach (NavGroup group in pending)
-                        await m_nav.BuildGroupAsync(group, progress, cancel);
+                        await GetBackgroundPathsAsync(group, progress, cancel);
                 }
                 catch (OperationCanceledException)
                 {
@@ -727,6 +791,29 @@ namespace HordesOfAzeroth.Launcher
                     ShowBackgroundProgress();
                 });
             });
+        }
+
+        async Task GetBackgroundPathsAsync(NavGroup group, IProgress<NavProgress> progress, CancellationToken cancel)
+        {
+            if (group.Download != null)
+            {
+                int total = (int)Math.Max(1, group.Download.Size / 1048576);
+                try
+                {
+                    await DownloadPathsAsync(group, new Progress<long>(bytes => progress.Report(new NavProgress
+                    {
+                        Group = group.Name,
+                        Done = (int)Math.Min(total - 1, bytes / 1048576),
+                        Total = total,
+                        Downloading = true,
+                    })), cancel);
+                    return;
+                }
+                catch (Exception e) when (IsDownloadProblem(e))
+                {
+                }
+            }
+            await m_nav.BuildGroupAsync(group, progress, cancel);
         }
 
         void ShowBackgroundProgress()
@@ -744,7 +831,9 @@ namespace HordesOfAzeroth.Launcher
                 }
                 return;
             }
-            StatusDetail.Text = $"   {n.Group}: monster paths {n.Done} of {n.Total} areas, building in the background";
+            StatusDetail.Text = n.Downloading
+                ? $"   {n.Group}: downloading monster paths in the background, {n.Done} of {n.Total} MB"
+                : $"   {n.Group}: building monster paths in the background, {n.Done} of {n.Total} areas on {CoresText(m_settings.BackgroundCores)}";
             Progress.IsIndeterminate = false;
             Progress.Value = (double)n.Done / n.Total;
             Progress.Visibility = Visibility.Visible;
@@ -882,6 +971,8 @@ namespace HordesOfAzeroth.Launcher
             m_settings.BuildWhilePlaying = BuildItem.IsChecked;
             m_settings.Save();
         }
+
+        void BuildSpeedItem_Click(object sender, RoutedEventArgs e) => BuildSpeedWindow.Ask(this, m_settings);
 
         void TrayItem_Click(object sender, RoutedEventArgs e)
         {

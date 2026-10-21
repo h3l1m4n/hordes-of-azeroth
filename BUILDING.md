@@ -175,6 +175,8 @@ To change a server setting, add it to `config/mangosd.overrides.conf` (or `realm
 
 `tools/release.ps1` builds the server from the committed fork, dumps the world database, packs everything into `release/<version>/assets` and writes the `manifest.json` the launcher reads. `config/release.json` lists the packages and the third-party downloads. A package is only uploaded again when its contents change; otherwise the manifest points at the previous release's file.
 
+The monster paths ship the same way: each group in `config/navtiles.json` becomes a `navmesh-<group>.zip` of the matching files in `server/data/mmaps`, and the launcher downloads those instead of building them. A group whose map header is missing, or with any file older than the last map generator change in `server/core`, is left out with a warning, and the launcher builds that group on the player's CPU instead. Build every tile (`tools\extract-client-data.ps1 -MmapsOnly -AllTiles`) after a generator change, and in a fork before its first release, to ship them as downloads. Each repository hosts its own navmesh files on its own releases. The launcher also builds tiles on the CPU when a download fails.
+
 1. Raise `VERSION`.
 2. Add a section for it at the top of `CHANGELOG.md`.
 3. Run `tools\release.ps1 -Publish`.

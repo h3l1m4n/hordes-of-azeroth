@@ -132,6 +132,29 @@
             </Setter>
         </Style>
 
+        <Style x:Key="ChoiceCard" TargetType="RadioButton">
+            <Setter Property="Foreground" Value="{StaticResource Text}" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="Face" CornerRadius="6" Padding="12,10" Background="#24181600" BorderThickness="1" BorderBrush="{StaticResource Line}">
+                            <ContentPresenter />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Face" Property="Background" Value="{StaticResource Hover}" />
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Face" Property="BorderBrush" Value="{StaticResource Accent}" />
+                                <Setter TargetName="Face" Property="Background" Value="{StaticResource Hover}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style x:Key="ThinProgress" TargetType="ProgressBar">
             <Setter Property="Height" Value="6" />
             <Setter Property="Template">

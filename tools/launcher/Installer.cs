@@ -247,7 +247,7 @@ namespace HordesOfAzeroth.Launcher
             return false;
         }
 
-        async Task<string> FetchAsync(string url, string sha256, Action<long> report, CancellationToken cancel)
+        public async Task<string> FetchAsync(string url, string sha256, Action<long> report, CancellationToken cancel)
         {
             Directory.CreateDirectory(Downloads);
             string name = Path.GetFileName(new Uri(url).AbsolutePath);

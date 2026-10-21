@@ -38,6 +38,7 @@ namespace HordesOfAzeroth.Launcher
     sealed class NavGroup
     {
         public string Name;
+        public PackageEntry Download;
         public List<string> WholeMaps = new List<string>();
         public List<KeyValuePair<string, string>> Tiles = new List<KeyValuePair<string, string>>();
     }
@@ -169,6 +170,15 @@ namespace HordesOfAzeroth.Launcher
                 foreach (Dictionary<string, object> group in groups.OfType<Dictionary<string, object>>())
                 {
                     NavGroup navGroup = new NavGroup { Name = group["name"] as string };
+                    if (group.TryGetValue("download", out object download) && download is Dictionary<string, object> pack)
+                        navGroup.Download = new PackageEntry
+                        {
+                            Name = navGroup.Name,
+                            Url = pack["url"] as string,
+                            Sha256 = pack["sha256"] as string,
+                            Size = Convert.ToInt64(pack["size"]),
+                            ContentHash = pack["contentHash"] as string,
+                        };
                     if (group["maps"] is Dictionary<string, object> maps)
                         foreach (KeyValuePair<string, object> map in maps)
                         {
