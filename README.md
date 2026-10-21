@@ -44,7 +44,7 @@ https://github.com/user-attachments/assets/3a82f020-7192-48dc-b6be-f6316bda0225
 
 1. Download **[HoALauncher.exe](https://github.com/jonhaldors/hordes-of-azeroth/releases/latest/download/HoALauncher.exe)**.
 2. Put it in your World of Warcraft folder, next to `WoW.exe`.
-3. Start it and press **Install**. The first install takes about 5 to 15 minutes. The harder zones keep building in the background while you play.
+3. Start it and press **Install**. The first install takes a few minutes and downloads about 460 MB.
 4. Press **Play**.
 
 From then on, always start the game with `HoALauncher.exe`. It starts the server, then the game, and stops the server when you close the game. While you play, the launcher waits in the system tray, next to the clock, and comes back when the game closes.
@@ -84,13 +84,13 @@ Updates come through the launcher. When a new version is out, **Play** turns int
 ## Questions
 
 <details>
-<summary><b>Why does the first install take a few minutes?</b></summary>
+<summary><b>What are the monster paths the launcher sets up?</b></summary>
 <br>
 In World of Warcraft, the server decides where monsters walk, not the game on your PC. Your client only has the shape of the world, so the launcher turns that into walking maps (navigation meshes) for every zone the game uses. That's the slow part.
 <br><br>
-The game mode uses those maps for two things. The horde chases you around trees, up ramps and through doorways instead of walking through walls. And every monster spawns on a spot it can actually reach you from: never inside a rock or a tree, on a rooftop, or across a river or cliff.
+The game mode uses those maps for two things. The mobs chases you around trees, up ramps and through doorways instead of walking through walls. And every monster spawns on a spot it can actually reach you from: never inside a rock or a tree, on a rooftop, or across a river or cliff.
 <br><br>
-They're built from your own game files, so they can't be downloaded with the game. The outpost and the Normal zones come first, so you can play while the rest finishes in the background.
+The launcher downloads them ready-made with the game. If the download doesn’t work, it builds them from your own game files instead. That keeps your processor busy for a while, and it asks first whether to use all of your cores or half. The outpost and the Normal zones come first, so you can play while the rest finishes in the background.
 </details>
 
 <details>
@@ -181,7 +181,7 @@ Hordes of Azeroth is open source. Everything you need to build it, run your own 
 
 Hordes of Azeroth is an unofficial fan project. Blizzard Entertainment didn't make it, doesn't endorse it, and has no part in it.
 
-Nothing in this repository or in the releases comes from the game: no models, textures, sounds, maps, interface files or game data. You bring a 1.12.1 client you own, and the launcher builds what it needs from it on your PC: the patched game copy, the server's map data, and the spell effects patch. The login screen runs on the client's own interface files with ours loaded on top. Everything under `Interface/` in this repository is written for this project.
+Nothing in this repository or in the releases comes from the game: no models, textures, sounds, maps, interface files or game data. You bring a 1.12.1 client you own, and the launcher builds what it needs from it on your PC: the patched game copy, the server's map data, and the spell effects patch. The one thing added is the monster paths: custom navigation meshes, which say only where monsters can walk, with no models, textures or terrain in them. The login screen runs on the client's own interface files with ours loaded on top. Everything under `Interface/` in this repository is written for this project.
 
 World of Warcraft and Blizzard Entertainment are trademarks or registered trademarks of Blizzard Entertainment, Inc.
 
