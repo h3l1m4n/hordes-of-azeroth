@@ -632,6 +632,24 @@ namespace
         return true;
     }
 
+    uintptr_t const IDLE_CHECK_AT = 0x00482ED8;
+    uint8_t const IDLE_CHECK_CODE[] = { 0x0F, 0x8C, 0xE1, 0x00, 0x00, 0x00 };
+    uint8_t const IDLE_NEVER_CODE[] = { 0xE9, 0xE2, 0x00, 0x00, 0x00, 0x90 };
+
+    bool DisableIdleAway()
+    {
+        auto* code = reinterpret_cast<uint8_t*>(IDLE_CHECK_AT);
+        if (std::memcmp(code, IDLE_CHECK_CODE, sizeof(IDLE_CHECK_CODE)) != 0)
+            return false;
+        DWORD protection;
+        if (!VirtualProtect(code, sizeof(IDLE_NEVER_CODE), PAGE_EXECUTE_READWRITE, &protection))
+            return false;
+        std::memcpy(code, IDLE_NEVER_CODE, sizeof(IDLE_NEVER_CODE));
+        VirtualProtect(code, sizeof(IDLE_NEVER_CODE), protection, &protection);
+        FlushInstructionCache(GetCurrentProcess(), code, sizeof(IDLE_NEVER_CODE));
+        return true;
+    }
+
     bool HookImportJump(uintptr_t thunk, uintptr_t slot, void* detour)
     {
         auto* code = reinterpret_cast<uint8_t*>(thunk);
@@ -758,6 +776,7 @@ BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID)
         HookImportJump(THUNK_SET_VOLUME, SLOT_SET_VOLUME, reinterpret_cast<void*>(&OnSetVolume)) &&
         HookImportJump(THUNK_STREAM_PLAYEX, SLOT_STREAM_PLAYEX, reinterpret_cast<void*>(&OnStreamPlayEx));
     Log("sound limit %s, coin sound on money %s", sounds ? "on" : "OFF", SilenceCoinSound() ? "off" : "ON");
+    Log("idle away and sit %s", DisableIdleAway() ? "off" : "ON");
 
     if (HANDLE retitle = CreateThread(nullptr, 0, &RetitleGameWindow, nullptr, 0, nullptr))
         CloseHandle(retitle);

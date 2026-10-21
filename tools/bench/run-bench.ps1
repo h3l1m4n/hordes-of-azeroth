@@ -2,14 +2,21 @@ param(
     [Parameter(Mandatory)][ValidateSet('warrior', 'paladin', 'hunter', 'rogue', 'priest', 'shaman', 'mage', 'warlock', 'druid')][string]$Class,
     [string[]]$Builds = @(),
     [string]$Account = 'player',
+    [switch]$Dummies,
+    [switch]$Melee,
+    [switch]$NoAnchor,
     [switch]$Markdown
 )
 . "$PSScriptRoot\..\common.ps1"
+$Builds = @($Builds | ForEach-Object { $_ -split ',' } | Where-Object { $_ })
 
 $ClassIds = @{ warrior = 1; paladin = 2; hunter = 3; rogue = 4; priest = 5; shaman = 7; mage = 8; warlock = 9; druid = 11 }
 $AnchorKey = 'anchor'
 $BuildSeconds = 45
-$StartupSeconds = 120
+$QuitDelaySeconds = 3
+$DummyCount = 10
+$DummyRingYards = 7
+$SetupSeconds = if ($Dummies) { 14 } else { 13 }
 $EnterTries = 3
 
 $mariadb = Join-Path $MariaDir 'bin\mariadb.exe'
@@ -38,9 +45,14 @@ function Get-GameProcess {
 
 function Read-Builds {
     $all = foreach ($line in Get-Content (Join-Path $PSScriptRoot 'builds.txt')) {
-        $fields = $line.Trim() -split '\s+', 7
-        if ($fields.Count -lt 7) { continue }
-        [pscustomobject]@{ Class = $fields[0]; Key = $fields[1]; Ids = [int[]]$fields[2..5]; Label = $fields[6] }
+        $fields = @($line.Trim() -split '\s+')
+        $idCount = 0
+        while ($idCount -lt 4 -and 2 + $idCount -lt $fields.Count -and $fields[2 + $idCount] -match '^\d+$') { $idCount++ }
+        if ($idCount -lt 1 -or $fields.Count -lt 3 + $idCount) { continue }
+        [pscustomobject]@{ Class = $fields[0]; Key = $fields[1]; Ids = [int[]]$fields[2..(1 + $idCount)]; Label = $fields[(2 + $idCount)..($fields.Count - 1)] -join ' ' }
+    }
+    if ($NoAnchor) {
+        return @($all | Where-Object { $_.Class -eq $Class -and ($Builds.Count -eq 0 -or $Builds -contains $_.Key) })
     }
     $anchor = $all | Where-Object { $_.Class -eq 'warrior' -and $_.Key -eq $AnchorKey } | Select-Object -First 1
     if (-not $anchor) { throw "builds.txt has no warrior $AnchorKey row." }
@@ -60,7 +72,12 @@ function Get-Spells([object[]]$BuildList) {
 }
 
 function Write-AddonBuilds([object[]]$BuildList, [hashtable]$Spells) {
-    $lines = @('BenchSetup = { "bench", "level 20", "quiet", "minute 5" }', '', 'BenchBuilds = {')
+    $setup = if ($Dummies) { '"bench", "level 20", "quiet", "minute 5", "deep"' } else { '"bench", "level 20", "quiet", "minute 5"' }
+    $lines = @("BenchSetup = { $setup }", '')
+    if ($Dummies) { $lines += "BenchDummies = `"$DummyCount $DummyRingYards`"" }
+    if ($Melee) { $lines += 'BenchPack = "pack 150 1"' }
+    $lines += 'BenchBuilds = {'
+
     foreach ($build in $BuildList) {
         $steps = ($build.Ids | ForEach-Object { '"' + $Spells[$_].Verb + ' ' + $_ + '"' }) -join ', '
         $lines += "    { name = `"$($build.Key)`", steps = { $steps } },"
@@ -116,8 +133,19 @@ function Test-ChatMarker([string]$Marker, [long]$From) {
     }
 }
 
-function Enter-World {
-    $chatStart = if (Test-Path $chatLog) { (Get-Item $chatLog).Length } else { 0 }
+function Wait-BenchDone([System.Diagnostics.Process]$Game, [long]$ChatStart, [int]$BuildCount) {
+    $scheduleEnd = (Get-Date).AddSeconds($SetupSeconds + $BuildCount * $BuildSeconds + $QuitDelaySeconds)
+    while ((Get-Date) -lt $scheduleEnd) {
+        if ($Game.HasExited) { return }
+        if (Test-ChatMarker 'bench done' $ChatStart) {
+            Start-Sleep -Seconds $QuitDelaySeconds
+            return
+        }
+        Start-Sleep -Seconds 1
+    }
+}
+
+function Enter-World([long]$ChatStart) {
     $realmStart = if (Test-Path $realmLog) { (Get-Item $realmLog).Length } else { 0 }
     & (Join-Path $RepoRoot 'tools\launch-client.ps1') -Account $Account -Password $Account | Out-Null
     Wait-Until {
@@ -144,10 +172,10 @@ if (-not (Get-Process mangosd -ErrorAction SilentlyContinue)) { throw 'mangosd i
 
 $buildList = Read-Builds
 $spells = Get-Spells $buildList
-$accountId = (Invoke-Sql "SELECT id FROM account WHERE username = '$($Account.ToUpper())'" 'realmd')[0]
-$hero = (Invoke-Sql "SELECT name FROM characters WHERE account = $accountId AND class = $($ClassIds[$Class])" 'characters')[0]
+$accountId = @(Invoke-Sql "SELECT id FROM account WHERE username = '$($Account.ToUpper())'" 'realmd')[0]
+$hero = @(Invoke-Sql "SELECT name FROM characters WHERE account = $accountId AND class = $($ClassIds[$Class])" 'characters')[0]
 if (-not $hero) { throw "Account $Account has no $Class hero." }
-$gmBefore = [int](Invoke-Sql "SELECT gmlevel FROM account WHERE id = $accountId" 'realmd')[0]
+$gmBefore = [int]@(Invoke-Sql "SELECT gmlevel FROM account WHERE id = $accountId" 'realmd')[0]
 
 Write-Host "Bench: $Class on $hero, builds $(($buildList | ForEach-Object { $_.Key }) -join ', ')"
 $since = (Get-Date).ToString('MM/dd HH:mm:ss')
@@ -159,11 +187,11 @@ try {
     Write-AddonBuilds $buildList $spells
     $lastHero = Set-LastHero $hero
     Set-GmLevel 3
-    $game = Enter-World
-    $limit = $StartupSeconds + $buildList.Count * $BuildSeconds
-    if (-not $game.WaitForExit($limit * 1000)) { throw "The client was still running after $limit s." }
+    $chatStart = if (Test-Path $chatLog) { (Get-Item $chatLog).Length } else { 0 }
+    $game = Enter-World $chatStart
+    Wait-BenchDone $game $chatStart $buildList.Count
 } finally {
-    if ($game -and -not $game.HasExited) { Stop-Process -Id $game.Id -Force }
+    Get-GameProcess | Stop-Process -Force -ErrorAction SilentlyContinue
     Set-GmLevel $gmBefore
     if ($null -ne $lastHero) { Set-LastHero $lastHero | Out-Null }
     if (Test-Path $addonTarget) { Remove-Item $addonTarget -Recurse -Force }
@@ -172,4 +200,6 @@ try {
 Write-Manifest $buildList $spells $hero $since
 $parseArgs = @((Join-Path $PSScriptRoot 'parse_bench.py'), $manifestFile)
 if ($Markdown) { $parseArgs += '--markdown' }
+$mode = if ($Dummies) { 'dummies' } elseif ($Melee) { 'melee' } else { 'pack' }
+$parseArgs += @('--save', (Join-Path $PSScriptRoot 'results.json'), '--mode', $mode)
 & python @parseArgs

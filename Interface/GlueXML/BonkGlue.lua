@@ -1,6 +1,6 @@
 BONK_CLASSES = {
 	{ token = "WARRIOR", name = "Warrior", races = { "HUMAN", "DWARF", "NIGHTELF", "GNOME", "ORC", "SCOURGE", "TAUREN", "TROLL" } },
-	{ token = "PALADIN", name = "Paladin", races = { "HUMAN", "DWARF" }, locked = 1 },
+	{ token = "PALADIN", name = "Paladin", races = { "HUMAN", "DWARF" } },
 	{ token = "HUNTER",  name = "Hunter",  races = { "DWARF", "NIGHTELF", "ORC", "TAUREN", "TROLL" } },
 	{ token = "ROGUE",   name = "Rogue",   races = { "HUMAN", "DWARF", "NIGHTELF", "GNOME", "ORC", "SCOURGE", "TROLL" } },
 	{ token = "PRIEST",  name = "Priest",  races = { "HUMAN", "DWARF", "NIGHTELF", "SCOURGE", "TROLL" } },
@@ -21,6 +21,23 @@ for _, class in BONK_CLASSES do
 end
 
 local NUM_STAT_ROWS = 8;
+local INFO_HEIGHT = 520;
+local INFO_CREATE_HEIGHT = 620;
+local IRONMAN_NAME = "Ironmanmode";
+local IRONMAN_TIP = "This character does not share gold or unlocks with other characters.";
+local RACES_PER_ROW = 4;
+local RACE_ROW_HEIGHT = 72;
+local CREATE_LAYOUT = {
+	{ "BonkHeroLookLabel", 26, -262 },
+	{ "BonkHeroGenderButton1", 26, -284 },
+	{ "BonkHeroLook1", 22, -342 },
+	{ "BonkHeroLook2", 22, -372 },
+	{ "BonkHeroLook3", 22, -402 },
+	{ "BonkHeroLook4", 22, -432 },
+	{ "BonkHeroLook5", 22, -462 },
+	{ "BonkHeroNameLabel", 26, -506 },
+	{ "BonkHeroNameEdit", 18, -520 },
+};
 
 local function Flag(condition)
 	if ( condition ) then
@@ -338,9 +355,9 @@ function BonkHero_OnLoad()
 
 	for index = 1, 8 do
 		local button = getglobal("BonkHeroRaceButton"..index);
-		local column = mod(index - 1, 4);
-		local row = floor((index - 1) / 4);
-		button:SetPoint("TOPLEFT", "BonkHeroCreateFrame", "TOPLEFT", 30 + column * 74, -114 - row * 72);
+		local column = mod(index - 1, RACES_PER_ROW);
+		local row = floor((index - 1) / RACES_PER_ROW);
+		button:SetPoint("TOPLEFT", "BonkHeroCreateFrame", "TOPLEFT", 30 + column * 74, -114 - row * RACE_ROW_HEIGHT);
 	end
 
 	for index = 1, NUM_STAT_ROWS do
@@ -350,10 +367,38 @@ function BonkHero_OnLoad()
 	getglobal("BonkHeroGenderButton1Icon"):SetTexCoord(0, 0.5, 0, 1.0);
 	getglobal("BonkHeroGenderButton2Icon"):SetTexCoord(0.5, 1.0, 0, 1.0);
 
-	if ( BONK_STATS and BONK_STATS.gold ) then
-		BonkHeroGold:SetText(FormatGold(BONK_STATS.gold));
-		BonkHeroGoldFrame:Show();
+	BonkHero_UpdateGold(nil);
+end
+
+function BonkHero_UpdateGold(stats)
+	if ( not BONK_STATS or not BONK_STATS.gold ) then
+		return;
 	end
+	if ( stats and stats.ironman ) then
+		BonkHeroGoldLabel:SetText("Gold (This character only)");
+		BonkHeroGold:SetText(FormatGold(stats.gold or 0));
+	else
+		BonkHeroGoldLabel:SetText("Gold (shared by all heroes)");
+		BonkHeroGold:SetText(FormatGold(BONK_STATS.gold));
+	end
+	BonkHeroGoldFrame:Show();
+end
+
+function BonkHero_ToggleIronman()
+	Bonk.ironman = BonkHeroIronman:GetChecked() and true or nil;
+	if ( Bonk.ironman ) then
+		PlaySound("igMainMenuOptionCheckBoxOn");
+	else
+		PlaySound("igMainMenuOptionCheckBoxOff");
+	end
+end
+
+function BonkHero_ShowIronmanTip()
+	BonkIronmanTipText:SetText(IRONMAN_TIP);
+	BonkIronmanTip:SetHeight(BonkIronmanTipText:GetHeight() + 20);
+	BonkIronmanTip:ClearAllPoints();
+	BonkIronmanTip:SetPoint("BOTTOMLEFT", "BonkHeroIronman", "TOPRIGHT", 0, 0);
+	BonkIronmanTip:Show();
 end
 
 function BonkHero_ReadHeroes()
@@ -402,6 +447,12 @@ function BonkHero_OnCharacterList()
 			Bonk.wiping.wait = BONK_WIPE_GAP;
 			BonkHero_UpdateRoster();
 		end
+		return;
+	end
+
+	if ( Bonk.creating and Bonk.creating.ironmanSent ) then
+		Bonk.creating.ironmanSent = nil;
+		BonkHero_CreateCharacter();
 		return;
 	end
 
@@ -488,15 +539,33 @@ function BonkHero_UpdateRoster()
 	BonkHeroCount:SetText(count.." of "..playable.." classes have a hero");
 end
 
+function BonkHero_LayoutCreate(raceCount)
+	local unusedRows = 2 - ceil(raceCount / RACES_PER_ROW);
+	local lift = unusedRows * RACE_ROW_HEIGHT;
+	for _, place in ipairs(CREATE_LAYOUT) do
+		local frame = getglobal(place[1]);
+		frame:ClearAllPoints();
+		frame:SetPoint("TOPLEFT", "BonkHeroCreateFrame", "TOPLEFT", place[2], place[3] + lift);
+	end
+	BonkHeroInfoPanel:SetHeight(INFO_CREATE_HEIGHT - lift);
+end
+
 function BonkHero_UpdateInfo()
 	local class = CurrentClass();
 	local hero = CurrentHero();
 
 	if ( hero ) then
 		BonkHeroName:SetText(hero.name);
-		local mastery = (HeroStats(hero) or {}).mastery or 0;
-		BonkHeroDetail:SetText(format("Mastery %d %s %s", mastery, BONK_RACE_NAMES[hero.race] or "", class.name));
+		local stats = HeroStats(hero) or {};
+		local mastery = stats.mastery or 0;
+		local detail = format("Mastery %d %s %s", mastery, BONK_RACE_NAMES[hero.race] or "", class.name);
+		if ( stats.ironman ) then
+			detail = detail.." (Ironman)";
+		end
+		BonkHeroDetail:SetText(detail);
+		BonkHero_UpdateGold(stats);
 		BonkHeroCreateFrame:Hide();
+		BonkHeroInfoPanel:SetHeight(INFO_HEIGHT);
 		BonkHeroRecordFrame:Show();
 		BonkHero_UpdateRecord(hero);
 		BonkHeroPlayButton:SetText("Play");
@@ -509,6 +578,9 @@ function BonkHero_UpdateInfo()
 	BonkHeroName:SetText("New "..class.name);
 	BonkHeroDetail:SetText(BONK_RACE_NAMES[NewHeroRace()].." "..class.name);
 	BonkHeroRecordFrame:Hide();
+	BonkHero_UpdateGold(nil);
+	BonkHeroIronman:SetChecked(Flag(Bonk.ironman));
+	BonkHero_LayoutCreate(getn(class.races));
 	BonkHeroCreateFrame:Show();
 	BonkHeroPlayButton:SetText("Create hero");
 
@@ -528,7 +600,6 @@ function BonkHero_UpdateInfo()
 	end
 	BonkHeroGenderButton1:SetChecked(Flag(Bonk.sex == 1));
 	BonkHeroGenderButton2:SetChecked(Flag(Bonk.sex == 2));
-	BonkHeroDescription:SetText((gsub(getglobal("CLASS_"..class.token) or "", "^%s+", "")));
 end
 
 local function FormatPlayed(seconds)
@@ -629,6 +700,20 @@ function BonkHero_ApplyNewHero()
 			SetCharacterClass(i);
 		end
 	end
+	BonkHero_UpdateCustomization();
+end
+
+function BonkHero_UpdateCustomization()
+	local hair = GetHairCustomization();
+	BonkHeroLook3Text:SetText(getglobal("HAIR_"..hair.."_STYLE"));
+	BonkHeroLook4Text:SetText(getglobal("HAIR_"..hair.."_COLOR"));
+	local facialHair = GetFacialHairCustomization();
+	if ( facialHair == "NONE" ) then
+		BonkHeroLook5:Hide();
+	else
+		BonkHeroLook5Text:SetText(getglobal("FACIAL_HAIR_"..facialHair));
+		BonkHeroLook5:Show();
+	end
 end
 
 function BonkHero_SelectClass(index)
@@ -711,6 +796,11 @@ function BonkHero_Play()
 	BonkHeroNameEdit:ClearFocus();
 	Bonk.creating = { class = CurrentClass().token };
 	BonkHero_SetStatus("Creating your hero...");
+	if ( Bonk.ironman ) then
+		Bonk.creating.ironmanSent = true;
+		CreateCharacter(IRONMAN_NAME);
+		return;
+	end
 	BonkHero_CreateCharacter();
 end
 

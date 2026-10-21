@@ -15,7 +15,7 @@
         <SolidColorBrush x:Key="Accent" Color="#F0C060" />
         <SolidColorBrush x:Key="Ok" Color="#7CCF5A" />
         <SolidColorBrush x:Key="Problem" Color="#FF7A5C" />
-        <SolidColorBrush x:Key="NoteOldValue" Color="#B8746A" />
+        <SolidColorBrush x:Key="NoteOldValue" Color="#D99482" />
         <SolidColorBrush x:Key="NoteNewValue" Color="#9CC47E" />
         <SolidColorBrush x:Key="Track" Color="#1FFFBEA0" />
         <LinearGradientBrush x:Key="Primary" StartPoint="0,0" EndPoint="0,1">

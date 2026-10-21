@@ -47,7 +47,7 @@ namespace HordesOfAzeroth.Launcher
                 missing["gxMaximize"] = "1";
                 missing["gxMaximized"] = "1";
             }
-            if (!values.ContainsKey("gxResolution"))
+            if (!values.TryGetValue("gxResolution", out string resolution) || !FitsPrimaryScreen(resolution))
                 missing["gxResolution"] = DesktopResolution();
             if (!values.ContainsKey("hwDetect"))
                 missing["hwDetect"] = "0";
@@ -78,6 +78,15 @@ namespace HordesOfAzeroth.Launcher
         {
             System.Drawing.Rectangle bounds = System.Windows.Forms.Screen.PrimaryScreen.Bounds;
             return $"{bounds.Width}x{bounds.Height}";
+        }
+
+        static bool FitsPrimaryScreen(string resolution)
+        {
+            string[] parts = resolution.Split('x');
+            if (parts.Length != 2 || !int.TryParse(parts[0], out int width) || !int.TryParse(parts[1], out int height) || width <= 0 || height <= 0)
+                return false;
+            System.Drawing.Rectangle bounds = System.Windows.Forms.Screen.PrimaryScreen.Bounds;
+            return width <= bounds.Width && height <= bounds.Height;
         }
 
         static Dictionary<string, string> Read(GameFolder folder)

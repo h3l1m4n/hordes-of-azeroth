@@ -46,6 +46,7 @@ namespace HordesOfAzeroth.Launcher
                 foreach (string cached in Directory.GetFiles(m_folder.Cache, "*.wdb"))
                     File.Delete(cached);
 
+            ForeignAddons.Disable(m_folder, Account);
             GameConfig.EnsureDefaults(m_folder, RealmName);
             ClientPatcher.SetFieldOfView(m_folder, widescreen);
             TurboMod.Apply(m_folder);

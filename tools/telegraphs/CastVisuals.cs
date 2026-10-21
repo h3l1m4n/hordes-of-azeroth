@@ -9,6 +9,7 @@ namespace BonkTelegraphs
         const uint FirstVisualId = 8000;
         const uint FirstKitId = 7000;
         const int SpellVisualField = 115;
+        const int VisualPrecastKitField = 1;
         const int VisualCastKitField = 2;
         const int VisualHasMissileField = 6;
         const int KitAnimField = 2;
@@ -26,6 +27,11 @@ namespace BonkTelegraphs
             5176,
             24239,
             24099,
+        };
+
+        static readonly HashSet<uint> FiredFromShotSources = new HashSet<uint>
+        {
+            403,
         };
 
         public static List<string> AddCastVisuals(Dbc spells, Dbc visuals, Dbc kits)
@@ -69,12 +75,18 @@ namespace BonkTelegraphs
                     uint[] newVisual = (uint[])visual.Clone();
                     newVisual[0] = copy;
                     newVisual[VisualCastKitField] = kitCopy;
+                    if (FiredFromShotSources.Contains(spellId))
+                    {
+                        newVisual[VisualPrecastKitField] = 0;
+                        newVisual[VisualCastKitField] = 0;
+                    }
                     visuals.Records.Add(newVisual);
                     visualCopies[visualId] = copy;
                 }
                 spell[SpellVisualField] = copy;
-                manifest.Add(string.Format("spell {0}: visual {1} -> {2} (cast kit {3} -> {4}, no animation)",
-                    spellId, visualId, copy, kitId, kitCopies[kitId]));
+                manifest.Add(FiredFromShotSources.Contains(spellId)
+                    ? string.Format("spell {0}: visual {1} -> {2} (no precast or cast kit, the server sends the hero's cast kit)", spellId, visualId, copy)
+                    : string.Format("spell {0}: visual {1} -> {2} (cast kit {3} -> {4}, no animation)", spellId, visualId, copy, kitId, kitCopies[kitId]));
             }
             return manifest;
         }

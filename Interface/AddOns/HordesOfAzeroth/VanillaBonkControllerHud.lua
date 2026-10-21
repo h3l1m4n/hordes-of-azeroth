@@ -10,7 +10,7 @@ local ITEM_GAP = 14
 local SHADE_TEXTURE = "Interface\\AddOns\\HordesOfAzeroth\\Textures\\CornerShade"
 local SHADE_WIDTH = 460
 local SHADE_HEIGHT = 120
-local METER_EDGE = 6
+local METER_EDGE = 20
 local METER_LIFT = HUD_HEIGHT + 6
 local KEYCAP_TEXTURE = "Interface\\AddOns\\HordesOfAzeroth\\Textures\\KeyCap"
 local KEYCAP_HEIGHT = 22
@@ -19,7 +19,7 @@ local KEYCAP_PAD = 7
 local KEY_REFRESH = 1
 local PAIR_GAP = 2
 local ITEMS = {
-    { button = "lt", with = "rs", label = "Zoom", padOnly = true, hubOnly = true },
+    { button = "lt", with = "rs", label = "Zoom", padOnly = true },
     { button = "rt", label = "Dash", dash = true },
     { button = "a", label = "Jump", command = "JUMP" },
     { button = "y", label = "Character", command = "TOGGLECHARACTER0", click = function() Controller.ToggleCharacterAndBags() end },
@@ -162,12 +162,11 @@ end
 
 local function RefreshIcons()
     local keyboard = Controller.kind == nil
-    local inRun = InRun()
     local signature = keyboard and "keys" or Controller.Style()
     for _, frame in ipairs(hud.items) do
         local item = frame.item
         frame.icon = ShowIcon(frame, keyboard)
-        frame.shown = not (item.padOnly and keyboard) and not (item.hubOnly and inRun)
+        frame.shown = not (item.padOnly and keyboard)
         if keyboard then
             if frame.shown then
                 local text = KeyText(item)
@@ -189,18 +188,17 @@ local function RefreshIcons()
         end
     end
     hud.signature = signature
-    hud.inRun = inRun
     Layout()
 end
 
-local function PlaceMeter()
+local function PlaceMeter(lifted)
     local meter = getglobal("VanillaBonkMeter")
-    if not meter or meter.controllerLifted then
+    if not meter or meter.lifted == lifted then
         return
     end
-    meter.controllerLifted = true
+    meter.lifted = lifted
     meter:ClearAllPoints()
-    meter:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", -METER_EDGE, METER_EDGE + METER_LIFT)
+    meter:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", -METER_EDGE, METER_EDGE + (lifted and METER_LIFT or 0))
 end
 
 local function HideMenuBar()
@@ -213,16 +211,17 @@ end
 local watcher = CreateFrame("Frame")
 watcher:SetScript("OnUpdate", function()
     HideMenuBar()
-    PlaceMeter()
-    local busy = Controller.PromptsVisible and Controller.PromptsVisible()
-    if busy and hud:IsShown() then
+    local shownHere = not InRun() and Controller.kind ~= nil
+    PlaceMeter(shownHere)
+    local hidden = not shownHere or (Controller.PromptsVisible and Controller.PromptsVisible())
+    if hidden and hud:IsShown() then
         hud:Hide()
-    elseif not busy and not hud:IsShown() then
+    elseif not hidden and not hud:IsShown() then
         hud:Show()
     end
     hud.keysAt = (hud.keysAt or 0) + arg1
     local keyboard = Controller.kind == nil
-    local changed = hud.keyboard ~= keyboard or hud.inRun ~= InRun()
+    local changed = hud.keyboard ~= keyboard
     if changed or (not keyboard and Controller.Style() ~= hud.signature) or (keyboard and hud.keysAt >= KEY_REFRESH) then
         hud.keysAt = 0
         hud.keyboard = keyboard

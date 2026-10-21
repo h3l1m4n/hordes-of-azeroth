@@ -23,5 +23,24 @@ namespace BonkTelegraphs
             }
             return manifest;
         }
+
+        static readonly uint[][] SoundSwaps =
+        {
+            new uint[] { 487, 3320, 1273 },
+        };
+
+        public static List<string> SwapKitSounds(Dbc kits)
+        {
+            List<string> manifest = new List<string>();
+            foreach (uint[] swap in SoundSwaps)
+            {
+                uint[] kit = kits.Find(swap[0]);
+                if (kit == null || kit[KitSoundField] != swap[1])
+                    throw new InvalidDataException("Spell visual kit " + swap[0] + " does not play sound " + swap[1] + ".");
+                kit[KitSoundField] = swap[2];
+                manifest.Add(string.Format("kit {0}: sound {1} -> {2}", swap[0], swap[1], swap[2]));
+            }
+            return manifest;
+        }
     }
 }

@@ -3,7 +3,7 @@ local SETUP_AT = 8
 local SETUP_GAP = 1
 local BUILD_GAP = 1.2
 local BUILD_SECONDS = 45
-local QUIT_DELAY = 3
+local FALLBACK_QUIT_DELAY = 15
 
 local steps = {}
 
@@ -32,7 +32,7 @@ local function scheduleBuild(build, start)
     end
     local ready = start + 1.5 + (table.getn(build.steps) + 1) * BUILD_GAP
     at(ready, function() sandbox("heal") end)
-    at(ready + 1.5, function() sandbox("pack 150") end)
+    at(ready + 1.5, function() sandbox(BenchDummies and ("dummies " .. BenchDummies) or BenchPack or "pack 150") end)
     at(ready + 2.7, function() mark("window pack " .. build.name) end)
 end
 
@@ -55,7 +55,7 @@ local function scheduleAll()
         sandbox("clear")
     end)
     at(t + 1, function() sandbox("forget 0") end)
-    at(t + QUIT_DELAY, function() ForceQuit() end)
+    at(t + FALLBACK_QUIT_DELAY, function() ForceQuit() end)
 end
 
 scheduleAll()

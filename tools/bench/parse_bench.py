@@ -56,7 +56,7 @@ def measure(start, states, slot_count):
     kills = last[1] - first[1]
     dead_at = next(s[0] for s in inside if s[1] - first[1] >= kills)
     still_dying = dead_at >= last[0] and kills > 0
-    span = max(1.0, dead_at - first[0])
+    span = max(1.0, dead_at - first[0]) if kills else max(1.0, last[0] - first[0])
     damage = [last[2][i][0] - first[2][i][0] for i in range(slot_count)]
     return {"kills": kills, "span": span, "finished": not still_dying, "damage": damage}
 
@@ -103,12 +103,45 @@ def print_markdown(rows, date, hero):
               f"{row['per_second'] / 1000:.1f}k | {row['top']} |")
 
 
+def save_results(rows, manifest, path, mode):
+    store = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    builds = store.setdefault(mode, {}).setdefault(manifest["class"], {})
+    for row in rows:
+        if row.get("missing"):
+            continue
+        builds[row["key"]] = {
+            "date": manifest["date"],
+            "label": row["label"],
+            "ids": row["ids"],
+            "kills": row["kills"],
+            "dead": round(row["dead"], 1),
+            "finished": row["finished"],
+            "per_second": round(row["per_second"]),
+            "top": row["top"],
+        }
+    path.write_text(json.dumps(store, indent=2) + "\n", encoding="utf-8")
+
+
+def show_results(path, mode):
+    store = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    for class_name, builds in sorted(store.get(mode, {}).items()):
+        for key, row in builds.items():
+            print(f"{class_name:<8} {key:<7} {row['date']}  kills {row['kills']:3d}  dead {dead_text(row):>5}s  {row['per_second'] / 1000:5.1f}k/s  {row['label']} | {row['top']}")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Report sandbox build benchmark results from the chat log.")
-    parser.add_argument("manifest", help="manifest JSON written by run-bench.ps1")
+    parser.add_argument("manifest", nargs="?", help="manifest JSON written by run-bench.ps1")
     parser.add_argument("--log", default=str(Path(__file__).resolve().parents[2] / "Logs" / "WoWChatLog.txt"))
     parser.add_argument("--markdown", action="store_true", help="print docs table rows")
+    parser.add_argument("--save", help="results JSON that keeps the latest row of each build")
+    parser.add_argument("--mode", default="pack", help="pack, melee or dummies")
+    parser.add_argument("--show", help="print the latest saved rows from this results JSON")
     args = parser.parse_args()
+
+    if args.show:
+        show_results(Path(args.show), args.mode)
+        return
 
     manifest = json.loads(Path(args.manifest).read_text(encoding="utf-8-sig"))
     windows, states, bench = read_log(args.log, since_seconds(manifest["since"]))
@@ -125,6 +158,8 @@ def main():
         print_markdown(rows, manifest["date"], manifest["hero"])
     else:
         print_text(rows)
+    if args.save:
+        save_results(rows, manifest, Path(args.save), args.mode)
 
 
 if __name__ == "__main__":

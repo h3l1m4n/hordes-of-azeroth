@@ -79,6 +79,22 @@ namespace HordesOfAzeroth.Launcher
             "Update the database",
         };
 
+        static readonly Dictionary<string, string> StepsInProgress = new Dictionary<string, string>
+        {
+            { "Download the game files", "Downloading the game files" },
+            { "Patch the game", "Patching the game" },
+            { "Read the maps", "Reading the maps" },
+            { "Build the spell effects", "Building the spell effects" },
+            { "Set up the database", "Setting up the database" },
+            { "Back up your characters", "Backing up your characters" },
+            { "Download the update", "Downloading the update" },
+            { "Rebuild the spell effects", "Rebuilding the spell effects" },
+            { "Update the database", "Updating the database" },
+        };
+
+        public static string InProgress(string step) =>
+            step != null && StepsInProgress.TryGetValue(step, out string doing) ? doing : step;
+
         const int BackupsKept = 3;
 
         string Backups => Path.Combine(m_folder.LauncherData, "backups");

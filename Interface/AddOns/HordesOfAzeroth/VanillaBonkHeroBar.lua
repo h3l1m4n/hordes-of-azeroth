@@ -421,7 +421,26 @@ local function RefreshSlots()
     end
 end
 
+local function RunHeld()
+    local offer, vendor, gear = getglobal("VanillaBonkOffer"), getglobal("VanillaBonkVendor"), getglobal("VanillaBonkGear")
+    return (offer and offer.open) or (vendor and vendor.open) or (gear and gear.open) or (UI.MenuPaused and UI.MenuPaused())
+end
+
+local function HoldCooldowns(elapsed)
+    for _, slot in ipairs(spellSlots) do
+        local info = slot.entry and run.info[slot.entry.index]
+        if slot.cycleStart and info and info.interval then
+            slot.cycleStart = slot.cycleStart + elapsed
+            CooldownFrame_SetTimer(slot.cooldown, slot.cycleStart, info.interval / 1000, 1)
+        end
+    end
+end
+
 spellBar:SetScript("OnUpdate", function()
+    if RunHeld() then
+        HoldCooldowns(arg1)
+        return
+    end
     this.elapsed = (this.elapsed or 0) + arg1
     if this.elapsed < 0.1 then
         return
@@ -648,11 +667,6 @@ dashRing:SetScript("OnEnter", function()
 end)
 dashRing:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
-local function RunHeld()
-    local offer, vendor, gear = getglobal("VanillaBonkOffer"), getglobal("VanillaBonkVendor"), getglobal("VanillaBonkGear")
-    return (offer and offer.open) or (vendor and vendor.open) or (gear and gear.open) or (UI.MenuPaused and UI.MenuPaused())
-end
-
 local function SetDashArc(done)
     if not done then
         dashRing.arc:Hide()
@@ -846,6 +860,7 @@ handlers["pw"] = function(f)
     info.ranks = f[4] or ""
     info.interval = tonumber(f[5]) or 0
     info.nextCast = tonumber(f[6]) or 0
+    info.held = nil
     info.line = f[7] or ""
     info.description = gsub(f[8] or "", "|n", "\n")
     info.damage = f[9] or ""

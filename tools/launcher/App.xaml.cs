@@ -6,6 +6,7 @@ namespace HordesOfAzeroth.Launcher
     public partial class App : Application
     {
         const string InstanceName = "HordesOfAzerothLauncher";
+        const int RestartWaitMs = 3000;
 
         Mutex m_single;
         EventWaitHandle m_showRequest;
@@ -18,7 +19,7 @@ namespace HordesOfAzeroth.Launcher
                 UpdateCheck.LocalSource = e.Args[source + 1];
             m_single = new Mutex(true, InstanceName, out bool first);
             m_showRequest = new EventWaitHandle(false, EventResetMode.AutoReset, InstanceName + ".Show");
-            if (!first)
+            if (!first && !OwnAfterRestart())
             {
                 m_showRequest.Set();
                 Shutdown();
@@ -32,6 +33,18 @@ namespace HordesOfAzeroth.Launcher
                     Dispatcher.Invoke(window.ShowFromTray);
             }) { IsBackground = true };
             listener.Start();
+        }
+
+        bool OwnAfterRestart()
+        {
+            try
+            {
+                return m_single.WaitOne(RestartWaitMs);
+            }
+            catch (AbandonedMutexException)
+            {
+                return true;
+            }
         }
 
         protected override void OnExit(ExitEventArgs e)

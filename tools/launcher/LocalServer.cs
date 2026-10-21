@@ -143,9 +143,42 @@ namespace HordesOfAzeroth.Launcher
 
         public async Task CreateDatabaseFilesAsync()
         {
+            if (Directory.Exists(m_folder.MariaDbData))
+                Directory.Delete(m_folder.MariaDbData, true);
             Directory.CreateDirectory(m_folder.MariaDbData);
-            await RunToEndAsync(Path.Combine(m_folder.MariaDb, "bin", "mariadb-install-db.exe"), m_folder.MariaDb,
-                $"\"--datadir={m_folder.MariaDbData}\"", "--password=root");
+            try
+            {
+                await RunToEndAsync(Path.Combine(m_folder.MariaDb, "bin", "mariadb-install-db.exe"), m_folder.MariaDb,
+                    $"\"--datadir={m_folder.MariaDbData}\"", "--password=root");
+            }
+            catch (InvalidOperationException failure)
+            {
+                string serverLog = DatabaseErrorLogLine();
+                try
+                {
+                    Directory.Delete(m_folder.MariaDbData, true);
+                }
+                catch (IOException)
+                {
+                }
+                catch (UnauthorizedAccessException)
+                {
+                }
+                throw serverLog == null ? failure : new InvalidOperationException($"{failure.Message} Database log: {serverLog}", failure);
+            }
+        }
+
+        string DatabaseErrorLogLine()
+        {
+            if (!Directory.Exists(m_folder.MariaDbData))
+                return null;
+            foreach (string log in Directory.GetFiles(m_folder.MariaDbData, "*.err"))
+            {
+                string line = File.ReadAllLines(log).Select(l => l.Trim()).LastOrDefault(l => l.IndexOf("ERROR", StringComparison.OrdinalIgnoreCase) >= 0);
+                if (line != null)
+                    return line;
+            }
+            return null;
         }
 
         public async Task StartDatabaseOnlyAsync(CancellationToken cancel)
@@ -221,15 +254,21 @@ namespace HordesOfAzeroth.Launcher
                 string text = await output;
                 string problem = await error;
                 if (process.ExitCode != 0)
-                    throw new InvalidOperationException($"{Path.GetFileName(exe)} failed: {FirstLine(problem)}");
+                    throw new InvalidOperationException($"{Path.GetFileName(exe)} failed (exit code 0x{process.ExitCode:X}): {Details(problem, text)}");
                 return text;
             }
         }
 
-        static string FirstLine(string text)
+        static string Details(string error, string output)
         {
-            string line = (text ?? "").Split('\n').Select(l => l.Trim()).FirstOrDefault(l => l.Length > 0 && !l.StartsWith("WARNING"));
+            string line = Lines(error).FirstOrDefault(l => !l.StartsWith("WARNING"))
+                ?? Lines(output).LastOrDefault();
             return line ?? "no details";
+        }
+
+        static IEnumerable<string> Lines(string text)
+        {
+            return (text ?? "").Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0);
         }
 
         void WriteServerConfig(string name)

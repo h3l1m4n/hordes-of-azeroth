@@ -54,3 +54,21 @@ priest willA 520 522 524 526 Discipline A
 priest willB 521 523 525 527 Discipline B
 priest voidA 528 530 532 534 Shadow A
 priest voidB 529 531 533 535 Shadow B
+paladin ret 800 801 802 803 Retribution base
+paladin holy 812 805 806 807 Holy base
+paladin prot 804 810 811 809 Protection base
+paladin light 800 806 804 810 Light AoE
+paladin csonly 800 Crusader Strike alone
+paladin sor 800 803 Crusader Strike with Seal of Righteousness
+paladin storm 800 806 805 812 Crusader, Divine Storm, Exorcism, Light's Hammer
+paladin lhonly 812 Light's Hammer alone
+paladin aow 800 801 805 803 Art of War: Crusader Strike, Judgement, Exorcism, Seal of Righteousness
+paladin seals 800 806 802 803 Seals: Crusader Strike, Divine Storm, Command, Righteousness
+paladin ground 804 806 810 800 Holy ground: Consecration, Divine Storm, Retribution Aura, Crusader Strike
+paladin hammers 812 801 805 800 Hammers: Light's Hammer, Judgement, Exorcism, Crusader Strike
+paladin retA 815 817 819 821 Retribution A
+paladin retB 816 818 820 822 Retribution B
+paladin holyA 837 825 827 829 Holy A
+paladin holyB 838 826 828 830 Holy B
+paladin protA 823 833 835 831 Protection A
+paladin protB 824 834 836 832 Protection B

@@ -88,7 +88,7 @@ Updates come through the launcher. When a new version is out, **Play** turns int
 <br>
 In World of Warcraft, the server decides where monsters walk, not the game on your PC. Your client only has the shape of the world, so the launcher turns that into walking maps (navigation meshes) for every zone the game uses. That's the slow part.
 <br><br>
-The game mode uses those maps for two things. The mobs chases you around trees, up ramps and through doorways instead of walking through walls. And every monster spawns on a spot it can actually reach you from: never inside a rock or a tree, on a rooftop, or across a river or cliff.
+The game mode uses those maps for two things. The mobs chase you around trees, up ramps and through doorways instead of walking through walls. And every monster spawns on a spot it can actually reach you from: never inside a rock or a tree, on a rooftop, or across a river or cliff.
 <br><br>
 The launcher downloads them ready-made with the game. If the download doesn’t work, it builds them from your own game files instead. That keeps your processor busy for a while, and it asks first whether to use all of your cores or half. The outpost and the Normal zones come first, so you can play while the rest finishes in the background.
 </details>

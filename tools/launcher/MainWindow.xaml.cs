@@ -394,6 +394,8 @@ namespace HordesOfAzeroth.Launcher
         {
             Brush colour = (Brush)FindResource("Text");
             string trimmed = line.TrimStart();
+            if (trimmed.StartsWith("#### "))
+                return NoteSubheading(trimmed.Substring(5).Trim());
             if (trimmed.StartsWith("### "))
                 return NoteHeading(trimmed.Substring(4).Trim());
             if (!trimmed.StartsWith("- "))
@@ -431,7 +433,7 @@ namespace HordesOfAzeroth.Launcher
                 string inner = text.Substring(next + 2, close - next - 2);
                 if (next == strike)
                 {
-                    block.Inlines.Add(new Run(inner) { Foreground = (Brush)FindResource("NoteOldValue"), TextDecorations = TextDecorations.Strikethrough });
+                    block.Inlines.Add(new Run(inner) { Foreground = (Brush)FindResource("NoteOldValue") });
                     afterOldValue = true;
                 }
                 else
@@ -450,10 +452,22 @@ namespace HordesOfAzeroth.Launcher
             return new TextBlock
             {
                 Text = text.ToUpperInvariant(),
-                FontSize = 11,
+                FontSize = 14,
                 FontWeight = FontWeights.Bold,
                 Foreground = (Brush)FindResource("Accent"),
-                Margin = new Thickness(0, 8, 0, 6),
+                Margin = new Thickness(0, 12, 0, 6),
+            };
+        }
+
+        TextBlock NoteSubheading(string text)
+        {
+            return new TextBlock
+            {
+                Text = text.ToUpperInvariant(),
+                FontSize = 11,
+                FontWeight = FontWeights.Bold,
+                Foreground = (Brush)FindResource("Text"),
+                Margin = new Thickness(0, 6, 0, 4),
             };
         }
 
@@ -486,7 +500,7 @@ namespace HordesOfAzeroth.Launcher
                 if (m_state != LauncherState.Installing)
                     return;
                 ShowInstallCard(Array.IndexOf(Installer.Steps, p.Step));
-                StatusText.Text = p.Step;
+                StatusText.Text = Installer.InProgress(p.Step);
                 StatusDetail.Text = string.IsNullOrEmpty(p.Detail) ? "" : "   " + p.Detail;
                 Progress.IsIndeterminate = p.Fraction < 0;
                 if (p.Fraction >= 0)
@@ -544,7 +558,7 @@ namespace HordesOfAzeroth.Launcher
                 if (m_state != LauncherState.Installing)
                     return;
                 ShowStepsCard("UPDATE", title, "Your characters and unlocks are backed up first and stay as they are. You can close the launcher and come back; it carries on where it stopped.", Installer.UpdateSteps, Array.IndexOf(Installer.UpdateSteps, p.Step));
-                StatusText.Text = p.Step;
+                StatusText.Text = Installer.InProgress(p.Step);
                 StatusDetail.Text = string.IsNullOrEmpty(p.Detail) ? "" : "   " + p.Detail;
                 Progress.IsIndeterminate = p.Fraction < 0;
                 if (p.Fraction >= 0)

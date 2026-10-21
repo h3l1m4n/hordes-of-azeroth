@@ -16,6 +16,7 @@ $testChannel = $repository -ne $releaseConfig.repository
 if ($Publish -and $Version -and -not $testChannel) { throw 'A -Version test release only goes to a test repository (-Repository): change VERSION and CHANGELOG.md for a real one.' }
 $version = if ($Version) { $Version } else { (Get-Content (Join-Path $RepoRoot 'VERSION') -Raw).Trim() }
 $tag = "v$version"
+$packageTag = "packages-$tag"
 $releaseRoot = Join-Path $RepoRoot 'release'
 $buildDir = Join-Path $releaseRoot 'build'
 $cacheDir = Join-Path $releaseRoot 'cache'
@@ -38,7 +39,7 @@ function Get-TextSha256([string]$Text) {
 function Get-ReleaseNotes {
     $sections = [System.Collections.Generic.List[object]]::new()
     $current = $null
-    foreach ($line in Get-Content (Join-Path $RepoRoot 'CHANGELOG.md')) {
+    foreach ($line in Get-Content (Join-Path $RepoRoot 'CHANGELOG.md') -Encoding UTF8) {
         if ($line -match '^## (\S+)') {
             $current = [ordered]@{ version = $Matches[1]; notes = [System.Collections.Generic.List[string]]::new() }
             $sections.Add($current)
@@ -83,7 +84,7 @@ function Get-DiscordWebhook {
 }
 
 function ConvertTo-DiscordNotes([string]$Notes, [string]$ReleaseUrl) {
-    $lines = $Notes -split "`r?`n" | ForEach-Object { if ($_ -match '^###\s+(.+)$') { "**$($Matches[1].Trim())**" } else { $_ } }
+    $lines = $Notes -split "`r?`n" | ForEach-Object { if ($_ -match '^####\s+(.+)$') { "**$($Matches[1].Trim())**" } else { $_ } }
     $text = ($lines -join "`n").Trim()
     $more = "`n`n[Full patch notes and download]($ReleaseUrl)"
     $limit = 4000 - $more.Length
@@ -391,10 +392,11 @@ New-Item -ItemType Directory -Force $assetsDir | Out-Null
 $previous = Get-PreviousManifest
 $previousPackages = @{}
 if ($previous) { foreach ($package in $previous.packages) { $previousPackages[$package.name] = $package } }
-$baseUrl = "https://github.com/$repository/releases/download/$tag"
+$baseUrl = "https://github.com/$repository/releases/download/$packageTag"
 
 $packages = [System.Collections.Generic.List[object]]::new()
 $uploads = [System.Collections.Generic.List[string]]::new()
+$releaseUploads = [System.Collections.Generic.List[string]]::new()
 foreach ($package in $releaseConfig.packages) {
     if ($package.build) { Invoke-PackageBuild $package.build }
     $files = Resolve-PackageFiles $package
@@ -459,7 +461,7 @@ $manifest = [ordered]@{
 $launcherExe = Join-Path $buildDir 'launcher\HoALauncher.exe'
 if (Test-Path $launcherExe) {
     Copy-Item $launcherExe (Join-Path $assetsDir 'HoALauncher.exe') -Force
-    $uploads.Add((Join-Path $assetsDir 'HoALauncher.exe'))
+    $releaseUploads.Add((Join-Path $assetsDir 'HoALauncher.exe'))
 }
 $manifestPath = Join-Path $assetsDir 'manifest.json'
 [System.IO.File]::WriteAllText($manifestPath, ($manifest | ConvertTo-Json -Depth 8) + "`n")
@@ -471,13 +473,17 @@ if (Test-Path $stagedLauncher) {
     $releaseBody += "`n`n---`n`nNew here? Download ``HoALauncher.exe`` below and put it in your World of Warcraft 1.12.1 folder. Already playing? The launcher updates itself.`n`n``HoALauncher.exe`` SHA-256: ``$launcherHash``"
 }
 [System.IO.File]::WriteAllText($notesPath, $releaseBody + "`n")
-$uploads.Add($manifestPath)
+$releaseUploads.Add($manifestPath)
 
-Write-Host "Release $tag staged in $outDir ($($uploads.Count - 1) changed packages)"
+Write-Host "Release $tag staged in $outDir ($($uploads.Count) changed packages for $packageTag)"
 if (-not $Publish) { return }
 
 $title = if ($testChannel) { "$($releaseConfig.productName) $version (test build)" } else { "$($releaseConfig.productName) $version" }
-gh release create $tag @uploads --repo $repository --title $title --notes-file $notesPath
+if ($uploads.Count) {
+    gh release create $packageTag @uploads --repo $repository --prerelease --title "$title update packages" --notes "Packages the launcher downloads for $tag. Players don't need anything here: get HoALauncher.exe from the $tag release."
+    if ($LASTEXITCODE -ne 0) { throw "gh release create $packageTag failed with exit code $LASTEXITCODE." }
+}
+gh release create $tag @releaseUploads --repo $repository --title $title --notes-file $notesPath --latest
 if ($LASTEXITCODE -ne 0) { throw "gh release create failed with exit code $LASTEXITCODE." }
 Write-Host "Published $tag to $repository"
 if (-not $testChannel) {

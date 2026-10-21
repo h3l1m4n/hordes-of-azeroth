@@ -19,6 +19,7 @@ namespace HordesOfAzeroth.Launcher
         public string LatestVersionFile => Path.Combine(ServerRun, "latest-version.txt");
         public string ConfigWtf => Path.Combine(Root, "WTF", "Config.wtf");
         public string GlueXml => Path.Combine(Root, "Interface", "GlueXML");
+        public string AddOns => Path.Combine(Root, "Interface", "AddOns");
         public string Cache => Path.Combine(Root, "WDB");
 
         GameFolder(string root)

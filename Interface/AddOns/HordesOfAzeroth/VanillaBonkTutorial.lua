@@ -38,6 +38,16 @@ local PLATE_KINDS = {
     { kind = 0, name = "You", text = "Your own health, shown over your hero. A bright cyan glow on it is your Shield.", own = true },
 }
 local OWN_BAR_COLOR = { 0.24, 0.70, 0.28 }
+local CURRENCY_WIDTH = 400
+local CURRENCY_ICON_SIZE = 32
+local CURRENCIES = {
+    { icon = "INV_Misc_Coin_02", name = "Gold", color = { 1, 0.82, 0 },
+        text = "Buys gear and upgrades at the outpost. You keep it between runs." },
+    { icon = "INV_Misc_Ticket_Darkmoon_01", name = "Darkmoon Tickets", color = { 0.75, 0.5, 1 },
+        text = "Spent at the Darkmoon vendors. You keep them between runs." },
+    { icon = "INV_Misc_Coin_04", name = "Valor", color = { 1, 0.91, 0.45 },
+        text = "Spent during a run to open chests and buy from shops. Resets every run, it's not kept." },
+}
 
 local tutorial = CreateFrame("Frame")
 local step
@@ -175,10 +185,64 @@ end
 
 local controllerTip = BuildControllerTip()
 
+local function CurrencyRow(box, currency, anchor)
+    local icon = box:CreateTexture(nil, "ARTWORK")
+    icon:SetWidth(CURRENCY_ICON_SIZE)
+    icon:SetHeight(CURRENCY_ICON_SIZE)
+    icon:SetTexture(UI.ICON_PATH .. currency.icon)
+    icon:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -GUIDE_ROW_GAP)
+    local name = UI.Text(box, 13)
+    name:SetTextColor(currency.color[1], currency.color[2], currency.color[3])
+    name:SetText(currency.name)
+    name:SetPoint("TOPLEFT", icon, "TOPRIGHT", 10, 0)
+    local text = UI.Text(box, 12)
+    text:SetWidth(CURRENCY_WIDTH - 52 - CURRENCY_ICON_SIZE - 10)
+    text:SetJustifyH("LEFT")
+    text:SetText(currency.text)
+    text:SetPoint("TOPLEFT", name, "BOTTOMLEFT", 0, -3)
+    return icon, math.max(CURRENCY_ICON_SIZE, name:GetHeight() + 3 + text:GetHeight())
+end
+
+local function BuildCurrencyTip()
+    local box = CreateFrame("Frame", "VanillaBonkCurrencyTip", UIParent)
+    box:SetFrameStrata("DIALOG")
+    box:SetWidth(CURRENCY_WIDTH)
+    box:SetPoint("CENTER", UIParent, "CENTER", 0, 60)
+    box:EnableMouse(true)
+    DialogBackdrop(box)
+    Title(box)
+    box.title:SetText("Your currencies")
+    local top = CreateFrame("Frame", nil, box)
+    top:SetWidth(1)
+    top:SetHeight(1)
+    top:SetPoint("TOPLEFT", box, "TOPLEFT", 26, -22 - box.title:GetHeight())
+    local height = 22 + box.title:GetHeight()
+    local anchor = top
+    for _, currency in ipairs(CURRENCIES) do
+        local rowHeight
+        anchor, rowHeight = CurrencyRow(box, currency, anchor)
+        if rowHeight > CURRENCY_ICON_SIZE then
+            local spacer = CreateFrame("Frame", nil, box)
+            spacer:SetWidth(1)
+            spacer:SetHeight(rowHeight)
+            spacer:SetPoint("TOPLEFT", anchor, "TOPLEFT", 0, 0)
+            anchor = spacer
+        end
+        height = height + GUIDE_ROW_GAP + rowHeight
+    end
+    box.next = UI.Button(box, 96, "Next", function() tutorial:ShowRunMaster() end)
+    box.next:SetPoint("BOTTOM", box, "BOTTOM", 0, 18)
+    box:SetHeight(height + 16 + 22 + 18)
+    box:Hide()
+    return box
+end
+
+local currencyTip = BuildCurrencyTip()
+
 local dashBox = Callout()
 local dashArrow = Arrow(DASH_ARROW_SIZE)
 RotateTexture(dashArrow.texture, math.pi)
-dashBox.next = UI.Button(dashBox, 96, "Next", function() tutorial:ShowRunMaster() end)
+dashBox.next = UI.Button(dashBox, 96, "Next", function() tutorial:ShowCurrencies() end)
 dashBox.next:SetPoint("BOTTOM", dashBox, "BOTTOM", 0, 18)
 
 local guideBox = Callout()
@@ -249,6 +313,7 @@ end
 
 local function HideCallouts()
     controllerTip:Hide()
+    currencyTip:Hide()
     dashBox:Hide()
     dashArrow:Hide()
     guideBox:Hide()
@@ -332,10 +397,18 @@ local function ShowGuide(title, body)
     guideBox:Show()
 end
 
+function tutorial:ShowCurrencies()
+    step = "currencies"
+    dashBox:Hide()
+    dashArrow:Hide()
+    currencyTip:Show()
+end
+
 function tutorial:ShowRunMaster()
     step = "runmaster"
     dashBox:Hide()
     dashArrow:Hide()
+    currencyTip:Hide()
     ShowGuide("Start a run", "Talk to " .. RUN_MASTER_NAME .. ", the Run Master. He lets you pick a map and starts your first run.")
 end
 
@@ -557,7 +630,7 @@ tutorial:SetScript("OnUpdate", function()
         SetBody(dashBox, DashText(), 30)
         dashArrow:SetPoint("BOTTOM", UI.DashRing, "TOP", 0, 4 + Bob())
         if dashedAt and GetTime() - dashedAt >= DASHED_DELAY then
-            this:ShowRunMaster()
+            this:ShowCurrencies()
         end
     elseif GUIDES[step] then
         UpdateGuide(GUIDES[step])

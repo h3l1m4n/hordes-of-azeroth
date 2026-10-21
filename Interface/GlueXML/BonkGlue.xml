@@ -273,7 +273,7 @@
 				</Anchors>
 				<Layers>
 					<Layer level="ARTWORK">
-						<FontString inherits="GlueFontNormalSmall" text="Gold (shared by all heroes)">
+						<FontString name="BonkHeroGoldLabel" inherits="GlueFontNormalSmall" text="Gold (shared by all heroes)">
 							<Anchors>
 								<Anchor point="TOP">
 									<Offset>
@@ -439,7 +439,7 @@
 										</Anchor>
 									</Anchors>
 								</FontString>
-								<FontString inherits="GlueFontNormal" text="Look">
+								<FontString name="BonkHeroLookLabel" inherits="GlueFontNormal" text="Look">
 									<Anchors>
 										<Anchor point="TOPLEFT">
 											<Offset>
@@ -448,23 +448,11 @@
 										</Anchor>
 									</Anchors>
 								</FontString>
-								<FontString inherits="GlueFontNormal" text="Name">
+								<FontString name="BonkHeroNameLabel" inherits="GlueFontNormal" text="Name">
 									<Anchors>
 										<Anchor point="TOPLEFT">
 											<Offset>
-												<AbsDimension x="26" y="-332"/>
-											</Offset>
-										</Anchor>
-									</Anchors>
-								</FontString>
-								<FontString name="BonkHeroDescription" inherits="GlueFontHighlightSmall" justifyH="LEFT" justifyV="TOP">
-									<Size>
-										<AbsDimension x="290" y="116"/>
-									</Size>
-									<Anchors>
-										<Anchor point="TOPLEFT">
-											<Offset>
-												<AbsDimension x="26" y="-392"/>
+												<AbsDimension x="26" y="-506"/>
 											</Offset>
 										</Anchor>
 									</Anchors>
@@ -498,6 +486,91 @@
 									</Anchor>
 								</Anchors>
 							</CheckButton>
+							<Frame name="BonkHeroLook1" inherits="CharacterCustomizationFrameTemplate" id="1">
+								<Size>
+									<AbsDimension x="296" y="32"/>
+								</Size>
+								<Anchors>
+									<Anchor point="TOPLEFT">
+										<Offset>
+											<AbsDimension x="22" y="-342"/>
+										</Offset>
+									</Anchor>
+								</Anchors>
+								<Scripts>
+									<OnLoad>
+										getglobal(this:GetName().."Text"):SetText(getglobal("CHAR_CUSTOMIZATION"..this:GetID().."_DESC"));
+									</OnLoad>
+								</Scripts>
+							</Frame>
+							<Frame name="BonkHeroLook2" inherits="CharacterCustomizationFrameTemplate" id="2">
+								<Size>
+									<AbsDimension x="296" y="32"/>
+								</Size>
+								<Anchors>
+									<Anchor point="TOPLEFT">
+										<Offset>
+											<AbsDimension x="22" y="-372"/>
+										</Offset>
+									</Anchor>
+								</Anchors>
+								<Scripts>
+									<OnLoad>
+										getglobal(this:GetName().."Text"):SetText(getglobal("CHAR_CUSTOMIZATION"..this:GetID().."_DESC"));
+									</OnLoad>
+								</Scripts>
+							</Frame>
+							<Frame name="BonkHeroLook3" inherits="CharacterCustomizationFrameTemplate" id="3">
+								<Size>
+									<AbsDimension x="296" y="32"/>
+								</Size>
+								<Anchors>
+									<Anchor point="TOPLEFT">
+										<Offset>
+											<AbsDimension x="22" y="-402"/>
+										</Offset>
+									</Anchor>
+								</Anchors>
+								<Scripts>
+									<OnLoad>
+										getglobal(this:GetName().."Text"):SetText(getglobal("CHAR_CUSTOMIZATION"..this:GetID().."_DESC"));
+									</OnLoad>
+								</Scripts>
+							</Frame>
+							<Frame name="BonkHeroLook4" inherits="CharacterCustomizationFrameTemplate" id="4">
+								<Size>
+									<AbsDimension x="296" y="32"/>
+								</Size>
+								<Anchors>
+									<Anchor point="TOPLEFT">
+										<Offset>
+											<AbsDimension x="22" y="-432"/>
+										</Offset>
+									</Anchor>
+								</Anchors>
+								<Scripts>
+									<OnLoad>
+										getglobal(this:GetName().."Text"):SetText(getglobal("CHAR_CUSTOMIZATION"..this:GetID().."_DESC"));
+									</OnLoad>
+								</Scripts>
+							</Frame>
+							<Frame name="BonkHeroLook5" inherits="CharacterCustomizationFrameTemplate" id="5">
+								<Size>
+									<AbsDimension x="296" y="32"/>
+								</Size>
+								<Anchors>
+									<Anchor point="TOPLEFT">
+										<Offset>
+											<AbsDimension x="22" y="-462"/>
+										</Offset>
+									</Anchor>
+								</Anchors>
+								<Scripts>
+									<OnLoad>
+										getglobal(this:GetName().."Text"):SetText(getglobal("CHAR_CUSTOMIZATION"..this:GetID().."_DESC"));
+									</OnLoad>
+								</Scripts>
+							</Frame>
 							<Button name="BonkHeroRandomizeButton" inherits="GlueButtonSmallTemplate" text="Random look">
 								<Anchors>
 									<Anchor point="LEFT" relativeTo="BonkHeroGenderButton2" relativePoint="RIGHT">
@@ -519,7 +592,7 @@
 								<Anchors>
 									<Anchor point="TOPLEFT">
 										<Offset>
-											<AbsDimension x="18" y="-346"/>
+											<AbsDimension x="18" y="-520"/>
 										</Offset>
 									</Anchor>
 								</Anchors>
@@ -549,6 +622,49 @@
 									<AbsInset left="15"/>
 								</TextInsets>
 							</EditBox>
+							<CheckButton name="BonkHeroIronman">
+								<Size>
+									<AbsDimension x="26" y="26"/>
+								</Size>
+								<Anchors>
+									<Anchor point="TOPLEFT" relativeTo="BonkHeroNameEdit" relativePoint="BOTTOMLEFT">
+										<Offset>
+											<AbsDimension x="6" y="2"/>
+										</Offset>
+									</Anchor>
+								</Anchors>
+								<HitRectInsets>
+									<AbsInset left="0" right="-110" top="0" bottom="0"/>
+								</HitRectInsets>
+								<Layers>
+									<Layer level="ARTWORK">
+										<FontString name="BonkHeroIronmanText" inherits="GlueFontNormalSmall" text="Ironman mode">
+											<Anchors>
+												<Anchor point="LEFT" relativePoint="RIGHT">
+													<Offset>
+														<AbsDimension x="2" y="1"/>
+													</Offset>
+												</Anchor>
+											</Anchors>
+										</FontString>
+									</Layer>
+								</Layers>
+								<Scripts>
+									<OnClick>
+										BonkHero_ToggleIronman();
+									</OnClick>
+									<OnEnter>
+										BonkHero_ShowIronmanTip();
+									</OnEnter>
+									<OnLeave>
+										BonkIronmanTip:Hide();
+									</OnLeave>
+								</Scripts>
+								<NormalTexture file="Interface\Buttons\UI-CheckBox-Up"/>
+								<PushedTexture file="Interface\Buttons\UI-CheckBox-Down"/>
+								<HighlightTexture file="Interface\Buttons\UI-CheckBox-Highlight" alphaMode="ADD"/>
+								<CheckedTexture file="Interface\Buttons\UI-CheckBox-Check"/>
+							</CheckButton>
 						</Frames>
 					</Frame>
 				</Frames>
@@ -616,5 +732,39 @@
 				BonkHero_OnUpdate(arg1);
 			</OnUpdate>
 		</Scripts>
+	</Frame>
+	<Frame name="BonkIronmanTip" frameStrata="TOOLTIP" hidden="true">
+		<Size>
+			<AbsDimension x="250" y="40"/>
+		</Size>
+		<Backdrop bgFile="Interface\Tooltips\UI-Tooltip-Background" edgeFile="Interface\Tooltips\UI-Tooltip-Border" tile="true">
+			<BackgroundInsets>
+				<AbsInset left="4" right="4" top="4" bottom="4"/>
+			</BackgroundInsets>
+			<TileSize>
+				<AbsValue val="16"/>
+			</TileSize>
+			<EdgeSize>
+				<AbsValue val="16"/>
+			</EdgeSize>
+			<Color r="0.09" g="0.09" b="0.19"/>
+			<BorderColor r="1" g="1" b="1"/>
+		</Backdrop>
+		<Layers>
+			<Layer level="ARTWORK">
+				<FontString name="BonkIronmanTipText" inherits="GlueFontHighlightSmall" justifyH="LEFT">
+					<Size>
+						<AbsDimension x="226" y="0"/>
+					</Size>
+					<Anchors>
+						<Anchor point="TOPLEFT">
+							<Offset>
+								<AbsDimension x="12" y="-10"/>
+							</Offset>
+						</Anchor>
+					</Anchors>
+				</FontString>
+			</Layer>
+		</Layers>
 	</Frame>
 </Ui>

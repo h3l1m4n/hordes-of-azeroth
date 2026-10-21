@@ -54,3 +54,5 @@
 
 # To track a new top-level project folder, add a line like:
 # !/addon-src/
+
+tools/bench/results.json

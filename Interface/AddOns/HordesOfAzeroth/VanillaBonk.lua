@@ -1964,6 +1964,9 @@ local function ShowNodeTooltip(button)
     else
         GameTooltip:AddLine(node.description, 1, 0.82, 0, 1)
     end
+    if node.description and string.find(node.description, "Valor") then
+        GameTooltip:AddLine("Valor is spent during a run to open chests and buy from shops. Resets every run, it's not kept.", 0.6, 0.6, 0.6, 1)
+    end
 
     GameTooltip:AddLine(" ")
     if node.rank < node.maxRank then
