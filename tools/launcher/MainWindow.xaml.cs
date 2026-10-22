@@ -21,6 +21,8 @@ namespace HordesOfAzeroth.Launcher
         const string DiscordUrl = "https://discord.gg/zpYfsqh6Dn";
         static readonly TimeSpan UpdateInterval = TimeSpan.FromMinutes(15);
         static readonly TimeSpan MenuReopenGuard = TimeSpan.FromMilliseconds(300);
+        const string FullRepairText = "The launcher checks every game file, puts back the ones that are missing or damaged and reloads the world. Your characters and unlocks are backed up first and stay as they are.";
+        const string QuickRepairText = "Some game files were missing or damaged, so the launcher puts them back. Your characters and unlocks stay as they are.";
 
         enum LauncherState { Missing, NotInstalled, Installing, Ready, UpdateAvailable, Starting, Playing, Stopping }
 
@@ -43,6 +45,7 @@ namespace HordesOfAzeroth.Launcher
         bool m_quitting;
         CancellationTokenSource m_installCancel;
         bool m_updating;
+        bool m_repairing;
 
         public MainWindow()
         {
@@ -194,6 +197,8 @@ namespace HordesOfAzeroth.Launcher
             {
                 if (!Installer.IsStockClient(m_folder))
                     SetState(LauncherState.Missing, "This client can't be used", "Hordes of Azeroth needs the English World of Warcraft 1.12.1 (build 5875) WoW.exe.");
+                else if (m_installer.IsComplete)
+                    SetState(LauncherState.NotInstalled, "Some game files are missing", "press Repair to put them back");
                 else if (m_installer.CompletedSteps.Count > 0)
                     SetState(LauncherState.NotInstalled, "The install isn't finished", "press Continue to carry on where it stopped");
                 else
@@ -239,11 +244,11 @@ namespace HordesOfAzeroth.Launcher
                     PrimaryButton.IsEnabled = false;
                     break;
                 case LauncherState.NotInstalled:
-                    PrimaryButton.Content = m_installer.CompletedSteps.Count > 0 ? "Continue" : "Install";
+                    PrimaryButton.Content = m_installer.IsComplete ? "Repair" : m_installer.CompletedSteps.Count > 0 ? "Continue" : "Install";
                     PrimaryButton.IsEnabled = true;
                     break;
                 case LauncherState.Installing:
-                    PrimaryButton.Content = m_updating ? "Updating…" : "Installing…";
+                    PrimaryButton.Content = m_repairing ? "Repairing…" : m_updating ? "Updating…" : "Installing…";
                     PrimaryButton.IsEnabled = false;
                     break;
                 case LauncherState.UpdateAvailable:
@@ -485,6 +490,8 @@ namespace HordesOfAzeroth.Launcher
             }
             if (m_state == LauncherState.Ready)
                 await PlayAsync();
+            else if (m_state == LauncherState.NotInstalled && m_installer.IsComplete)
+                await RepairAsync(false);
             else if (m_state == LauncherState.NotInstalled)
                 await InstallAsync();
         }
@@ -500,11 +507,7 @@ namespace HordesOfAzeroth.Launcher
                 if (m_state != LauncherState.Installing)
                     return;
                 ShowInstallCard(Array.IndexOf(Installer.Steps, p.Step));
-                StatusText.Text = Installer.InProgress(p.Step);
-                StatusDetail.Text = string.IsNullOrEmpty(p.Detail) ? "" : "   " + p.Detail;
-                Progress.IsIndeterminate = p.Fraction < 0;
-                if (p.Fraction >= 0)
-                    Progress.Value = p.Fraction;
+                ShowStepProgress(p);
             });
             try
             {
@@ -558,11 +561,7 @@ namespace HordesOfAzeroth.Launcher
                 if (m_state != LauncherState.Installing)
                     return;
                 ShowStepsCard("UPDATE", title, "Your characters and unlocks are backed up first and stay as they are. You can close the launcher and come back; it carries on where it stopped.", Installer.UpdateSteps, Array.IndexOf(Installer.UpdateSteps, p.Step));
-                StatusText.Text = Installer.InProgress(p.Step);
-                StatusDetail.Text = string.IsNullOrEmpty(p.Detail) ? "" : "   " + p.Detail;
-                Progress.IsIndeterminate = p.Fraction < 0;
-                if (p.Fraction >= 0)
-                    Progress.Value = p.Fraction;
+                ShowStepProgress(p);
             });
             try
             {
@@ -592,6 +591,81 @@ namespace HordesOfAzeroth.Launcher
                 RefreshState();
                 ShowProblem("The update stopped", e.Message);
             }
+        }
+
+        async Task RepairAsync(bool thorough)
+        {
+            if (m_game.IsRunning)
+            {
+                ShowProblem("Close the game first", "the repair replaces files the game has open");
+                return;
+            }
+            m_background?.Cancel();
+            m_installCancel = new CancellationTokenSource();
+            m_repairing = true;
+            string explanation = thorough ? FullRepairText : QuickRepairText;
+            SetState(LauncherState.Installing, "Getting ready", "");
+            ShowRepairCard(0, explanation);
+            IProgress<InstallProgress> progress = new Progress<InstallProgress>(p =>
+            {
+                if (m_state != LauncherState.Installing)
+                    return;
+                ShowRepairCard(Array.IndexOf(Installer.RepairSteps, p.Step), explanation);
+                ShowStepProgress(p);
+            });
+            try
+            {
+                await m_server.StopAsync();
+                Manifest manifest = await LatestManifestAsync();
+                await m_installer.RepairAsync(manifest, thorough, progress, m_installCancel.Token);
+                await m_server.StopAsync();
+                await GetInstallPathsAsync(manifest, m_installCancel.Token);
+                m_updates.PublishLatestVersion(manifest);
+                m_repairing = false;
+                m_state = LauncherState.Ready;
+                ShowNotes(manifest.Notes);
+                RefreshState();
+                if (m_state == LauncherState.Ready)
+                    StatusDetail.Text = "   the game is repaired";
+                StartBackgroundBuild();
+            }
+            catch (OperationCanceledException)
+            {
+                m_repairing = false;
+                await m_server.StopAsync();
+            }
+            catch (Exception e) when (!(e is OutOfMemoryException))
+            {
+                m_repairing = false;
+                await m_server.StopAsync();
+                m_state = LauncherState.Ready;
+                RefreshState();
+                ShowProblem("The repair stopped", e.Message);
+            }
+        }
+
+        async Task<Manifest> LatestManifestAsync()
+        {
+            try
+            {
+                return m_latest = await m_updates.FetchAsync();
+            }
+            catch (Exception e) when (m_latest != null && (e is System.Net.WebException || e is IOException))
+            {
+                return m_latest;
+            }
+        }
+
+        void ShowRepairCard(int current, string explanation) =>
+            ShowStepsCard("REPAIR", "Repairing Hordes of Azeroth", explanation, Installer.RepairSteps, current);
+
+        void ShowStepProgress(InstallProgress p)
+        {
+            StatusText.Text = Installer.InProgress(p.Step);
+            StatusDetail.Text = string.IsNullOrEmpty(p.Detail) ? "" : "   " + p.Detail;
+            Progress.IsIndeterminate = p.Fraction < 0;
+            if (p.Fraction >= 0)
+                Progress.Value = p.Fraction;
         }
 
         void RestartLauncher()
@@ -859,8 +933,9 @@ namespace HordesOfAzeroth.Launcher
             Progress<string> progress = new Progress<string>(step => StatusDetail.Text = "   " + step);
             try
             {
+                await RepairBeforePlayAsync();
                 m_game.Prepare(m_settings.Widescreen);
-                await m_server.StartAsync(progress, CancellationToken.None);
+                await StartServerAsync(progress);
                 await m_server.RemovePlayerGameMasterAsync();
                 StatusDetail.Text = "   Starting the game";
                 await m_game.StartAsync(CancellationToken.None);
@@ -874,6 +949,51 @@ namespace HordesOfAzeroth.Launcher
                 return;
             }
             await WatchRunningGameAsync();
+        }
+
+        async Task RepairBeforePlayAsync()
+        {
+            if (m_latest == null)
+                return;
+            bool checking = true;
+            bool repairing = false;
+            IProgress<InstallProgress> progress = new Progress<InstallProgress>(p =>
+            {
+                if (!checking || m_state != LauncherState.Starting)
+                    return;
+                repairing |= p.Fixing;
+                if (!repairing)
+                {
+                    StatusDetail.Text = "   " + Installer.InProgress(p.Step);
+                    return;
+                }
+                ShowRepairCard(Array.IndexOf(Installer.RepairSteps, p.Step), QuickRepairText);
+                ShowStepProgress(p);
+            });
+            bool repaired = await m_installer.RepairAsync(m_latest, false, progress, CancellationToken.None);
+            checking = false;
+            if (!repaired)
+                return;
+            ShowNotes(m_latest.Notes);
+            SetState(LauncherState.Starting, "Starting", "");
+        }
+
+        async Task StartServerAsync(IProgress<string> progress)
+        {
+            try
+            {
+                await m_server.StartAsync(progress, CancellationToken.None);
+            }
+            catch (WorldDatabaseException) when (!m_folder.IsDevelopmentTree)
+            {
+                StatusText.Text = "Reloading the world";
+                StatusDetail.Text = "   the world database didn't match the server (about a minute)";
+                ShowRepairCard(Installer.RepairSteps.Length - 1, QuickRepairText);
+                await m_installer.ReloadWorldAsync(new Progress<InstallProgress>(_ => { }), CancellationToken.None);
+                ShowNotes(m_latest?.Notes);
+                SetState(LauncherState.Starting, "Starting", "");
+                await m_server.StartAsync(progress, CancellationToken.None);
+            }
         }
 
         async Task WatchRunningGameAsync()
@@ -955,6 +1075,15 @@ namespace HordesOfAzeroth.Launcher
             BuildItem.IsChecked = m_settings.BuildWhilePlaying;
             WidescreenItem.IsChecked = m_settings.Widescreen;
             WidescreenItem.ToolTip = "Widens the view to fit your screen's shape, from 16:9 to 21:9 and 32:9 ultrawide, so the world doesn't look zoomed in. Turn it off for the original 1.12 view.";
+            RepairItem.Visibility = m_folder.IsDevelopmentTree ? Visibility.Collapsed : Visibility.Visible;
+            RepairItem.IsEnabled = m_state == LauncherState.Ready || m_state == LauncherState.UpdateAvailable || (m_state == LauncherState.NotInstalled && m_installer.IsComplete);
+        }
+
+        async void RepairItem_Click(object sender, RoutedEventArgs e)
+        {
+            string question = "Repair checks every game file, downloads the ones that are missing or damaged and reloads the world. It takes a minute or two. Your characters and unlocks are backed up first and stay as they are.\n\nRepair the game now?";
+            if (MessageBox.Show(this, question, "Hordes of Azeroth", MessageBoxButton.YesNo) == MessageBoxResult.Yes)
+                await RepairAsync(true);
         }
 
         void ShowWindowMode()

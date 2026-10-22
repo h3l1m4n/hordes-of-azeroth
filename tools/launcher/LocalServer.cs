@@ -10,8 +10,17 @@ using System.Threading.Tasks;
 
 namespace HordesOfAzeroth.Launcher
 {
+    sealed class WorldDatabaseException : InvalidOperationException
+    {
+        public WorldDatabaseException(string message) : base(message)
+        {
+        }
+    }
+
     sealed class LocalServer
     {
+        public const string RepairAdvice = "Choose Repair the game in the ••• menu next to Play.";
+        static readonly string[] OutdatedWorldLines = { "database structure is not up to date", "Database `mangos` is missing the following migrations" };
         const string Host = "127.0.0.1";
         const int DatabasePort = 3306;
         const int LoginPort = 3724;
@@ -59,9 +68,35 @@ namespace HordesOfAzeroth.Launcher
             if (!IsPortOpen(WorldPort))
             {
                 progress.Report("Loading the world");
+                DateTime started = DateTime.UtcNow;
                 m_world = StartHidden(Path.Combine(m_folder.ServerRun, "mangosd.exe"), m_folder.ServerRun, redirectInput: true);
-                await WaitForPortAsync(WorldPort, m_world, TimeSpan.FromMinutes(5), "the world server", cancel);
+                try
+                {
+                    await WaitForPortAsync(WorldPort, m_world, TimeSpan.FromMinutes(5), "the world server", cancel);
+                }
+                catch (InvalidOperationException) when (m_world.HasExited && WorldLogsMention(OutdatedWorldLines, started))
+                {
+                    throw new WorldDatabaseException("The world database doesn't match the server. " + RepairAdvice);
+                }
             }
+        }
+
+        bool WorldLogsMention(string[] texts, DateTime sinceUtc)
+        {
+            foreach (string name in new[] { "Server.log", "DBErrors.log" })
+            {
+                string log = Path.Combine(m_folder.ServerLogs, name);
+                if (!File.Exists(log) || File.GetLastWriteTimeUtc(log) < sinceUtc.AddSeconds(-2))
+                    continue;
+                using (FileStream stream = new FileStream(log, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+                using (StreamReader reader = new StreamReader(stream))
+                {
+                    string written = reader.ReadToEnd();
+                    if (texts.Any(t => written.IndexOf(t, StringComparison.OrdinalIgnoreCase) >= 0))
+                        return true;
+                }
+            }
+            return false;
         }
 
         public async Task StopAsync()
@@ -303,7 +338,7 @@ namespace HordesOfAzeroth.Launcher
         static Process StartHidden(string exe, string workingDirectory, bool redirectInput, params string[] arguments)
         {
             if (!File.Exists(exe))
-                throw new FileNotFoundException($"{Path.GetFileName(exe)} is missing. Repair the installation from the menu.", exe);
+                throw new FileNotFoundException($"{Path.GetFileName(exe)} is missing. {RepairAdvice}", exe);
             ProcessStartInfo info = new ProcessStartInfo(exe, string.Join(" ", arguments))
             {
                 WorkingDirectory = workingDirectory,

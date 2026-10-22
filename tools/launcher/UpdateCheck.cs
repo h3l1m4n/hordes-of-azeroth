@@ -15,6 +15,13 @@ namespace HordesOfAzeroth.Launcher
         public string Text;
     }
 
+    sealed class PackageFile
+    {
+        public string Path;
+        public long Size;
+        public string Sha256;
+    }
+
     sealed class PackageEntry
     {
         public string Name;
@@ -22,6 +29,7 @@ namespace HordesOfAzeroth.Launcher
         public string Sha256;
         public long Size;
         public string ContentHash;
+        public List<PackageFile> Files = new List<PackageFile>();
     }
 
     sealed class ThirdPartyEntry
@@ -146,6 +154,7 @@ namespace HordesOfAzeroth.Launcher
                         Sha256 = package["sha256"] as string,
                         Size = Convert.ToInt64(package["size"]),
                         ContentHash = package["contentHash"] as string,
+                        Files = ParseFiles(package),
                     });
                 manifest.DownloadSize = packageList.OfType<Dictionary<string, object>>()
                     .Where(p => p.TryGetValue("release", out object release) && (release as string) == "v" + manifest.Version?.Full)
@@ -194,6 +203,18 @@ namespace HordesOfAzeroth.Launcher
             if (root.TryGetValue("realmName", out object realm) && realm is string realmName)
                 manifest.RealmName = realmName;
             return manifest;
+        }
+
+        static List<PackageFile> ParseFiles(Dictionary<string, object> package)
+        {
+            if (!package.TryGetValue("files", out object files) || !(files is object[] list))
+                return new List<PackageFile>();
+            return list.OfType<Dictionary<string, object>>().Select(f => new PackageFile
+            {
+                Path = f["path"] as string,
+                Size = Convert.ToInt64(f["size"]),
+                Sha256 = f["sha256"] as string,
+            }).ToList();
         }
 
         static List<ReleaseNote> ParseChangelog(string[] lines)

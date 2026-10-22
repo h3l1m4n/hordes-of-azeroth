@@ -124,6 +124,8 @@
                                 <MenuItem Header="Monster path build speed…" Click="BuildSpeedItem_Click" />
                                 <MenuItem x:Name="TrayItem" IsCheckable="True" Header="Keep running in the tray" Click="TrayItem_Click" />
                                 <Separator />
+                                <MenuItem x:Name="RepairItem" Header="Repair the game…" Click="RepairItem_Click"
+                                          ToolTip="Checks every game file, puts back the ones that are missing or damaged and reloads the world. Your characters and unlocks stay." />
                                 <MenuItem Header="Open logs folder" Click="OpenLogs_Click" />
                                 <MenuItem Header="Save logs to the desktop" Click="SaveLogs_Click" />
                             </ContextMenu>

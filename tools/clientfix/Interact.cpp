@@ -4,6 +4,9 @@
 #include <cmath>
 #include <cstdint>
 #include <map>
+#include <iterator>
+#include <set>
+#include <string>
 
 namespace
 {
@@ -57,6 +60,8 @@ namespace
     float const UNIT_HEAD_FALLBACK          = 2.2f;
     float const PLAYER_HEIGHT_SMOOTHING     = 0.02f;
     DWORD const PICK_INTERVAL_MS            = 100;
+    DWORD const AUTO_USE_INTERVAL_MS        = 150;
+    DWORD const AUTO_USE_RETRY_MS           = 4000;
 
     struct Vec3
     {
@@ -77,6 +82,12 @@ namespace
     DWORD s_pickedAt = 0;
     float s_playerHeight = 0.0f;
     std::map<uint32_t, float> s_objectReach;
+    bool s_skipUnits = false;
+    std::set<uint32_t> s_skipObjectEntries;
+    std::set<uint32_t> s_skipObjectTypes;
+    std::set<uint32_t> s_autoUseEntries;
+    std::map<uint64_t, DWORD> s_autoUsedAt;
+    DWORD s_autoCheckedAt = 0;
 
     using ResolveUnitToken_t = uint8_t*(__fastcall*)(char const* token);
     using GetPosition_t = Vec3*(__thiscall*)(void* object, Vec3* out);
@@ -201,6 +212,13 @@ namespace
         return found;
     }
 
+    bool IsSkipped(Pick const& pick)
+    {
+        if (pick.unit)
+            return s_skipUnits;
+        return s_skipObjectEntries.count(pick.entry) || s_skipObjectTypes.count(pick.detail);
+    }
+
     void Repick(uint8_t* player)
     {
         Vec3 const from = Position(player);
@@ -210,7 +228,7 @@ namespace
             if (object == player)
                 return true;
             Pick candidate;
-            if (!ReadCandidate(object, from, candidate))
+            if (!ReadCandidate(object, from, candidate) || IsSkipped(candidate))
                 return true;
             if (candidate.guid == s_pick.guid)
                 kept = candidate;
@@ -342,6 +360,76 @@ namespace
         return 0;
     }
 
+    void SetMember(std::set<uint32_t>& members, uint32_t id, bool member)
+    {
+        if (member)
+            members.insert(id);
+        else
+            members.erase(id);
+    }
+
+    int __fastcall Lua_SetInteractSkip(void* L)
+    {
+        char const* kind = Lua::tostring(L, 1);
+        uint32_t const id = uint32_t(Lua::tonumber(L, 2));
+        bool const skip = Lua::toboolean(L, 3) != 0;
+        std::string const which = kind ? kind : "";
+        if (which == "unit")
+            s_skipUnits = skip;
+        else if (which == "object")
+            SetMember(s_skipObjectEntries, id, skip);
+        else if (which == "type")
+            SetMember(s_skipObjectTypes, id, skip);
+        s_pickedAt = 0;
+        return 0;
+    }
+
+    int __fastcall Lua_SetAutoUse(void* L)
+    {
+        SetMember(s_autoUseEntries, uint32_t(Lua::tonumber(L, 1)), Lua::toboolean(L, 2) != 0);
+        return 0;
+    }
+
+    void ForgetOldAutoUses(DWORD now)
+    {
+        for (auto used = s_autoUsedAt.begin(); used != s_autoUsedAt.end();)
+            used = now - used->second >= AUTO_USE_RETRY_MS ? s_autoUsedAt.erase(used) : std::next(used);
+    }
+
+    int __fastcall Lua_AutoUse(void* L)
+    {
+        DWORD const now = GetTickCount();
+        uint8_t* player = Player();
+        if (!player || s_autoUseEntries.empty() || now - s_autoCheckedAt < AUTO_USE_INTERVAL_MS)
+        {
+            Lua::pushboolean(L, 0);
+            return 1;
+        }
+        s_autoCheckedAt = now;
+        ForgetOldAutoUses(now);
+        Vec3 const from = Position(player);
+        Pick nearest;
+        ForEachObject([&](uint8_t* object) {
+            Pick candidate;
+            if (object == player || !ReadCandidate(object, from, candidate) || candidate.unit ||
+                !s_autoUseEntries.count(candidate.entry) || s_autoUsedAt.count(candidate.guid))
+                return true;
+            if (!nearest.object || candidate.distance < nearest.distance)
+                nearest = candidate;
+            return true;
+        });
+        if (!nearest.object)
+        {
+            Lua::pushboolean(L, 0);
+            return 1;
+        }
+        s_autoUsedAt[nearest.guid] = now;
+        Log("interact: auto-using object %u at %.1f yd", nearest.entry, nearest.distance);
+        reinterpret_cast<RightClick_t>(FUN_OBJECT_RIGHT_CLICK)(nearest.object, 0);
+        Lua::pushboolean(L, 1);
+        return 1;
+    }
+
     int __fastcall Lua_Interact(void* L)
     {
         uint8_t* player = Player();
@@ -362,8 +450,16 @@ void RegisterInteractFunctions()
 {
     s_pick = Pick();
     s_playerHeight = 0.0f;
+    s_skipUnits = false;
+    s_skipObjectEntries.clear();
+    s_skipObjectTypes.clear();
+    s_autoUseEntries.clear();
+    s_autoUsedAt.clear();
     Lua::Register("HoAController_GetInteract", &Lua_GetInteract);
     Lua::Register("HoAController_Interact", &Lua_Interact);
     Lua::Register("HoAController_SetObjectReach", &Lua_SetObjectReach);
     Lua::Register("HoAController_GetPlayerHead", &Lua_GetPlayerHead);
+    Lua::Register("HoAController_SetInteractSkip", &Lua_SetInteractSkip);
+    Lua::Register("HoAController_SetAutoUse", &Lua_SetAutoUse);
+    Lua::Register("HoAController_AutoUse", &Lua_AutoUse);
 }

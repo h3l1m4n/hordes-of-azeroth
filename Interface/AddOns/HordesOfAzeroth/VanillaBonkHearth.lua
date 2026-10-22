@@ -2,8 +2,6 @@ local UI = VanillaBonkUI
 
 local HEARTH = "VANILLABONK_HEARTH"
 local HEARTHSTONE_ITEM = "item:900230:"
-local DEFAULT_KEY = "T"
-local FREE_KEY_ACTIONS = { [""] = true, ATTACKTARGET = true }
 local SIZE = 44
 local BAR_OFFSET_X = 366
 local BAR_OFFSET_Y = 4
@@ -151,25 +149,8 @@ local function Refresh()
     end
 end
 
-local function GiveDefaultKey()
-    if VanillaBonkHearthKeyGiven then
-        return
-    end
-    VanillaBonkHearthKeyGiven = true
-    if GetBindingKey(HEARTH) or not FREE_KEY_ACTIONS[GetBindingAction(DEFAULT_KEY) or ""] then
-        return
-    end
-    SetBinding(DEFAULT_KEY, HEARTH)
-    SaveBindings(GetCurrentBindingSet())
-end
-
 local events = CreateFrame("Frame")
 events:RegisterEvent("PLAYER_ENTERING_WORLD")
 events:RegisterEvent("BAG_UPDATE")
 events:RegisterEvent("UPDATE_BINDINGS")
-events:SetScript("OnEvent", function()
-    if event == "PLAYER_ENTERING_WORLD" then
-        GiveDefaultKey()
-    end
-    Refresh()
-end)
+events:SetScript("OnEvent", Refresh)

@@ -9,16 +9,9 @@ local ROW = 25
 local INDENT = 16
 local SECTION_GAP = 24
 
-local OWN_OPTIONS = {
-    { key = "enemyPlates", label = "Enemy Nameplates", default = true,
-        tooltip = "Shows health bars over enemies near you.", apply = function() UI.ApplyEnemyPlates() end },
-    { key = "damageMeter", label = "Damage Meter", default = true,
-        tooltip = "Shows how much damage each of your spells has done this run.", apply = function() UI.ApplyDamageMeter() end },
-    { key = "incomingNumbers", label = "Damage Taken Numbers", default = true,
-        tooltip = "Shows the damage you take as numbers beside your hero." },
-    { key = "healthNumbers", label = "Health Numbers", default = true,
-        tooltip = "Shows your health as numbers on your health bars.", apply = function() UI.ApplyHealthNumbers() end },
-}
+local DISPLAY = UI.DISPLAY_SETTINGS
+local INTERACT = UI.INTERACT_SETTINGS
+local checks = {}
 
 local healthBar = { pending = nil }
 
@@ -28,8 +21,21 @@ local SECTION_ROWS = {
             name = "Hordes of Azeroth",
             height = 3 * ROW + 20,
             columns = 3,
-            own = { { 1, 1, 0 }, { 2, 1, 1 }, { 3, 1, 2 }, { 4, 2, 2 } },
+            own = { { DISPLAY[1], 1, 0 }, { DISPLAY[2], 1, 1 }, { DISPLAY[3], 1, 2 }, { DISPLAY[4], 2, 2 } },
             healthBar = { 2, 0, -22 },
+        },
+    },
+    {
+        {
+            name = "Interact Key",
+            height = 3 * ROW + 20,
+            columns = 3,
+            own = {
+                { INTERACT[1], 1, 0 }, { INTERACT[2], 1, 1 }, { INTERACT[3], 1, 2 },
+                { INTERACT[4], 2, 0 }, { INTERACT[5], 2, 1 },
+                { UI.AUTO_CHEST_SETTING, 3, 0 },
+            },
+            interactKey = { 3, 1 },
         },
     },
     {
@@ -160,6 +166,31 @@ local function BuildHealthBarDropdown(box)
     return dropdown
 end
 
+local interactKey
+
+local function BuildInteractKey(box)
+    local binding = UI.KEYS[1]
+    local row = CreateFrame("Frame", nil, box)
+    row:SetWidth(box.columnWidth - 10)
+    row:SetHeight(26)
+    row.label = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    row.label:SetPoint("LEFT", row, "LEFT", 0, 0)
+    row.label:SetText("Interact key")
+    row.change = UI.Button(row, 70, "Change", function()
+        PlaySound("igMainMenuOptionCheckBoxOn")
+        UI.CaptureKey(binding)
+    end)
+    row.change:SetPoint("RIGHT", row, "RIGHT", 0, 0)
+    row.cap = UI.KeyCap(row)
+    row.cap:SetPoint("RIGHT", row.change, "LEFT", -6, 0)
+    function row:Refresh()
+        UI.SetKeyCap(self.cap, UI.KeyText(binding))
+    end
+    row:RegisterEvent("UPDATE_BINDINGS")
+    row:SetScript("OnEvent", function() this:Refresh() end)
+    return row
+end
+
 local function BuildSection(section, width, height, x, y)
     local box = CreateFrame("Frame", "VanillaBonkOptions" .. gsub(section.name, " ", ""), frame, "OptionFrameBoxTemplate")
     box:SetWidth(width)
@@ -171,14 +202,18 @@ local function BuildSection(section, width, height, x, y)
         Place(getglobal("UIOptionsFrameCheckButton" .. check[1]), box, check[2], check[3], check[4])
     end
     for _, own in ipairs(section.own or {}) do
-        local option = OWN_OPTIONS[own[1]]
-        local check = CreateFrame("CheckButton", "VanillaBonkOptionsCheck" .. own[1], box, "OptionsCheckButtonTemplate")
+        local setting = own[1]
+        local check = CreateFrame("CheckButton", "VanillaBonkOptionsCheck" .. setting.key, box, "OptionsCheckButtonTemplate")
         check:SetWidth(26)
         check:SetHeight(26)
-        getglobal(check:GetName() .. "Text"):SetText(option.label)
-        check.tooltipText = option.tooltip
-        option.check = check
+        getglobal(check:GetName() .. "Text"):SetText(setting.label)
+        check.tooltipText = setting.tooltip
+        checks[setting] = check
         Place(check, box, own[2], own[3])
+    end
+    if section.interactKey then
+        interactKey = BuildInteractKey(box)
+        Place(interactKey, box, section.interactKey[1], section.interactKey[2], 4, -6)
     end
     if section.healthBar then
         healthBar.dropdown = BuildHealthBarDropdown(box)
@@ -267,14 +302,11 @@ local function LoadOwnOptions()
     if healthBar.dropdown then
         SelectHealthBar(UI.HealthBarMode())
     end
-    for _, option in ipairs(OWN_OPTIONS) do
-        if option.check then
-            if option.get then
-                option.check:SetChecked(option.get())
-            else
-                option.check:SetChecked(UI.Option(option.key, option.default))
-            end
-        end
+    for setting, check in pairs(checks) do
+        check:SetChecked(UI.SettingValue(setting))
+    end
+    if interactKey then
+        interactKey:Refresh()
     end
 end
 
@@ -282,21 +314,10 @@ local BaseSave = UIOptionsFrame_Save
 function UIOptionsFrame_Save()
     BaseSave()
     if healthBar.pending then
-        UI.SetOption("healthBar", healthBar.pending)
-        UI.ApplyHealthBarMode()
+        UI.ChangeHealthBar(healthBar.pending)
     end
-    for _, option in ipairs(OWN_OPTIONS) do
-        if option.check then
-            local on = option.check:GetChecked() and true or false
-            if option.set then
-                option.set(on)
-            else
-                UI.SetOption(option.key, on)
-            end
-            if option.apply then
-                option.apply()
-            end
-        end
+    for setting, check in pairs(checks) do
+        UI.ChangeSetting(setting, check:GetChecked() and true or false)
     end
 end
 
@@ -306,10 +327,8 @@ function UIOptionsFrame_SetDefaults()
     if healthBar.dropdown then
         SelectHealthBar("plate")
     end
-    for _, option in ipairs(OWN_OPTIONS) do
-        if option.check then
-            option.check:SetChecked(option.default)
-        end
+    for setting, check in pairs(checks) do
+        check:SetChecked(setting.default)
     end
 end
 

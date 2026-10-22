@@ -12,10 +12,6 @@ local SHADE_WIDTH = 460
 local SHADE_HEIGHT = 120
 local METER_EDGE = 20
 local METER_LIFT = HUD_HEIGHT + 6
-local KEYCAP_TEXTURE = "Interface\\AddOns\\HordesOfAzeroth\\Textures\\KeyCap"
-local KEYCAP_HEIGHT = 22
-local KEYCAP_CAP = 11
-local KEYCAP_PAD = 7
 local KEY_REFRESH = 1
 local PAIR_GAP = 2
 local ITEMS = {
@@ -37,44 +33,13 @@ hud.shade:SetWidth(SHADE_WIDTH)
 hud.shade:SetHeight(SHADE_HEIGHT)
 hud.shade:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", 0, 0)
 
-local function KeyCapPiece(cap, left, right)
-    local piece = cap:CreateTexture(nil, "ARTWORK")
-    piece:SetTexture(KEYCAP_TEXTURE)
-    piece:SetTexCoord(left, right, 0, 1)
-    piece:SetHeight(KEYCAP_HEIGHT)
-    return piece
-end
-
-local function MakeKeyCap(parent)
-    local cap = CreateFrame("Frame", nil, parent)
-    cap:SetHeight(KEYCAP_HEIGHT)
-    cap.left = KeyCapPiece(cap, 0, 0.25)
-    cap.left:SetWidth(KEYCAP_CAP)
-    cap.left:SetPoint("LEFT", cap, "LEFT", 0, 0)
-    cap.right = KeyCapPiece(cap, 0.75, 1)
-    cap.right:SetWidth(KEYCAP_CAP)
-    cap.right:SetPoint("RIGHT", cap, "RIGHT", 0, 0)
-    cap.middle = KeyCapPiece(cap, 0.25, 0.75)
-    cap.middle:SetPoint("LEFT", cap.left, "RIGHT", 0, 0)
-    cap.middle:SetPoint("RIGHT", cap.right, "LEFT", 0, 0)
-    cap.text = UI.Text(cap, 11)
-    cap.text:SetPoint("CENTER", cap, "CENTER", 0, 0)
-    cap.text:SetTextColor(0.95, 0.92, 0.82)
-    return cap
-end
-
-local function SetKeyCapText(cap, text)
-    cap.text:SetText(text)
-    cap:SetWidth(math.max(KEYCAP_HEIGHT, cap.text:GetStringWidth() + 2 * KEYCAP_PAD))
-end
-
 local function MakeItem(item)
     local frame = CreateFrame("Button", nil, hud)
     frame:SetHeight(HUD_HEIGHT)
     if item.click then
         frame:SetScript("OnClick", item.click)
     end
-    frame.cap = MakeKeyCap(frame)
+    frame.cap = UI.KeyCap(frame)
     frame.cap:SetPoint("LEFT", frame, "LEFT", 0, 0)
     frame.glyph = frame:CreateTexture(nil, "ARTWORK")
     frame.glyph:SetWidth(GLYPH_SIZE)
@@ -170,7 +135,7 @@ local function RefreshIcons()
         if keyboard then
             if frame.shown then
                 local text = KeyText(item)
-                SetKeyCapText(frame.cap, text)
+                UI.SetKeyCap(frame.cap, text)
                 frame.shown = text ~= ""
                 signature = signature .. "|" .. text
             end

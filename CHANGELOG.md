@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.2.3
+
+### Innkeeper
+- A new NPC has moved in: Tarn Oakhoof, the new Innkeeper at the Inn.
+- Tarn allows you to change some game settings, it also updates the settings in the Interface menu, and also works the other way around.
+- New players meet Tarn before their first run. If you've already played, the tutorial shows you the way to him once.
+
+### Interact key
+- Press F to talk to people and open chests near you, no right-click needed. The key shows above whatever you can use.
+- Tarn allows you to choose what the key interacts with: people, chests, shrines, portals and/or the mailbox.
+- New option: Automatically open chests when you walk up to them. It's off by default and only opens Treasure and Elite Chests.
+- F is the default interact key. You can change it by speaking to Tarn or inside the Key Bindings menu.
+
+### Launcher
+- The launcher now checks the game before every start and puts back missing or broken files, such as the login screen or the addon, before the game opens.
+- An update or install that was stopped while loading the world now loads it again, instead of leaving a game that can't start.
+- New Repair the game option in the "..." menu next to Play. It checks every file, downloads the ones that are missing or damaged and reloads the world. Your characters and unlocks are backed up first.
+- The first time you play after this update, the launcher may reload the world once. It takes about a minute.
+
 ## 0.2.2
 
 ### Debuffs on health bars

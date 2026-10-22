@@ -17,11 +17,48 @@ namespace HordesOfAzeroth.Launcher
         public string Step;
         public string Detail;
         public double Fraction = -1;
+        public bool Fixing;
+    }
+
+    sealed class FixTracker : IProgress<InstallProgress>
+    {
+        readonly IProgress<InstallProgress> m_progress;
+
+        public FixTracker(IProgress<InstallProgress> progress)
+        {
+            m_progress = progress;
+        }
+
+        public bool FixedSomething { get; private set; }
+
+        public void Report(InstallProgress value)
+        {
+            FixedSomething |= value.Fixing;
+            m_progress.Report(value);
+        }
     }
 
     sealed class Installer
     {
         public const string StockClientMd5 = "CCF83146DBB3D10EF826AA4DE178A5BE";
+        const string LauncherPackage = "launcher";
+        const string WorldPackage = "world-db";
+        const string SpellEffectsPackage = "telegraphkit";
+        const string VersionEntry = "VERSION";
+
+        static readonly string[] SpellEffectFiles =
+        {
+            Path.Combine("Data", "patch-3.MPQ"),
+            Path.Combine("Interface", "AddOns", "HordesOfAzeroth", "Textures", "ClassCrests.tga"),
+            Path.Combine("Interface", "AddOns", "HordesOfAzeroth", "Textures", "PlayerFrameNoPower.tga"),
+        };
+
+        static readonly Dictionary<string, string> MigrationDatabases = new Dictionary<string, string>
+        {
+            ["characters"] = "characters",
+            ["logon"] = "realmd",
+            ["logs"] = "logs",
+        };
 
         public static readonly string[] Steps =
         {
@@ -43,8 +80,11 @@ namespace HordesOfAzeroth.Launcher
 
         string StateFile => Path.Combine(m_folder.LauncherData, "install-steps.txt");
         string PackagesFile => Path.Combine(m_folder.LauncherData, "packages.txt");
+        string AppliedFile => Path.Combine(m_folder.LauncherData, "packages-applied.txt");
         string Downloads => Path.Combine(m_folder.LauncherData, "downloads");
         string DataDir => Path.Combine(m_folder.Server, "data");
+        string SqlDir => Path.Combine(m_folder.Server, "sql");
+        string WorldSql => Path.Combine(SqlDir, "world.sql");
         string PendingVersion => Path.Combine(m_folder.LauncherData, "VERSION.pending");
 
         void FinishVersion()
@@ -79,8 +119,21 @@ namespace HordesOfAzeroth.Launcher
             "Update the database",
         };
 
+        public static readonly string[] RepairSteps =
+        {
+            "Check the game files",
+            "Download the missing files",
+            "Patch the game",
+            "Read the maps",
+            "Rebuild the spell effects",
+            "Check the database",
+        };
+
         static readonly Dictionary<string, string> StepsInProgress = new Dictionary<string, string>
         {
+            { "Check the game files", "Checking the game files" },
+            { "Download the missing files", "Downloading the missing files" },
+            { "Check the database", "Checking the database" },
             { "Download the game files", "Downloading the game files" },
             { "Patch the game", "Patching the game" },
             { "Read the maps", "Reading the maps" },
@@ -109,79 +162,126 @@ namespace HordesOfAzeroth.Launcher
 
         public async Task<bool> UpdateAsync(Manifest manifest, IProgress<InstallProgress> progress, CancellationToken cancel)
         {
-            HashSet<string> changed = ChangedPackages(manifest);
-            GameVersion from = m_folder.InstalledVersion;
+            bool launcherChanged = LauncherOutdated(manifest);
+            string from = "Patch " + (m_folder.InstalledVersion?.Display ?? "unknown");
             try
             {
                 progress.Report(new InstallProgress { Step = UpdateSteps[0] });
                 await BackUpAsync(from, cancel);
 
                 progress.Report(new InstallProgress { Step = UpdateSteps[1] });
-                await DownloadAsync(manifest, progress, UpdateSteps[1], cancel);
+                await DownloadAsync(await PackagesToFetchAsync(manifest, true, false, _ => { }), MissingThirdParty(manifest), progress, UpdateSteps[1], cancel);
 
                 progress.Report(new InstallProgress { Step = UpdateSteps[2] });
                 Patch(manifest);
 
                 progress.Report(new InstallProgress { Step = UpdateSteps[3] });
-                if (changed.Contains("telegraphkit"))
+                if (!SpellEffectsBuilt())
                     await BuildSpellEffectsAsync(cancel);
 
                 progress.Report(new InstallProgress { Step = UpdateSteps[4] });
-                await UpdateDatabaseAsync(manifest, changed.Contains("world-db"), progress, UpdateSteps[4], cancel);
+                await EnsureDatabaseAsync(manifest, false, progress, UpdateSteps[4], cancel);
                 FinishVersion();
             }
             finally
             {
                 await m_server.StopAsync();
             }
-            return changed.Contains("launcher");
+            return launcherChanged;
         }
 
-        async Task BackUpAsync(GameVersion version, CancellationToken cancel)
+        public async Task<bool> RepairAsync(Manifest manifest, bool thorough, IProgress<InstallProgress> reporter, CancellationToken cancel)
+        {
+            if (m_folder.IsDevelopmentTree)
+                return false;
+            Directory.CreateDirectory(m_folder.LauncherData);
+            FixTracker progress = new FixTracker(reporter);
+
+            progress.Report(new InstallProgress { Step = RepairSteps[0] });
+            Action<double> reportChecked = thorough
+                ? fraction => progress.Report(new InstallProgress { Step = RepairSteps[0], Fraction = fraction })
+                : (Action<double>)(_ => { });
+            List<PackageEntry> packages = await PackagesToFetchAsync(manifest, false, thorough, reportChecked);
+            List<ThirdPartyEntry> thirdParty = MissingThirdParty(manifest);
+            if (packages.Count > 0 || thirdParty.Count > 0)
+            {
+                progress.Report(new InstallProgress { Step = RepairSteps[1], Fixing = true });
+                await DownloadAsync(packages, thirdParty, progress, RepairSteps[1], cancel);
+            }
+
+            progress.Report(new InstallProgress { Step = RepairSteps[2] });
+            Patch(manifest);
+
+            bool mapsMissing = !MapsRead;
+            if (mapsMissing)
+            {
+                progress.Report(new InstallProgress { Step = RepairSteps[3], Fixing = true });
+                await ReadMapsAsync(progress, RepairSteps[3], cancel);
+            }
+
+            if (thorough || mapsMissing || !SpellEffectsBuilt())
+            {
+                progress.Report(new InstallProgress { Step = RepairSteps[4], Fixing = true });
+                await BuildSpellEffectsAsync(cancel);
+            }
+
+            progress.Report(new InstallProgress { Step = RepairSteps[5] });
+            if (thorough && m_server.DatabaseExists)
+            {
+                progress.Report(new InstallProgress { Step = RepairSteps[5], Detail = "backing up your characters" });
+                await BackUpAsync("Repair", cancel);
+            }
+            await EnsureDatabaseAsync(manifest, thorough, progress, RepairSteps[5], cancel);
+            FinishVersion();
+            return progress.FixedSomething;
+        }
+
+        public async Task ReloadWorldAsync(IProgress<InstallProgress> progress, CancellationToken cancel)
+        {
+            progress.Report(new InstallProgress { Step = RepairSteps[5], Fixing = true });
+            await m_server.StartDatabaseOnlyAsync(cancel);
+            await LoadWorldAsync(progress, RepairSteps[5]);
+        }
+
+        async Task BackUpAsync(string label, CancellationToken cancel)
         {
             await m_server.StartDatabaseOnlyAsync(cancel);
-            string folder = Path.Combine(Backups, $"{DateTime.Now:yyyy-MM-dd HHmmss} Patch {version?.Display ?? "unknown"}");
+            HashSet<string> present = new HashSet<string>(Lines(await m_server.QueryAsync("mysql", "SHOW DATABASES")), StringComparer.OrdinalIgnoreCase);
+            string[] databases = new[] { "characters", "realmd" }.Where(present.Contains).ToArray();
+            if (databases.Length == 0)
+                return;
+            string folder = Path.Combine(Backups, $"{DateTime.Now:yyyy-MM-dd HHmmss} {label}");
             Directory.CreateDirectory(folder);
-            await m_server.BackUpAsync(Path.Combine(folder, "characters and accounts.sql"), "characters", "realmd");
+            await m_server.BackUpAsync(Path.Combine(folder, "characters and accounts.sql"), databases);
             foreach (DirectoryInfo old in new DirectoryInfo(Backups).GetDirectories().OrderByDescending(d => d.Name).Skip(BackupsKept))
                 old.Delete(true);
-        }
-
-        async Task UpdateDatabaseAsync(Manifest manifest, bool replaceWorld, IProgress<InstallProgress> progress, string step, CancellationToken cancel)
-        {
-            string sql = Path.Combine(m_folder.Server, "sql");
-            await m_server.StartDatabaseOnlyAsync(cancel);
-            if (replaceWorld)
-            {
-                progress.Report(new InstallProgress { Step = step, Detail = "loading the new world (about a minute)" });
-                await m_server.QueryAsync("mysql", "DROP DATABASE IF EXISTS mangos");
-                await m_server.RunSqlFileAsync(null, Path.Combine(m_folder.Config, "create-databases.sql"));
-                await m_server.RunSqlFileAsync("mangos", Path.Combine(sql, "world.sql"));
-            }
-            progress.Report(new InstallProgress { Step = step, Detail = "applying updates to your characters" });
-            await ApplyMigrationsAsync(Path.Combine(sql, "migrations"));
-            string realm = manifest.RealmName.Replace("'", "''");
-            await m_server.QueryAsync("realmd", $"UPDATE realmlist SET name = '{realm}' WHERE id = 1");
         }
 
         public async Task InstallAsync(Manifest manifest, IProgress<InstallProgress> progress, CancellationToken cancel)
         {
             Directory.CreateDirectory(m_folder.LauncherData);
             HashSet<string> done = CompletedSteps;
-            foreach (string step in Steps)
+            try
             {
-                if (done.Contains(step))
-                    continue;
-                progress.Report(new InstallProgress { Step = step });
-                switch (Array.IndexOf(Steps, step))
+                foreach (string step in Steps)
                 {
-                    case 0: await DownloadAsync(manifest, progress, step, cancel); break;
-                    case 1: Patch(manifest); break;
-                    case 2: await ReadMapsAsync(progress, step, cancel); break;
-                    case 3: await BuildSpellEffectsAsync(cancel); break;
-                    case 4: await SetUpDatabaseAsync(manifest, progress, step, cancel); break;
+                    if (done.Contains(step))
+                        continue;
+                    progress.Report(new InstallProgress { Step = step });
+                    switch (Array.IndexOf(Steps, step))
+                    {
+                        case 0: await DownloadAsync(await PackagesToFetchAsync(manifest, true, false, _ => { }), MissingThirdParty(manifest), progress, step, cancel); break;
+                        case 1: Patch(manifest); break;
+                        case 2: await ReadMapsAsync(progress, step, cancel); break;
+                        case 3: await BuildSpellEffectsAsync(cancel); break;
+                        case 4: await EnsureDatabaseAsync(manifest, false, progress, step, cancel); break;
+                    }
+                    File.AppendAllLines(StateFile, new[] { step });
                 }
-                File.AppendAllLines(StateFile, new[] { step });
+            }
+            finally
+            {
+                await m_server.StopAsync();
             }
             FinishVersion();
         }
@@ -207,15 +307,45 @@ namespace HordesOfAzeroth.Launcher
             string file = await FetchAsync(launcher.Url, launcher.Sha256, _ => { }, cancel);
             Unzip(file, m_folder.Root, false, PendingVersion);
             installed[launcher.Name] = launcher.ContentHash;
-            File.WriteAllLines(PackagesFile, installed.Select(p => p.Key + "=" + p.Value));
+            WritePairs(PackagesFile, installed);
             File.Delete(file);
         }
 
-        async Task DownloadAsync(Manifest manifest, IProgress<InstallProgress> progress, string step, CancellationToken cancel)
+        Task<List<PackageEntry>> PackagesToFetchAsync(Manifest manifest, bool includeLauncher, bool compareContents, Action<double> reportChecked)
         {
             Dictionary<string, string> installed = InstalledPackages();
-            List<PackageEntry> packages = manifest.Packages.Where(p => !installed.TryGetValue(p.Name, out string hash) || hash != p.ContentHash).ToList();
-            List<ThirdPartyEntry> thirdParty = manifest.ThirdParty.Where(t => !ThirdPartyInstalled(t)).ToList();
+            List<PackageEntry> packages = manifest.Packages.Where(p => includeLauncher || p.Name != LauncherPackage).ToList();
+            return Task.Run(() =>
+            {
+                long total = Math.Max(1, packages.Sum(p => p.Files.Sum(f => f.Size)));
+                long checkedBytes = 0;
+                List<PackageEntry> fetch = new List<PackageEntry>();
+                foreach (PackageEntry package in packages)
+                {
+                    bool current = installed.TryGetValue(package.Name, out string hash) && hash == package.ContentHash;
+                    if (!current || (package.Name != LauncherPackage && package.Files.Any(f => !IsIntact(f, compareContents))))
+                        fetch.Add(package);
+                    checkedBytes += package.Files.Sum(f => f.Size);
+                    reportChecked((double)checkedBytes / total);
+                }
+                return fetch;
+            });
+        }
+
+        bool IsIntact(PackageFile file, bool compareContents)
+        {
+            string path = file.Path == VersionEntry && File.Exists(PendingVersion)
+                ? PendingVersion
+                : Path.Combine(m_folder.Root, file.Path.Replace('/', Path.DirectorySeparatorChar));
+            FileInfo info = new FileInfo(path);
+            return info.Exists && info.Length == file.Size && (!compareContents || Sha256(path) == file.Sha256);
+        }
+
+        List<ThirdPartyEntry> MissingThirdParty(Manifest manifest) => manifest.ThirdParty.Where(t => !ThirdPartyInstalled(t)).ToList();
+
+        async Task DownloadAsync(List<PackageEntry> packages, List<ThirdPartyEntry> thirdParty, IProgress<InstallProgress> progress, string step, CancellationToken cancel)
+        {
+            Dictionary<string, string> installed = InstalledPackages();
             long total = packages.Sum(p => p.Size) + thirdParty.Sum(t => t.Size);
             long finished = 0;
             Action<long> report = bytes => progress.Report(new InstallProgress
@@ -239,17 +369,45 @@ namespace HordesOfAzeroth.Launcher
                 string file = await FetchAsync(package.Url, package.Sha256, report, cancel);
                 Unzip(file, m_folder.Root, false, PendingVersion);
                 installed[package.Name] = package.ContentHash;
-                File.WriteAllLines(PackagesFile, installed.Select(p => p.Key + "=" + p.Value));
+                WritePairs(PackagesFile, installed);
                 finished += package.Size;
                 File.Delete(file);
             }
         }
 
-        public Dictionary<string, string> InstalledPackages()
+        public Dictionary<string, string> InstalledPackages() => ReadPairs(PackagesFile);
+
+        string InstalledHash(string package) => InstalledPackages().TryGetValue(package, out string hash) ? hash : "";
+
+        Dictionary<string, string> AppliedPackages() => ReadPairs(AppliedFile);
+
+        void MarkApplied(string package)
         {
-            return File.Exists(PackagesFile)
-                ? File.ReadAllLines(PackagesFile).Select(l => l.Split(new[] { '=' }, 2)).Where(p => p.Length == 2).ToDictionary(p => p[0], p => p[1])
-                : new Dictionary<string, string>();
+            Dictionary<string, string> applied = AppliedPackages();
+            applied[package] = InstalledHash(package);
+            WritePairs(AppliedFile, applied);
+        }
+
+        void ForgetApplied(string package)
+        {
+            Dictionary<string, string> applied = AppliedPackages();
+            if (applied.Remove(package))
+                WritePairs(AppliedFile, applied);
+        }
+
+        static Dictionary<string, string> ReadPairs(string file)
+        {
+            Dictionary<string, string> pairs = new Dictionary<string, string>();
+            if (File.Exists(file))
+                foreach (string[] pair in File.ReadAllLines(file).Select(l => l.Split(new[] { '=' }, 2)).Where(p => p.Length == 2))
+                    pairs[pair[0]] = pair[1];
+            return pairs;
+        }
+
+        static void WritePairs(string file, Dictionary<string, string> pairs)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(file));
+            File.WriteAllLines(file, pairs.Select(p => p.Key + "=" + p.Value));
         }
 
         bool ThirdPartyInstalled(ThirdPartyEntry item)
@@ -407,80 +565,134 @@ namespace HordesOfAzeroth.Launcher
         async Task BuildSpellEffectsAsync(CancellationToken cancel)
         {
             await RunToolAsync(Path.Combine(m_folder.Root, "tools", "TelegraphKit.exe"), m_folder.Root, cancel, "build", Quote(m_folder.Root));
+            MarkApplied(SpellEffectsPackage);
         }
 
-        async Task SetUpDatabaseAsync(Manifest manifest, IProgress<InstallProgress> progress, string step, CancellationToken cancel)
+        bool SpellEffectsBuilt()
         {
-            string sql = Path.Combine(m_folder.Server, "sql");
+            if (!SpellEffectFiles.All(f => File.Exists(Path.Combine(m_folder.Root, f))))
+                return false;
+            if (AppliedPackages().TryGetValue(SpellEffectsPackage, out string built))
+                return built == InstalledHash(SpellEffectsPackage);
+            if (File.Exists(PendingVersion))
+                return false;
+            MarkApplied(SpellEffectsPackage);
+            return true;
+        }
+
+        bool MapsRead =>
+            HasFiles(Path.Combine(DataDir, "maps"), "*.map")
+            && HasFiles(Path.Combine(DataDir, "vmaps"), "*.vmtree")
+            && HasFiles(Path.Combine(DataDir, "5875", "dbc"), "*.dbc");
+
+        static bool HasFiles(string folder, string pattern) => Directory.Exists(folder) && Directory.EnumerateFiles(folder, pattern).Any();
+
+        async Task EnsureDatabaseAsync(Manifest manifest, bool reloadWorld, IProgress<InstallProgress> progress, string step, CancellationToken cancel)
+        {
             if (!m_server.DatabaseExists)
             {
-                progress.Report(new InstallProgress { Step = step, Detail = "creating the database", Fraction = 0.05 });
+                ForgetApplied(WorldPackage);
+                progress.Report(new InstallProgress { Step = step, Detail = "creating the database", Fraction = 0.05, Fixing = true });
                 await m_server.CreateDatabaseFilesAsync();
             }
             await m_server.StartDatabaseOnlyAsync(cancel);
             await m_server.RunSqlFileAsync(null, Path.Combine(m_folder.Config, "create-databases.sql"));
+            HashSet<string> tables = await TablesAsync();
 
             string[,] imports =
             {
                 { "realmd", "logon.sql", "account" },
                 { "logs", "logs.sql", "logs_characters" },
                 { "characters", "characters.sql", "characters" },
-                { "mangos", "world.sql", "bonk_map" },
             };
             for (int i = 0; i < imports.GetLength(0); i++)
             {
                 string database = imports[i, 0];
-                if (await TableExistsAsync(database, imports[i, 2]))
+                if (tables.Contains(database + "." + imports[i, 2]))
                     continue;
-                progress.Report(new InstallProgress { Step = step, Detail = database == "mangos" ? "loading the world (about a minute)" : "creating " + database, Fraction = 0.1 + 0.15 * i });
-                await m_server.RunSqlFileAsync(database, Path.Combine(sql, imports[i, 1]));
+                progress.Report(new InstallProgress { Step = step, Detail = "creating " + database, Fraction = 0.1 + 0.15 * i, Fixing = true });
+                await m_server.RunSqlFileAsync(database, Path.Combine(SqlDir, imports[i, 1]));
             }
 
-            progress.Report(new InstallProgress { Step = step, Detail = "applying updates", Fraction = 0.75 });
-            await ApplyMigrationsAsync(Path.Combine(sql, "migrations"));
+            if (reloadWorld || !await WorldLoadedAsync(tables))
+                await LoadWorldAsync(progress, step);
 
-            string realm = manifest.RealmName.Replace("'", "''");
-            await m_server.QueryAsync("realmd", $"INSERT INTO realmlist (id, name, address, port) VALUES (1, '{realm}', '127.0.0.1', 8085) ON DUPLICATE KEY UPDATE name = '{realm}', address = '127.0.0.1', port = 8085");
-
-            string accounts = await m_server.QueryAsync("realmd", "SELECT COUNT(*) FROM account WHERE username = 'PLAYER'");
-            if (accounts.Trim() == "0")
-            {
-                progress.Report(new InstallProgress { Step = step, Detail = "creating your account", Fraction = 0.85 });
-                await m_server.StartAsync(new Progress<string>(_ => { }), cancel);
-                await m_server.RunConsoleAsync("account create player player");
-                bool created = (await m_server.QueryAsync("realmd", "SELECT COUNT(*) FROM account WHERE username = 'PLAYER'")).Trim() != "0";
-                await m_server.StopAsync();
-                if (!created)
-                    throw new InvalidOperationException("The account couldn't be created. See server/logs/Server.log.");
-            }
-            else
-            {
-                await m_server.StopAsync();
-            }
+            await ApplyMigrationsAsync(progress, step);
+            await EnsureRealmAndAccountAsync(manifest, progress, step, cancel);
         }
 
-        async Task<bool> TableExistsAsync(string database, string table)
+        async Task<HashSet<string>> TablesAsync()
         {
-            string count = await m_server.QueryAsync("information_schema", $"SELECT COUNT(*) FROM TABLES WHERE TABLE_SCHEMA = '{database}' AND TABLE_NAME = '{table}'");
-            return count.Trim() != "0";
+            string tables = await m_server.QueryAsync("information_schema", "SELECT CONCAT(TABLE_SCHEMA, '.', TABLE_NAME) FROM TABLES WHERE TABLE_SCHEMA IN ('realmd', 'logs', 'characters', 'mangos')");
+            return new HashSet<string>(Lines(tables), StringComparer.OrdinalIgnoreCase);
         }
 
-        async Task ApplyMigrationsAsync(string folder)
+        async Task<bool> WorldLoadedAsync(HashSet<string> tables)
         {
+            if (!tables.Contains("mangos.migrations"))
+                return false;
+            if (AppliedPackages().TryGetValue(WorldPackage, out string loaded))
+                return loaded == InstalledHash(WorldPackage);
+            if (File.Exists(PendingVersion) || !File.Exists(WorldSql))
+                return false;
+            WorldDump dump = await Task.Run(() => WorldDump.Read(WorldSql));
+            if (dump.LastTable == null || !tables.Contains("mangos." + dump.LastTable))
+                return false;
+            HashSet<string> applied = new HashSet<string>(Lines(await m_server.QueryAsync("mangos", "SELECT id FROM migrations")));
+            if (!dump.Migrations.All(applied.Contains))
+                return false;
+            MarkApplied(WorldPackage);
+            return true;
+        }
+
+        async Task LoadWorldAsync(IProgress<InstallProgress> progress, string step)
+        {
+            if (!File.Exists(WorldSql))
+                throw new FileNotFoundException("The world database file (server/sql/world.sql) is missing. " + LocalServer.RepairAdvice, WorldSql);
+            progress.Report(new InstallProgress { Step = step, Detail = "loading the world (about a minute)", Fraction = 0.55, Fixing = true });
+            ForgetApplied(WorldPackage);
+            await m_server.QueryAsync("mysql", "DROP DATABASE IF EXISTS mangos");
+            await m_server.RunSqlFileAsync(null, Path.Combine(m_folder.Config, "create-databases.sql"));
+            await m_server.RunSqlFileAsync("mangos", WorldSql);
+            MarkApplied(WorldPackage);
+        }
+
+        async Task ApplyMigrationsAsync(IProgress<InstallProgress> progress, string step)
+        {
+            string folder = Path.Combine(SqlDir, "migrations");
             if (!Directory.Exists(folder))
                 return;
-            Dictionary<string, string> databases = new Dictionary<string, string> { ["characters"] = "characters", ["logon"] = "realmd", ["logs"] = "logs" };
+            string query = string.Join(" UNION ALL ", MigrationDatabases.Values.Select(d => $"SELECT CONCAT('{d}.', id) FROM {d}.migrations"));
+            HashSet<string> applied = new HashSet<string>(Lines(await m_server.QueryAsync("realmd", query)));
             foreach (string file in Directory.GetFiles(folder, "*.sql").OrderBy(f => Path.GetFileName(f), StringComparer.Ordinal))
             {
                 string[] parts = Path.GetFileNameWithoutExtension(file).Split('_');
-                if (parts.Length != 2 || !databases.TryGetValue(parts[1], out string database))
+                if (parts.Length != 2 || !MigrationDatabases.TryGetValue(parts[1], out string database) || applied.Contains(database + "." + parts[0]))
                     continue;
-                string known = await m_server.QueryAsync(database, $"SELECT COUNT(*) FROM migrations WHERE id = '{parts[0]}'");
-                if (known.Trim() != "0")
-                    continue;
+                progress.Report(new InstallProgress { Step = step, Detail = "applying updates to your characters", Fraction = 0.75, Fixing = true });
                 await m_server.RunSqlFileAsync(database, file);
             }
         }
+
+        async Task EnsureRealmAndAccountAsync(Manifest manifest, IProgress<InstallProgress> progress, string step, CancellationToken cancel)
+        {
+            string realm = manifest.RealmName.Replace("'", "''");
+            await m_server.QueryAsync("realmd", $"INSERT INTO realmlist (id, name, address, port) VALUES (1, '{realm}', '127.0.0.1', 8085) ON DUPLICATE KEY UPDATE name = '{realm}', address = '127.0.0.1', port = 8085");
+            if (await PlayerAccountExistsAsync())
+                return;
+            progress.Report(new InstallProgress { Step = step, Detail = "creating your account", Fraction = 0.85, Fixing = true });
+            await m_server.StartAsync(new Progress<string>(_ => { }), cancel);
+            await m_server.RunConsoleAsync("account create player player");
+            bool created = await PlayerAccountExistsAsync();
+            await m_server.StopAsync();
+            if (!created)
+                throw new InvalidOperationException("The account couldn't be created. See server/logs/Server.log.");
+        }
+
+        async Task<bool> PlayerAccountExistsAsync() =>
+            (await m_server.QueryAsync("realmd", "SELECT COUNT(*) FROM account WHERE username = 'PLAYER'")).Trim() != "0";
+
+        static IEnumerable<string> Lines(string text) => text.Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0);
 
         static async Task RunToolAsync(string exe, string workingDirectory, CancellationToken cancel, params string[] arguments)
         {

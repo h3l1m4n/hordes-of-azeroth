@@ -421,6 +421,46 @@ function UI.Button(parent, width, text, onClick)
     return button
 end
 
+UI.INNKEEPER_ENTRY = 900140
+UI.INNKEEPER_NAME = "Tarn Oakhoof"
+
+local KEYCAP_TEXTURE = "Interface\\AddOns\\HordesOfAzeroth\\Textures\\KeyCap"
+local KEYCAP_CAP_SHARE = 0.5
+local KEYCAP_PAD_SHARE = 7 / 22
+
+local function KeyCapPiece(cap, left, right, height)
+    local piece = cap:CreateTexture(nil, "ARTWORK")
+    piece:SetTexture(KEYCAP_TEXTURE)
+    piece:SetTexCoord(left, right, 0, 1)
+    piece:SetHeight(height)
+    return piece
+end
+
+function UI.KeyCap(parent, height, textSize)
+    height = height or 22
+    local cap = CreateFrame("Frame", nil, parent)
+    cap:SetHeight(height)
+    cap.capHeight = height
+    cap.left = KeyCapPiece(cap, 0, 0.25, height)
+    cap.left:SetWidth(height * KEYCAP_CAP_SHARE)
+    cap.left:SetPoint("LEFT", cap, "LEFT", 0, 0)
+    cap.right = KeyCapPiece(cap, 0.75, 1, height)
+    cap.right:SetWidth(height * KEYCAP_CAP_SHARE)
+    cap.right:SetPoint("RIGHT", cap, "RIGHT", 0, 0)
+    cap.middle = KeyCapPiece(cap, 0.25, 0.75, height)
+    cap.middle:SetPoint("LEFT", cap.left, "RIGHT", 0, 0)
+    cap.middle:SetPoint("RIGHT", cap.right, "LEFT", 0, 0)
+    cap.text = UI.Text(cap, textSize or 11)
+    cap.text:SetPoint("CENTER", cap, "CENTER", 0, 0)
+    cap.text:SetTextColor(0.95, 0.92, 0.82)
+    return cap
+end
+
+function UI.SetKeyCap(cap, text)
+    cap.text:SetText(text)
+    cap:SetWidth(math.max(cap.capHeight, cap.text:GetStringWidth() + 2 * KEYCAP_PAD_SHARE * cap.capHeight))
+end
+
 UI.CLASS_CRESTS = "Interface\\AddOns\\HordesOfAzeroth\\Textures\\ClassCrests"
 local CREST_ORDER = { "WARRIOR", "MAGE", "ROGUE", "DRUID", "HUNTER", "SHAMAN", "PRIEST", "WARLOCK", "PALADIN" }
 

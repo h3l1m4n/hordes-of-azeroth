@@ -2,6 +2,9 @@
 	<Binding name="VANILLABONK_DASH" header="VANILLABONK">
 		VanillaBonk_Dash();
 	</Binding>
+	<Binding name="VANILLABONK_INTERACT">
+		VanillaBonk_Interact();
+	</Binding>
 	<Binding name="VANILLABONK_HEARTH">
 		VanillaBonk_UseHearthstone();
 	</Binding>

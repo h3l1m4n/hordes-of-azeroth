@@ -1492,6 +1492,8 @@ end
 local INTERACT_GLYPH = 30
 local INTERACT_LIFT = 26
 local INTERACT_FADE = 6
+local INTERACT_KEYCAP = 26
+local INTERACT_COMMAND = "VANILLABONK_INTERACT"
 local OBJECT_VERBS = { [900001] = "Open", [900002] = "Open", [900003] = "Enter", [900041] = "Open", [900060] = "Search" }
 local OBJECT_TYPE_VERBS = { [3] = "Open", [19] = "Mail" }
 local NPC_FLAG_GOSSIP = 1
@@ -1505,9 +1507,10 @@ interactPrompt.glyph = interactPrompt:CreateTexture(nil, "ARTWORK")
 interactPrompt.glyph:SetWidth(INTERACT_GLYPH)
 interactPrompt.glyph:SetHeight(INTERACT_GLYPH)
 interactPrompt.glyph:SetPoint("LEFT", interactPrompt, "LEFT", 0, 0)
+interactPrompt.cap = VanillaBonkUI.KeyCap(interactPrompt, INTERACT_KEYCAP, 13)
+interactPrompt.cap:SetPoint("LEFT", interactPrompt, "LEFT", 0, 0)
 interactPrompt.label = interactPrompt:CreateFontString(nil, "ARTWORK", "GameFontHighlightLarge")
 interactPrompt.label:SetShadowOffset(1, -1)
-interactPrompt.label:SetPoint("LEFT", interactPrompt.glyph, "RIGHT", 4, 0)
 interactPrompt:Hide()
 Controller.interactPrompt = interactPrompt
 
@@ -1545,22 +1548,50 @@ local function PlaceOnWorld(frame, point, x, y, lift)
     frame:SetPoint(point, WorldFrame, "BOTTOMLEFT", offsetX, offsetY)
 end
 
-local function ShowInteract(kind, entry, detail, headX, headY)
-    local key = kind .. entry .. Controller.Style()
+local function DressInteract(keyText)
+    local mark = interactPrompt.glyph
+    if keyText then
+        interactPrompt.glyph:Hide()
+        VanillaBonkUI.SetKeyCap(interactPrompt.cap, keyText)
+        interactPrompt.cap:Show()
+        mark = interactPrompt.cap
+    else
+        interactPrompt.cap:Hide()
+        Controller.SetGlyph(interactPrompt.glyph, "x")
+        interactPrompt.glyph:Show()
+    end
+    interactPrompt.label:ClearAllPoints()
+    interactPrompt.label:SetPoint("LEFT", mark, "RIGHT", 4, 0)
+    return mark:GetWidth()
+end
+
+local function ShowInteract(kind, entry, detail, headX, headY, keyText)
+    local key = kind .. entry .. Controller.Style() .. (keyText or "")
     if interactPrompt.key ~= key then
         interactPrompt.key = key
         interactPrompt.shownAt = GetTime()
-        Controller.SetGlyph(interactPrompt.glyph, "x")
         interactPrompt.label:SetText(InteractVerb(kind, entry, detail))
-        interactPrompt:SetWidth(INTERACT_GLYPH + 4 + interactPrompt.label:GetStringWidth())
+        interactPrompt:SetWidth(DressInteract(keyText) + 4 + interactPrompt.label:GetStringWidth())
     end
     PlaceOnWorld(interactPrompt, "BOTTOM", headX, headY, INTERACT_LIFT)
     interactPrompt:SetAlpha(math.min(1, (GetTime() - interactPrompt.shownAt) * INTERACT_FADE))
     interactPrompt:Show()
 end
 
+local function InteractKeyText()
+    if Controller.kind then
+        return nil
+    end
+    local text = VanillaBonkUI.BindingText(INTERACT_COMMAND)
+    if text == "" then
+        return false
+    end
+    return text
+end
+
 local function UpdateInteract(allowed)
-    if not allowed or not Controller.kind or not Controller.Setting("interactPrompts") or not HoAController_GetInteract or UnitIsDeadOrGhost("player") then
+    local keyText = InteractKeyText()
+    if not allowed or keyText == false or not Controller.Setting("interactPrompts") or not HoAController_GetInteract or UnitIsDeadOrGhost("player") then
         HideInteract()
         return
     end
@@ -1569,7 +1600,7 @@ local function UpdateInteract(allowed)
         HideInteract()
         return
     end
-    ShowInteract(kind, entry, detail, headX, headY)
+    ShowInteract(kind, entry, detail, headX, headY, keyText)
 end
 
 function HoAController_OnButton(name, down)

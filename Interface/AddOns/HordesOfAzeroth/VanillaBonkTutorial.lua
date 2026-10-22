@@ -3,6 +3,7 @@ local UI = VanillaBonkUI
 local RUN_MASTER = 900001
 local RUN_MASTER_NAME = "Gizzik Bonkwhistle"
 local RUN_MASTER_TARGETS = { { entry = RUN_MASTER, name = RUN_MASTER_NAME } }
+local INNKEEPER_TARGETS = { { entry = UI.INNKEEPER_ENTRY, name = UI.INNKEEPER_NAME } }
 local UPSTAIRS_TARGETS = {
     { entry = 900002, name = "Nix Sparkwrench" },
     { entry = 900008, name = "Theron Ashveil" },
@@ -232,7 +233,7 @@ local function BuildCurrencyTip()
         end
         height = height + GUIDE_ROW_GAP + rowHeight
     end
-    box.next = UI.Button(box, 96, "Next", function() tutorial:ShowRunMaster() end)
+    box.next = UI.Button(box, 96, "Next", function() tutorial:ShowInnkeeper() end)
     box.next:SetPoint("BOTTOM", box, "BOTTOM", 0, 18)
     box:SetHeight(height + 16 + 22 + 18)
     box:Hide()
@@ -334,6 +335,7 @@ local function CompleteIntro()
     end
     VanillaBonkTutorialDone = true
     VanillaBonkControllerTipDone = true
+    VanillaBonkInnkeeperTip = true
 end
 
 local function NextLesson()
@@ -343,13 +345,16 @@ local function NextLesson()
     if not VanillaBonkTutorialDone then
         return "dash"
     end
+    if not VanillaBonkInnkeeperTip then
+        return "innkeeper"
+    end
     if VanillaBonkVendorTip == "ready" then
         return "vendors"
     end
 end
 
 local function AllDone()
-    return VanillaBonkControllerTipDone and VanillaBonkTutorialDone and VanillaBonkVendorTip ~= "waiting" and VanillaBonkVendorTip ~= "ready"
+    return VanillaBonkControllerTipDone and VanillaBonkTutorialDone and VanillaBonkInnkeeperTip and VanillaBonkVendorTip ~= "waiting" and VanillaBonkVendorTip ~= "ready"
 end
 
 function tutorial:ShowControllerTip()
@@ -406,6 +411,24 @@ function tutorial:ShowCurrencies()
     currencyTip:Show()
 end
 
+function tutorial:ShowInnkeeper()
+    step = "innkeeper"
+    dashBox:Hide()
+    dashArrow:Hide()
+    currencyTip:Hide()
+    ShowGuide("Make yourself at home", "Talk to " .. UI.INNKEEPER_NAME .. ", the Innkeeper. He keeps your settings: "
+        .. "the interact key and what it works on, chests that open by themselves, where your health bar sits and more.")
+end
+
+function tutorial:InnkeeperSeen()
+    VanillaBonkInnkeeperTip = true
+    if VanillaBonkTutorialDone then
+        EndLesson()
+    else
+        self:ShowRunMaster()
+    end
+end
+
 function tutorial:ShowRunMaster()
     step = "runmaster"
     dashBox:Hide()
@@ -427,6 +450,7 @@ function tutorial:Close()
     else
         VanillaBonkTutorialDone = true
         VanillaBonkControllerTipDone = true
+        VanillaBonkInnkeeperTip = true
         VanillaBonkVendorTip = true
     end
     EndLesson()
@@ -507,6 +531,11 @@ local function TalkHint(name)
 end
 
 local GUIDES = {
+    innkeeper = {
+        targets = INNKEEPER_TARGETS,
+        far = "Follow the arrow to find him.",
+        lost = "Look for " .. UI.INNKEEPER_NAME .. " <Innkeeper> at the Inn.",
+    },
     runmaster = {
         targets = RUN_MASTER_TARGETS,
         far = "Follow the arrow to find him.",
@@ -582,6 +611,7 @@ end
 local LESSONS = {
     controller = function() tutorial:ShowControllerTip() end,
     dash = function() tutorial:ShowDash() end,
+    innkeeper = function() tutorial:ShowInnkeeper() end,
     vendors = function() tutorial:ShowVendors() end,
 }
 
@@ -628,6 +658,10 @@ tutorial:SetScript("OnUpdate", function()
         if not (VanillaBonkControllerPanel and VanillaBonkControllerPanel:IsVisible()) then
             this:ControllerTipSeen()
         end
+    elseif step == "innkeeperopen" then
+        if not (VanillaBonkInnkeeper and VanillaBonkInnkeeper:IsVisible()) then
+            this:InnkeeperSeen()
+        end
     elseif step == "dash" then
         SetBody(dashBox, DashText(), 30)
         dashArrow:SetPoint("BOTTOM", UI.DashRing, "TOP", 0, 4 + Bob())
@@ -656,6 +690,13 @@ tutorial:SetScript("OnEvent", function()
         inWorld = true
     elseif event == "PLAYER_LEAVING_WORLD" then
         inWorld = false
+    elseif event == "GOSSIP_SHOW" and UnitName("npc") == UI.INNKEEPER_NAME then
+        if step == "innkeeper" then
+            step = "innkeeperopen"
+            HideCallouts()
+        else
+            VanillaBonkInnkeeperTip = true
+        end
     elseif event == "GOSSIP_SHOW" and IsUpstairsVendor(UnitName("npc")) then
         if VanillaBonkVendorTip == "waiting" or VanillaBonkVendorTip == "ready" then
             VanillaBonkVendorTip = true
@@ -898,6 +939,7 @@ function UI.ResetTutorial()
     VanillaBonkGearTabTips = nil
     VanillaBonkPlateGuideDone = nil
     VanillaBonkHearthTipDone = nil
+    VanillaBonkInnkeeperTip = nil
     EndLesson()
     if not inRun then
         tutorial:Show()

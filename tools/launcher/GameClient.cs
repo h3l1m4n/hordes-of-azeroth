@@ -30,7 +30,7 @@ namespace HordesOfAzeroth.Launcher
         public void Prepare(bool widescreen)
         {
             if (!File.Exists(m_folder.GameExe))
-                throw new FileNotFoundException($"{m_folder.GameExeName} is missing. Repair the installation from the menu.");
+                throw new FileNotFoundException($"{m_folder.GameExeName} is missing. {LocalServer.RepairAdvice}");
 
             Directory.CreateDirectory(m_folder.GlueXml);
             File.WriteAllLines(Path.Combine(m_folder.GlueXml, "BonkAccount.lua"), new[]
