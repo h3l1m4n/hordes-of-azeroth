@@ -425,6 +425,7 @@ local function RunHeld()
     local offer, vendor, gear = getglobal("VanillaBonkOffer"), getglobal("VanillaBonkVendor"), getglobal("VanillaBonkGear")
     return (offer and offer.open) or (vendor and vendor.open) or (gear and gear.open) or (UI.MenuPaused and UI.MenuPaused())
 end
+UI.RunHeld = RunHeld
 
 local function HoldCooldowns(elapsed)
     for _, slot in ipairs(spellSlots) do
@@ -792,8 +793,53 @@ handlers["start"] = function()
     SetMode(true)
 end
 
+local XP_PICKUP_SOUNDS = {
+    "Interface\\AddOns\\HordesOfAzeroth\\Sounds\\XpCoin1.wav",
+    "Interface\\AddOns\\HordesOfAzeroth\\Sounds\\XpCoin2.wav",
+    "Interface\\AddOns\\HordesOfAzeroth\\Sounds\\XpCoin3.wav",
+    "Interface\\AddOns\\HordesOfAzeroth\\Sounds\\XpCoin4.wav",
+}
+local XP_SOUND_GAP = 0.08
+local XP_SOUND_MAX_QUEUED = 5
+local xpSounds = CreateFrame("Frame")
+xpSounds.last = 0
+xpSounds.queued = 0
+xpSounds.wait = 0
+
+local function PlayXpPickupSound()
+    local pick = math.random(getn(XP_PICKUP_SOUNDS) - 1)
+    if pick >= xpSounds.last then
+        pick = pick + 1
+    end
+    xpSounds.last = pick
+    PlaySoundFile(XP_PICKUP_SOUNDS[pick])
+end
+
+xpSounds:SetScript("OnUpdate", function()
+    if this.queued <= 0 then
+        return
+    end
+    this.wait = this.wait - arg1
+    if this.wait > 0 then
+        return
+    end
+    this.queued = this.queued - 1
+    this.wait = XP_SOUND_GAP
+    PlayXpPickupSound()
+end)
+
+local function QueueXpPickupSounds(orbs)
+    if orbs <= 0 or not UI.Option("xpSounds", true) then
+        return
+    end
+    xpSounds.queued = min(xpSounds.queued + orbs, XP_SOUND_MAX_QUEUED)
+end
+
 handlers["runxp"] = function(f)
     run.xp = { level = tonumber(f[2] or "") or 1, xp = tonumber(f[3] or "") or 0, next = tonumber(f[4] or "") or 0 }
+    if inRun then
+        QueueXpPickupSounds(tonumber(f[5] or "") or 0)
+    end
     if inRun then
         RefreshXp()
     end

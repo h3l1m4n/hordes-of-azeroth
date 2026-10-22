@@ -430,11 +430,20 @@
 					<Frame name="BonkHeroCreateFrame" setAllPoints="true" hidden="true">
 						<Layers>
 							<Layer level="ARTWORK">
-								<FontString inherits="GlueFontNormal" text="Race">
+								<FontString name="BonkHeroRaceLabel" inherits="GlueFontNormal" text="Race">
 									<Anchors>
 										<Anchor point="TOPLEFT">
 											<Offset>
 												<AbsDimension x="26" y="-92"/>
+											</Offset>
+										</Anchor>
+									</Anchors>
+								</FontString>
+								<FontString name="BonkHeroRaceNote" inherits="GlueFontDisableSmall" text="Cosmetic only, no racial bonuses">
+									<Anchors>
+										<Anchor point="BOTTOMLEFT" relativeTo="BonkHeroRaceLabel" relativePoint="BOTTOMRIGHT">
+											<Offset>
+												<AbsDimension x="8" y="0"/>
 											</Offset>
 										</Anchor>
 									</Anchors>

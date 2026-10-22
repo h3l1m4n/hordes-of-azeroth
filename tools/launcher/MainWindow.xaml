@@ -115,7 +115,8 @@
                         <Button.ContextMenu>
                             <ContextMenu x:Name="OptionsMenu" Placement="Top" Opened="OptionsMenu_Opened" Closed="OptionsMenu_Closed">
                                 <MenuItem Header="GAME WINDOW" IsEnabled="False" FontSize="11" FontWeight="Bold" />
-                                <MenuItem x:Name="WindowedItem" IsCheckable="True" Header="Window, filling the screen" Click="WindowedItem_Click" />
+                                <MenuItem x:Name="BorderlessItem" IsCheckable="True" Header="Borderless window" Click="BorderlessItem_Click" />
+                                <MenuItem x:Name="WindowedItem" IsCheckable="True" Header="Window" Click="WindowedItem_Click" />
                                 <MenuItem x:Name="FullscreenItem" IsCheckable="True" Header="Fullscreen" Click="FullscreenItem_Click" />
                                 <MenuItem x:Name="WidescreenItem" IsCheckable="True" Header="Widescreen and ultrawide view" Click="WidescreenItem_Click" />
                                 <Separator />

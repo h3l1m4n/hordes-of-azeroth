@@ -5,6 +5,7 @@ local NAME_FONT = "Fonts\\FRIZQT__.TTF"
 local NUMBER_FONT = "Fonts\\ARIALN.TTF"
 local PLATE_BORDER = "Interface\\Tooltips\\Nameplate-Border"
 local PREFIX = "BONK~"
+local UI = VanillaBonkUI
 local ICON_PATH = "Interface\\Icons\\"
 
 local REFRESH = 0.1
@@ -44,6 +45,16 @@ local SIZES = {
     [ALLY_KIND] = { width = 128, height = 14, name = 10.5, percent = 8.5 },
     [BRUISER_KIND] = { width = 78, height = 10, name = 0, percent = 0 },
     [VETERAN_KIND] = { width = 78, height = 10, name = 0, percent = 0 },
+}
+
+local DEBUFF_LOOKS = {
+    [0] = UI.DEBUFF_LOOKS.small,
+    [1] = UI.DEBUFF_LOOKS.plate,
+    [2] = UI.DEBUFF_LOOKS.boss,
+    [3] = UI.DEBUFF_LOOKS.boss,
+    [ALLY_KIND] = UI.DEBUFF_LOOKS.plate,
+    [BRUISER_KIND] = UI.DEBUFF_LOOKS.small,
+    [VETERAN_KIND] = UI.DEBUFF_LOOKS.small,
 }
 
 local PLATE_HEALTH_BASE = 100000
@@ -144,6 +155,56 @@ local function LayoutLost(plate)
         plate.vbName:GetWidth() > 0.01
 end
 
+local function PlaceDebuffRow(row, health, sy)
+    row:ClearAllPoints()
+    row:SetPoint("TOPLEFT", health, "BOTTOMLEFT", 0, -((32 - 14 - BAR_INSET_Y - BAR_ROWS) * sy + 1))
+end
+
+local function UpdateStackExtent(plate)
+    local size, sy = plate.vbSize, plate.vbScaleY
+    local rimTop = plate.vbBarHeight / 2 + BAR_INSET_Y * sy
+    plate.vbStackWidth = size.width
+    plate.vbStackBelow = (32 - 14) * sy - rimTop
+    plate.vbStackAbove = rimTop
+    if size.name > 0 then
+        plate.vbStackAbove = plate.vbStackAbove + size.name + 2
+    end
+    if plate.vbIconCount > 0 then
+        plate.vbStackAbove = plate.vbStackAbove + ICON_SIZE + 3
+    end
+    if plate.vbDebuffRow.height > 0 then
+        plate.vbStackBelow = plate.vbStackBelow + plate.vbDebuffRow.height + 1
+    end
+end
+
+local function PlateUnit(plate)
+    local unit = plate.vbUnit
+    if not unit or not plate.vbGuid then
+        return nil
+    end
+    if UnitGUID(unit) ~= plate.vbGuid then
+        unit = UnitTokenFromGUID and UnitTokenFromGUID(plate.vbGuid)
+        plate.vbUnit = unit
+    end
+    return unit
+end
+
+local function UpdateDebuffs(plate)
+    local row = plate.vbDebuffRow
+    local count = 0
+    if not plate.vbFriendly then
+        count = UI.ReadKeywordDebuffs(PlateUnit(plate), plate.vbDebuffList)
+    end
+    if count == 0 and row.count == 0 then
+        return
+    end
+    local before = row.height
+    row:SetDebuffs(plate.vbDebuffList, count)
+    if row.height ~= before then
+        UpdateStackExtent(plate)
+    end
+end
+
 local function ApplyKind(plate)
     local mob = plate.vbGuid and mobsByGuid[plate.vbGuid]
     if not mob then
@@ -165,6 +226,7 @@ local function ApplyKind(plate)
     local size = SIZES[kind] or SIZES[0]
     local sx, sy = size.width / 128, size.height / 15
     local health = plate.vbHealth
+    plate.vbSize, plate.vbScaleY = size, sy
     plate.vbBarWidth = (128 - 2 * BAR_INSET_X) * sx
     plate.vbBarHeight = BAR_ROWS * sy
     health:ClearAllPoints()
@@ -214,32 +276,27 @@ local function ApplyKind(plate)
     end
 
     local count = min(getn(icons), MAX_ICONS)
-
-    local rimTop = plate.vbBarHeight / 2 + BAR_INSET_Y * sy
-    plate.vbStackWidth = size.width
-    plate.vbStackBelow = (32 - 14) * sy - rimTop
-    plate.vbStackAbove = rimTop
-    if size.name > 0 then
-        plate.vbStackAbove = plate.vbStackAbove + size.name + 2
-    end
-    if count > 0 then
-        plate.vbStackAbove = plate.vbStackAbove + ICON_SIZE + 3
-    end
+    plate.vbIconCount = count
     plate.vbStackRank = boss and 0 or (kind == 1 and 1 or 2)
 
     for index = 1, MAX_ICONS do
-        local affix = plate.vbAffixes[index]
+        local slot = plate.vbIconSlots[index]
         if index <= count then
-            affix.icon:SetTexture(ICON_PATH .. icons[index])
-            affix.icon:ClearAllPoints()
-            affix.icon:SetPoint("BOTTOM", title, "TOP", (index - (count + 1) / 2) * (ICON_SIZE + 3), 3)
-            affix.icon:Show()
-            affix.back:Show()
+            slot.icon:SetTexture(ICON_PATH .. icons[index])
+            slot.icon:ClearAllPoints()
+            slot.icon:SetPoint("BOTTOM", title, "TOP", (index - (count + 1) / 2) * (ICON_SIZE + 3), 3)
+            slot.icon:Show()
+            slot.back:Show()
         else
-            affix.icon:Hide()
-            affix.back:Hide()
+            slot.icon:Hide()
+            slot.back:Hide()
         end
     end
+
+    UI.SetDebuffRowLook(plate.vbDebuffRow, DEBUFF_LOOKS[kind] or DEBUFF_LOOKS[0])
+    plate.vbDebuffRow:SetDebuffs(plate.vbDebuffList, plate.vbDebuffRow.count)
+    PlaceDebuffRow(plate.vbDebuffRow, health, sy)
+    UpdateStackExtent(plate)
 end
 
 local function Refresh(plate)
@@ -249,6 +306,7 @@ local function Refresh(plate)
     ApplyKind(plate)
     TintKind(plate)
     UpdateMuted(plate)
+    UpdateDebuffs(plate)
     if plate.vbTitle:IsShown() then
         plate.vbTitle:SetText(plate.vbName:GetText())
     end
@@ -320,7 +378,7 @@ local function Style(plate)
     bossSkull:Hide()
     plate.vbBossSkull = bossSkull
 
-    plate.vbAffixes = {}
+    plate.vbIconSlots = {}
     for index = 1, MAX_ICONS do
         local icon = rim:CreateTexture(nil, "ARTWORK")
         icon:SetWidth(ICON_SIZE)
@@ -334,8 +392,10 @@ local function Style(plate)
         edge:SetHeight(ICON_SIZE + 2)
         edge:SetPoint("CENTER", icon, "CENTER", 0, 0)
         edge:Hide()
-        plate.vbAffixes[index] = { icon = icon, back = edge }
+        plate.vbIconSlots[index] = { icon = icon, back = edge }
     end
+    plate.vbDebuffRow = UI.DebuffRow(rim, DEBUFF_LOOKS[0])
+    plate.vbDebuffList = {}
 
     local title = rim:CreateFontString(nil, "OVERLAY")
     title:SetFont(NAME_FONT, 11, "OUTLINE")
@@ -576,6 +636,7 @@ local function OnPlateUnit(token, guid)
     end
     if plate.vbHealth then
         plate.vbGuid = guid
+        plate.vbUnit = guid and token
         plate.vbKind = nil
         Refresh(plate)
     end
@@ -625,7 +686,7 @@ handlers["mob"] = function(f)
     mobs[name] = { kind = kind, icons = icons, alive = (mob and mob.alive or 0) + 1 }
 end
 
-function VanillaBonkUI.SamplePlate(parent, kind, name, icons, customSize)
+function VanillaBonkUI.SamplePlate(parent, kind, name, icons, customSize, debuffs)
     local size = customSize or SIZES[kind] or SIZES[0]
     local sx, sy = size.width / 128, size.height / 15
     local health = CreateFrame("StatusBar", nil, parent)
@@ -686,6 +747,11 @@ function VanillaBonkUI.SamplePlate(parent, kind, name, icons, customSize)
             edge:SetHeight(ICON_SIZE + 2)
             edge:SetPoint("CENTER", icon, "CENTER", 0, 0)
         end
+    end
+    if debuffs and getn(debuffs) > 0 then
+        local row = UI.DebuffRow(rim, DEBUFF_LOOKS[kind] or DEBUFF_LOOKS[0])
+        row:SetDebuffs(debuffs, getn(debuffs))
+        PlaceDebuffRow(row, health, sy)
     end
     return health
 end

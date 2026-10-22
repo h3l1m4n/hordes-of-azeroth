@@ -171,10 +171,12 @@ end
 
 callout:SetScript("OnUpdate", function()
     local low = -4
-    if VanillaBonkBossAffixes and VanillaBonkBossAffixes:IsVisible() then
-        low = -60
-    elseif VanillaBonkBossBar and VanillaBonkBossBar:IsVisible() then
+    local bossBar = VanillaBonkBossBar
+    if bossBar and bossBar:IsVisible() then
         low = -32
+        if bossBar.debuffs:IsVisible() then
+            low = low - bossBar.debuffs.height - 4
+        end
     end
     if low ~= this.low then
         this.low = low

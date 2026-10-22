@@ -33,8 +33,10 @@ local PLATE_KINDS = {
     { kind = 5, name = "Bruiser", text = "A big enemy with four times the health that hits twice as hard." },
     { kind = 6, name = "Veteran", text = "A stronger version of a regular enemy, with more health and harder hits.",
         note = "Only appears on Heroic and Mythic." },
-    { kind = 1, name = "Elite", text = "Named, with special powers shown by the icons above its bar.", sample = "Kolkar Pack Runner",
-        icons = { "Ability_Rogue_Sprint", "Ability_Warrior_DefensiveStance" } },
+    { kind = 1, name = "Elite", text = "Named, with special powers called affixes. The Spellbook Keeper in town lists what each one does.",
+        sample = "Kolkar Pack Runner" },
+    { kind = 0, name = "Your debuffs", text = "Shown under an enemy's bar with their stacks. On a boss's bar, each icon wipes away as its time runs out unless you hit the boss again.",
+        debuffs = { { 3, 12 }, { 4, 5 } } },
     { kind = 0, name = "You", text = "Your own health, shown over your hero. A bright cyan glow on it is your Shield.", own = true },
 }
 local OWN_BAR_COLOR = { 0.24, 0.70, 0.28 }
@@ -780,6 +782,17 @@ local function PlateKeyText()
     return "Hit |cffffd100" .. key .. "|r to toggle enemy health bars."
 end
 
+local function SampleDebuffs(entries)
+    local list = {}
+    for _, pair in ipairs(entries) do
+        local keyword = UI.Keyword(pair[1])
+        if keyword then
+            tinsert(list, { keyword = keyword, stacks = pair[2] })
+        end
+    end
+    return list
+end
+
 local function BuildPlateGuide()
     local box = CreateFrame("Frame", "VanillaBonkPlateGuide", UIParent)
     box:SetFrameStrata("FULLSCREEN_DIALOG")
@@ -827,11 +840,11 @@ local function BuildPlateGuide()
         end
         local textHeight = row.name:GetHeight() + 3 + row.text:GetHeight() + (row.note and row.note:GetHeight() or 0)
         row:SetHeight(max(textHeight, entry.icons and 52 or entry.sample and 34 or 22))
-        local plate = UI.SamplePlate(row, entry.kind, entry.sample, entry.icons)
+        local plate = UI.SamplePlate(row, entry.kind, entry.sample, entry.icons, nil, entry.debuffs and SampleDebuffs(entry.debuffs))
         if entry.own then
             plate:SetStatusBarColor(OWN_BAR_COLOR[1], OWN_BAR_COLOR[2], OWN_BAR_COLOR[3])
         end
-        plate:SetPoint("CENTER", row, "LEFT", GUIDE_PLATE_COLUMN / 2, entry.icons and -16 or entry.sample and -8 or 0)
+        plate:SetPoint("CENTER", row, "LEFT", GUIDE_PLATE_COLUMN / 2, entry.icons and -16 or entry.sample and -8 or entry.debuffs and 6 or 0)
         if previous then
             row:SetPoint("TOPLEFT", previous, "BOTTOMLEFT", 0, -GUIDE_ROW_GAP)
         else

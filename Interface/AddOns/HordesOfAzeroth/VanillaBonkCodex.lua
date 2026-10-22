@@ -312,11 +312,18 @@ local TABS = {
     { key = "cards",      label = "Cards" },
     { key = "glyphs",     label = "Glyphs" },
     { key = "debuffs",    label = "Debuffs" },
+    { key = "affixes",    label = "Affixes" },
     { key = "evolutions", label = "Evolutions" },
 }
 
+local eliteAffixes = {}
+
 local function TabHasClasses()
     return currentTab == "spells" or currentTab == "evolutions"
+end
+
+local function TabHasInfoRows()
+    return currentTab == "debuffs" or currentTab == "affixes"
 end
 
 local shownTabs = TABS
@@ -325,7 +332,8 @@ local function TabLabels()
     shownTabs = {}
     for _, tab in ipairs(TABS) do
         if (tab.key ~= "evolutions" or (book and getn(book.evolutions) > 0)) and
-            (tab.key ~= "debuffs" or (book and book.debuffs and getn(book.debuffs) > 0)) then
+            (tab.key ~= "debuffs" or (book and book.debuffs and getn(book.debuffs) > 0)) and
+            (tab.key ~= "affixes" or getn(eliteAffixes) > 0) then
             tinsert(shownTabs, tab)
         end
     end
@@ -826,16 +834,16 @@ local function DescribeDebuffLimits(debuff)
     return table.concat(parts, ", ")
 end
 
-local function ShowDebuffs()
+local function ShowInfoRows(entries, describe)
     local top = 0
-    local count = book.debuffs and getn(book.debuffs) or 0
+    local count = entries and getn(entries) or 0
     for index = 1, count do
-        local debuff = book.debuffs[index]
+        local entry = entries[index]
         local row = window.debuffRows[index] or CreateDebuffRow(index)
-        row.icon:SetTexture(ICON_PATH .. (debuff.icon ~= "" and debuff.icon or "INV_Misc_QuestionMark"))
-        row.name:SetText(debuff.name)
-        row.meta:SetText(DescribeDebuffLimits(debuff))
-        row.text:SetText(debuff.description)
+        row.icon:SetTexture(ICON_PATH .. (entry.icon ~= "" and entry.icon or "INV_Misc_QuestionMark"))
+        row.name:SetText(entry.name)
+        row.meta:SetText(describe and describe(entry) or "")
+        row.text:SetText(entry.description)
         local textHeight = row.text:GetHeight()
         if textHeight < 1 then
             textHeight = math.ceil(row.text:GetStringWidth() / row.text:GetWidth() + 0.25) * DEBUFF_LINE
@@ -897,19 +905,23 @@ function Refresh(keepScroll)
     UpdateFilters()
 
     local height, count = 0, 0
-    if currentTab ~= "debuffs" then
+    if not TabHasInfoRows() then
         for _, row in ipairs(window.debuffRows) do
             row:Hide()
         end
     end
-    if currentTab == "debuffs" then
+    if TabHasInfoRows() then
         for _, card in ipairs(window.cards) do
             card:Hide()
         end
         for _, row in ipairs(window.evolutionRows) do
             row:Hide()
         end
-        height, count = ShowDebuffs()
+        if currentTab == "affixes" then
+            height, count = ShowInfoRows(eliteAffixes)
+        else
+            height, count = ShowInfoRows(book.debuffs, DescribeDebuffLimits)
+        end
         window.empty:SetText(count == 0 and "Nothing here yet." or "")
     elseif currentTab == "evolutions" then
         for _, card in ipairs(window.cards) do
@@ -958,7 +970,7 @@ function Refresh(keepScroll)
     local still = "|cffffd100" .. forSale .. " to unlock|r"
     window.subtitle:SetText(still .. "|cffffffff, " .. locked .. " locked by quests|r")
 
-    if TabHasClasses() or currentTab == "debuffs" then
+    if TabHasClasses() or TabHasInfoRows() then
         window.tally:SetText("")
     else
         local owned, sale, held = 0, 0, 0
@@ -1172,6 +1184,20 @@ handlers["cdxk"] = function(f)
         durationMs = tonumber(f[6]) or 0,
         description = f[7] or "",
     })
+end
+
+handlers["affixinfo"] = function(f)
+    local name = f[2]
+    if not name or name == "" then
+        return
+    end
+    for _, affix in ipairs(eliteAffixes) do
+        if affix.name == name then
+            affix.icon, affix.description = f[3] or "", f[4] or ""
+            return
+        end
+    end
+    tinsert(eliteAffixes, { name = name, icon = f[3] or "", description = f[4] or "" })
 end
 
 handlers["cdxg"] = function(f)

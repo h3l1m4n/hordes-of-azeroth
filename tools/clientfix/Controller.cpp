@@ -928,6 +928,7 @@ namespace
         Lua::Register("HoAController_GetSticks", &Lua_GetSticks);
         Lua::Register("HoAController_SetScrollMode", &Lua_SetScrollMode);
         RegisterInteractFunctions();
+        RegisterBorderlessFunctions();
         s_reportedKind = PadKind::None;
         s_capture = false;
         LeaveCursorMode();

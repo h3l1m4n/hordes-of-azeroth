@@ -632,6 +632,24 @@ namespace
         return true;
     }
 
+    uintptr_t const SOUND_BUS_CAPS_AT = 0x0087CE60;
+    size_t const FILE_SOUND_BUS = 3;
+    uint32_t const FILE_SOUND_STOCK_CAP = 2;
+    uint32_t const FILE_SOUND_CAP = 8;
+
+    bool RaiseFileSoundCap()
+    {
+        auto* cap = reinterpret_cast<uint32_t*>(SOUND_BUS_CAPS_AT) + FILE_SOUND_BUS;
+        if (*cap != FILE_SOUND_STOCK_CAP)
+            return false;
+        DWORD protection;
+        if (!VirtualProtect(cap, sizeof(*cap), PAGE_READWRITE, &protection))
+            return false;
+        *cap = FILE_SOUND_CAP;
+        VirtualProtect(cap, sizeof(*cap), protection, &protection);
+        return true;
+    }
+
     uintptr_t const IDLE_CHECK_AT = 0x00482ED8;
     uint8_t const IDLE_CHECK_CODE[] = { 0x0F, 0x8C, 0xE1, 0x00, 0x00, 0x00 };
     uint8_t const IDLE_NEVER_CODE[] = { 0xE9, 0xE2, 0x00, 0x00, 0x00, 0x90 };
@@ -738,6 +756,7 @@ namespace
             if (renamed)
             {
                 StartController(renamed);
+                StartBorderless(renamed);
                 return 0;
             }
             Sleep(TITLE_POLL_MS);
@@ -751,6 +770,7 @@ BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID)
     if (reason != DLL_PROCESS_ATTACH)
         return TRUE;
     DisableThreadLibraryCalls(instance);
+    PrepareBorderless();
 
     s_moverUpdate = reinterpret_cast<MoverUpdate_t>(Hook(FUN_MOVER_UPDATE, MOVER_UPDATE_START, reinterpret_cast<void*>(&OnMoverUpdate)));
     if (s_moverUpdate)
@@ -777,6 +797,7 @@ BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID)
         HookImportJump(THUNK_STREAM_PLAYEX, SLOT_STREAM_PLAYEX, reinterpret_cast<void*>(&OnStreamPlayEx));
     Log("sound limit %s, coin sound on money %s", sounds ? "on" : "OFF", SilenceCoinSound() ? "off" : "ON");
     Log("idle away and sit %s", DisableIdleAway() ? "off" : "ON");
+    Log("addon sound files at once: %s", RaiseFileSoundCap() ? "8" : "2 (stock)");
 
     if (HANDLE retitle = CreateThread(nullptr, 0, &RetitleGameWindow, nullptr, 0, nullptr))
         CloseHandle(retitle);

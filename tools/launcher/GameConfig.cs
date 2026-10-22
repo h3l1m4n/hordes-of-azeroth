@@ -9,6 +9,8 @@ namespace HordesOfAzeroth.Launcher
 {
     static class GameConfig
     {
+        const double ShapeTolerance = 0.01;
+
         static readonly Regex Setting = new Regex(@"^\s*SET\s+(\w+)\s+""([^""]*)""", RegexOptions.IgnoreCase);
 
         public static bool IsWindowed(GameFolder folder)
@@ -42,12 +44,12 @@ namespace HordesOfAzeroth.Launcher
                 if (!values.ContainsKey(setting.Key))
                     missing[setting.Key] = setting.Value;
             if (!values.ContainsKey("gxWindow"))
-            {
                 missing["gxWindow"] = "1";
-                missing["gxMaximize"] = "1";
-                missing["gxMaximized"] = "1";
-            }
-            if (!values.TryGetValue("gxResolution", out string resolution) || !FitsPrimaryScreen(resolution))
+            if (!values.TryGetValue("gxMaximize", out string maximize) || maximize != "0")
+                missing["gxMaximize"] = "0";
+            if (!values.TryGetValue("gxMaximized", out string maximized) || maximized != "0")
+                missing["gxMaximized"] = "0";
+            if (!values.TryGetValue("gxResolution", out string resolution) || !MatchesPrimaryScreen(resolution))
                 missing["gxResolution"] = DesktopResolution();
             if (!values.ContainsKey("hwDetect"))
                 missing["hwDetect"] = "0";
@@ -63,18 +65,28 @@ namespace HordesOfAzeroth.Launcher
                 Write(folder, missing);
         }
 
-        public static void SetWindowed(GameFolder folder, bool windowed)
+        public static bool IsBorderless(GameFolder folder)
         {
+            string path = BorderlessPath(folder);
+            return !File.Exists(path) || File.ReadAllText(path).Trim() != "0";
+        }
+
+        public static void SetWindowed(GameFolder folder, bool windowed, bool borderless)
+        {
+            Directory.CreateDirectory(folder.LauncherData);
+            File.WriteAllText(BorderlessPath(folder), borderless ? "1" : "0");
             Dictionary<string, string> changes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
                 ["gxWindow"] = windowed ? "1" : "0",
-                ["gxMaximize"] = windowed ? "1" : "0",
-                ["gxMaximized"] = windowed ? "1" : "0",
+                ["gxMaximize"] = "0",
+                ["gxMaximized"] = "0",
             };
             if (!Read(folder).ContainsKey("gxResolution"))
                 changes["gxResolution"] = DesktopResolution();
             Write(folder, changes);
         }
+
+        static string BorderlessPath(GameFolder folder) => Path.Combine(folder.LauncherData, "borderless.txt");
 
         static string DesktopResolution()
         {
@@ -82,13 +94,17 @@ namespace HordesOfAzeroth.Launcher
             return $"{bounds.Width}x{bounds.Height}";
         }
 
-        static bool FitsPrimaryScreen(string resolution)
+        static bool MatchesPrimaryScreen(string resolution)
         {
             string[] parts = resolution.Split('x');
             if (parts.Length != 2 || !int.TryParse(parts[0], out int width) || !int.TryParse(parts[1], out int height) || width <= 0 || height <= 0)
                 return false;
             System.Drawing.Rectangle bounds = System.Windows.Forms.Screen.PrimaryScreen.Bounds;
-            return width <= bounds.Width && height <= bounds.Height;
+            if (width > bounds.Width || height > bounds.Height)
+                return false;
+            double shape = (double)width / height;
+            double screenShape = (double)bounds.Width / bounds.Height;
+            return Math.Abs(shape - screenShape) / screenShape < ShapeTolerance;
         }
 
         static Dictionary<string, string> Read(GameFolder folder)

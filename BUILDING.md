@@ -128,7 +128,7 @@ It also carries client tweaks from [vanilla-tweaks](https://github.com/brndd/van
 
 - [VanillaFixes](https://github.com/hannesmann/vanillafixes/releases), extracted into the root, fixes the 1.12 client's stutter and animation lag on modern CPUs. The `-dxvk` zip also swaps Direct3D 9 for Vulkan, which is faster with a crowd on screen. The launch script starts the game through `VanillaFixes.exe` when it's there.
 - `tools/build-classicapi.ps1` builds [ClassicAPI](https://github.com/brues-code/ClassicAPI) (GPL-3.0) from source at a pinned release and adds it to VanillaFixes' `dlls.txt`. It gives addons the modern API, among them the nameplate functions (`C_NamePlate`, `UnitGUID`). Its source lands in `vendor/ClassicAPI`. `/classicapi` in game browses it.
-- `tools/build-clientfix.ps1` builds our own client DLL, `HordesOfAzerothClientFix.dll` (source in `tools/clientfix`), and adds it to `dlls.txt`. It fixes the hero standing still with W held after a knockback, holds the hero still in the air while a run is paused, limits stacked sounds and sets the window title. It logs to `Logs/HordesOfAzerothClientFix.log`.
+- `tools/build-clientfix.ps1` builds our own client DLL, `HordesOfAzerothClientFix.dll` (source in `tools/clientfix`), and adds it to `dlls.txt`. It fixes the hero standing still with W held after a knockback, holds the hero still in the air while a run is paused, limits stacked sounds, sets the window title and runs the borderless window (on by default, chosen in the launcher or in the game's Video Options, saved in `HordesOfAzeroth/borderless.txt`; the stock Maximized option is replaced and kept off). It logs to `Logs/HordesOfAzerothClientFix.log`.
 
 <br>
 

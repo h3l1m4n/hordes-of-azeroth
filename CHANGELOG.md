@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.2.2
+
+### Debuffs on health bars
+- Enemy nameplates now show your debuffs under the health bar (Burning, Bleed, Poison, Decay, Chill, Static and the rest) with their stack counts, instead of elite affixes.
+- The mini-boss and boss bar shows your debuffs too. Each icon darkens clockwise as its time runs out.
+- Elite affixes are explained in a new Affixes tab at the Spellbook Keeper.
+- Damage over time effects no longer fall off right after a level-up choice.
+
+### Combat
+- Bosses no longer hit you from far away. Enemy melee reach is capped (Magmadar reached almost 15 yards).
+- Mini-bosses are tougher: 35 times a normal enemy's health, up from 14.
+- An elite that is a bounty target no longer also drops its own chest.
+- Level-ups add the max health you gain on top of the 5% heal.
+- XP orbs fly to your hero's chest, and follow you through the air.
+- The kodo caravan stops while the run is paused.
+
+### Paladin
+- Hammer of Justice only knocks down enemies it stuns. Bosses, mini-bosses and stun-immune enemies no longer plays the stun animation when they're not stunned.
+- Avenger's Shield no longer looks like it knocks enemies down.
+- Judgement plays your cast animation and an impact on each target.
+
+### Sound
+- XP pickups play a sound for each orb. It can be turned off in Sound Options (Experience Pickup Sounds).
+- Valor Pouch pickups play the coin sound.
+
+### Game window
+- New proper Borderless window mode, on by default: the game fills your screen without a title bar or borders, like modern games. Alt+Tab switches instantly, and the picture stays sharp with Windows display scaling.
+- Fixed a stretched picture on ultrawide and other screens when the game resolution didn't match the screen's shape. The launcher now sets your screen's resolution when the two don't match.
+- Window mode now opens as a normal window that fits above the taskbar.
+
+### Other changes
+- Upgrade offers name the reward type (Darkmoon Card, upgrade, reward or blessing), and cards grow to fit long text.
+- Shorter Darkmoon Card descriptions.
+- Hero creation now says races are cosmetic only, with no racial bonuses.
+
 ## 0.2.1
 
 ### Gear

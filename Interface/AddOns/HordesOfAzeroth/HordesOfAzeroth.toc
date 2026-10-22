@@ -5,6 +5,7 @@
 ## Version: 1
 ## SavedVariables: VanillaBonkChoiceKeys, VanillaBonkMeterMode, VanillaBonkPerfLog, VanillaBonkTutorialDone, VanillaBonkDashShift, VanillaBonkPlateGuideDone, VanillaBonkControllerSettings, VanillaBonkControllerTipDone, VanillaBonkVendorTip, VanillaBonkGearTabTips, VanillaBonkOptions, VanillaBonkHearthTipDone, VanillaBonkHearthKeyGiven
 VanillaBonkUI.lua
+VanillaBonkDebuffs.lua
 VanillaBonk.lua
 VanillaBonkRunMaster.lua
 VanillaBonkBars.lua
@@ -36,6 +37,8 @@ VanillaBonkSelfBar.lua
 VanillaBonkTargeting.lua
 VanillaBonkMenu.lua
 VanillaBonkInterfaceOptions.lua
+VanillaBonkWindowOption.lua
+VanillaBonkSoundOptions.lua
 VanillaBonkVault.lua
 VanillaBonkGlyphs.lua
 VanillaBonkPerf.lua

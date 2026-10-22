@@ -7,9 +7,7 @@ local BOX_EDGE = 20
 local NAME_HEIGHT = 16
 local TOP = -36
 local SKULL_SIZE = 26
-local AFFIX_SIZE = 24
-local AFFIX_ART = 0.72
-local AFFIX_GAP = 6
+local DEBUFF_GAP = 6
 local SMOOTHING = 8
 local SKULL = "Interface\\TargetingFrame\\UI-TargetingFrame-Skull"
 local GOLD_BORDER = "Interface\\DialogFrame\\UI-DialogBox-Gold-Border"
@@ -105,65 +103,16 @@ local function PlaceName()
     bar.tag:SetPoint("LEFT", bar.name, "RIGHT", gap, 0)
 end
 
-local affixInfo = {}
+bar.debuffs = UI.DebuffRow(bar, UI.DEBUFF_LOOKS.bar)
+bar.debuffs:SetPoint("TOPLEFT", bar.box, "BOTTOMLEFT", BOX_INSET, -DEBUFF_GAP)
+bar.debuffList = {}
 
-bar.affixes = CreateFrame("Frame", "VanillaBonkBossAffixes", bar)
-bar.affixes:SetHeight(AFFIX_SIZE)
-bar.affixes:SetPoint("TOP", bar, "BOTTOM", 0, -6)
-bar.affixes:Hide()
-bar.affixes.icons = {}
-
-local function AffixIcon(index)
-    local icon = bar.affixes.icons[index]
-    if icon then
-        return icon
-    end
-    icon = UI.Ring(bar.affixes, AFFIX_SIZE)
-    icon.art = UI.RingArt(icon, "")
-    if not icon.art.SetMask then
-        icon.art:SetWidth(AFFIX_SIZE * AFFIX_ART)
-        icon.art:SetHeight(AFFIX_SIZE * AFFIX_ART)
-    end
-    icon:EnableMouse(true)
-    icon:SetScript("OnEnter", function()
-        local info = affixInfo[this.affix]
-        GameTooltip:SetOwner(this, "ANCHOR_BOTTOM")
-        GameTooltip:AddLine(this.affix, 1, 0.82, 0)
-        if info and info.description ~= "" then
-            GameTooltip:AddLine(info.description, 1, 1, 1, 1)
-        end
-        GameTooltip:Show()
-    end)
-    icon:SetScript("OnLeave", function() GameTooltip:Hide() end)
-    bar.affixes.icons[index] = icon
-    return icon
-end
-
-local function ShowAffixes(text)
-    if text == bar.affixText then
+local function ShowDebuffs(text, guid)
+    if text == bar.debuffText and guid == bar.debuffs.guid then
         return
     end
-    bar.affixText = text
-    bar.affixNames = (text and text ~= "") and UI.Split(text, ",") or {}
-    local count = getn(bar.affixNames)
-    for index, name in ipairs(bar.affixNames) do
-        local icon = AffixIcon(index)
-        local info = affixInfo[name]
-        icon.affix = name
-        icon.art:SetTexture(UI.ICON_PATH .. (info and info.icon ~= "" and info.icon or "INV_Misc_QuestionMark"))
-        icon:ClearAllPoints()
-        icon:SetPoint("LEFT", bar.affixes, "LEFT", (index - 1) * (AFFIX_SIZE + AFFIX_GAP), 0)
-        icon:Show()
-    end
-    for index = count + 1, getn(bar.affixes.icons) do
-        bar.affixes.icons[index]:Hide()
-    end
-    if count > 0 then
-        bar.affixes:SetWidth(count * AFFIX_SIZE + (count - 1) * AFFIX_GAP)
-        bar.affixes:Show()
-    else
-        bar.affixes:Hide()
-    end
+    bar.debuffText = text
+    bar.debuffs:SetDebuffs(bar.debuffList, UI.ParseKeywordDebuffs(text, bar.debuffList), guid)
 end
 
 bar:EnableMouse(true)
@@ -193,7 +142,7 @@ bar:SetScript("OnUpdate", function()
     this.trail:SetWidth(max(0.01, (WIDTH - 2 * BOX_INSET) * this.trailShown))
 end)
 
-local function ShowBoss(name, health, maxHealth, kind, affixes)
+local function ShowBoss(name, health, maxHealth, kind, affixes, debuffs, guid)
     local fraction = maxHealth > 0 and health / maxHealth or 0
     if not bar:IsShown() or bar.bossName ~= name then
         bar.shown, bar.trailShown = fraction, fraction
@@ -208,27 +157,24 @@ local function ShowBoss(name, health, maxHealth, kind, affixes)
     bar.tag:SetText(look.tag)
     PlaceName()
     bar.value:SetText(floor(fraction * 100 + 0.5) .. "%  |cffc8c8c8" .. Short(health) .. " / " .. Short(maxHealth) .. "|r")
-    ShowAffixes(affixes)
+    bar.affixNames = (affixes and affixes ~= "") and UI.Split(affixes, ",") or {}
+    ShowDebuffs(debuffs, guid)
     bar:Show()
 end
 
 local function HideBoss()
     bar:Hide()
     bar.bossName = nil
-    ShowAffixes(nil)
+    bar.affixNames = {}
+    ShowDebuffs(nil)
 end
 
 UI.Listen({
     ["boss"] = function(f)
         if f[2] and f[2] ~= "" then
-            ShowBoss(f[2], tonumber(f[3]) or 0, tonumber(f[4]) or 0, f[5], f[6])
+            ShowBoss(f[2], tonumber(f[3]) or 0, tonumber(f[4]) or 0, f[5], f[6], f[7], f[8])
         else
             HideBoss()
-        end
-    end,
-    ["affixinfo"] = function(f)
-        if f[2] and f[2] ~= "" then
-            affixInfo[f[2]] = { icon = f[3] or "", description = f[4] or "" }
         end
     end,
     ["start"] = HideBoss,

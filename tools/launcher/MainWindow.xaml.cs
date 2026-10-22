@@ -950,29 +950,37 @@ namespace HordesOfAzeroth.Launcher
         void OptionsMenu_Opened(object sender, RoutedEventArgs e)
         {
             MoreButton.IsHitTestVisible = false;
-            bool windowed = GameConfig.IsWindowed(m_folder);
-            WindowedItem.IsChecked = windowed;
-            WindowedItem.InputGestureText = GameConfig.Resolution(m_folder).Replace("x", "×");
-            FullscreenItem.IsChecked = !windowed;
+            ShowWindowMode();
             TrayItem.IsChecked = m_settings.KeepInTray;
             BuildItem.IsChecked = m_settings.BuildWhilePlaying;
             WidescreenItem.IsChecked = m_settings.Widescreen;
             WidescreenItem.ToolTip = "Widens the view to fit your screen's shape, from 16:9 to 21:9 and 32:9 ultrawide, so the world doesn't look zoomed in. Turn it off for the original 1.12 view.";
         }
 
-        void WindowedItem_Click(object sender, RoutedEventArgs e)
+        void ShowWindowMode()
         {
-            GameConfig.SetWindowed(m_folder, true);
-            WindowedItem.IsChecked = true;
-            FullscreenItem.IsChecked = false;
+            bool windowed = GameConfig.IsWindowed(m_folder);
+            bool borderless = GameConfig.IsBorderless(m_folder);
+            string resolution = GameConfig.Resolution(m_folder).Replace("x", "×");
+            BorderlessItem.IsChecked = windowed && borderless;
+            BorderlessItem.InputGestureText = resolution;
+            BorderlessItem.ToolTip = "The game fills your screen without a title bar, like fullscreen, and Alt+Tab switches instantly.";
+            WindowedItem.IsChecked = windowed && !borderless;
+            WindowedItem.InputGestureText = resolution;
+            FullscreenItem.IsChecked = !windowed;
         }
 
-        void FullscreenItem_Click(object sender, RoutedEventArgs e)
+        void ChooseWindowMode(bool windowed, bool borderless)
         {
-            GameConfig.SetWindowed(m_folder, false);
-            WindowedItem.IsChecked = false;
-            FullscreenItem.IsChecked = true;
+            GameConfig.SetWindowed(m_folder, windowed, borderless);
+            ShowWindowMode();
         }
+
+        void BorderlessItem_Click(object sender, RoutedEventArgs e) => ChooseWindowMode(true, true);
+
+        void WindowedItem_Click(object sender, RoutedEventArgs e) => ChooseWindowMode(true, false);
+
+        void FullscreenItem_Click(object sender, RoutedEventArgs e) => ChooseWindowMode(false, GameConfig.IsBorderless(m_folder));
 
         void WidescreenItem_Click(object sender, RoutedEventArgs e)
         {

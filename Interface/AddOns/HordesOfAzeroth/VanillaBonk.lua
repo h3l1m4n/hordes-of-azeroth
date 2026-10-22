@@ -164,6 +164,8 @@ offerFrame.hint:SetPoint("CENTER", offerFrame, "CENTER", 0, -206)
 offerFrame.hint:SetTextColor(0.78, 0.78, 0.78)
 
 offerFrame.cards = {}
+offerFrame.cardDrop = 0
+offerFrame.MAX_GROWTH = 120
 
 local BANISH_RED = { 1, 0.25, 0.2 }
 
@@ -781,7 +783,7 @@ local function PlaceCard(card, scale, alpha, rise)
     card:SetAlpha(alpha)
     card.alphaNow = alpha
     card:ClearAllPoints()
-    card:SetPoint("CENTER", offerFrame, "CENTER", card.x / scale, (16 + rise) / scale)
+    card:SetPoint("CENTER", offerFrame, "CENTER", card.x / scale, (16 - offerFrame.cardDrop + rise) / scale)
 end
 
 local CHOICE_KEYS = {
@@ -919,7 +921,7 @@ local function FitCardText(card, width, darkmoon, hasLock, damageRoom)
 
     local top = darkmoon and 158 or 104
     local used = top + card.name:GetHeight() + 4 + card.level:GetHeight() + 11 + 1 + 10
-    local room = CARD_HEIGHT - used - (hasLock and 46 or 18) - (damageRoom or 0)
+    local room = offerFrame.cardHeight - used - (hasLock and 46 or 18) - (damageRoom or 0)
     local size = max(10, floor(13 * scale + 0.5))
     while size > 9 do
         card.measure:SetFont(FONT, size)
@@ -929,6 +931,8 @@ local function FitCardText(card, width, darkmoon, hasLock, damageRoom)
         end
         size = size - 1
     end
+    card.measure:SetFont(FONT, size)
+    card.overflow = max(0, (card.measure:GetHeight() or 0) - room)
     card.description:SetFont("P", FONT, size, "")
     card.description:SetHeight(max(room, 12))
     card.descriptionHtml, card.descriptionLinks = KeywordHtml(card.descriptionText or "")
@@ -1034,6 +1038,68 @@ local function LayoutStats(card, stats, width, room)
     HideStats(card, count + 1)
 end
 
+function offerFrame.FitCard(card, option, width, hasLock)
+    local darkmoon = option.kind == "c"
+    if not darkmoon then
+        VanillaBonkUI.TalentArtCoords(card.art, width - 18, offerFrame.cardHeight - 18)
+    end
+    if option.stats and getn(option.stats) > 0 then
+        card.descriptionText = ""
+        card.damage:Hide()
+        LayoutStats(card, option.stats, width, FitCardText(card, width, darkmoon, hasLock, 0))
+    else
+        HideStats(card, 1)
+        card.descriptionText = option.description
+        FitCardText(card, width, darkmoon, hasLock, LayoutDamageRow(card, option, hasLock))
+    end
+end
+
+function offerFrame.GrowCardsToFit(width, hasLock)
+    local grow = 0
+    for index, card in ipairs(offerFrame.cards) do
+        if VB.offer[index] then
+            grow = max(grow, card.overflow or 0)
+        end
+    end
+    grow = min(ceil(grow), offerFrame.MAX_GROWTH)
+    if grow > 0 then
+        offerFrame.cardHeight = CARD_HEIGHT + grow
+        for index, card in ipairs(offerFrame.cards) do
+            local option = VB.offer[index]
+            if option then
+                card:SetHeight(offerFrame.cardHeight)
+                offerFrame.FitCard(card, option, width, hasLock)
+            end
+        end
+    end
+    offerFrame.cardDrop = grow / 2
+    for index, card in ipairs(offerFrame.cards) do
+        if VB.offer[index] and not card.pop then
+            PlaceCard(card, 1, 1, 0)
+        end
+    end
+    offerFrame.hint:SetPoint("CENTER", offerFrame, "CENTER", 0, -206 - grow)
+    return grow
+end
+
+function offerFrame.Subtitle()
+    if VB.offerSource == "ley" then
+        return "Choose a blessing"
+    end
+    local cards, upgrades = 0, 0
+    for _, option in ipairs(VB.offer) do
+        if option.kind == "c" then
+            cards = cards + 1
+        else
+            upgrades = upgrades + 1
+        end
+    end
+    if cards > 0 and upgrades > 0 then
+        return "Choose a reward"
+    end
+    return cards > 0 and "Choose a Darkmoon Card" or "Choose an upgrade"
+end
+
 local function ShowOffer(level)
     if offerFrame.anim and offerFrame.anim.mode == "close" then
         offerFrame.deferred = level
@@ -1051,18 +1117,21 @@ local function ShowOffer(level)
     else
         offerFrame.title:SetText("Level " .. level)
     end
-    offerFrame.subtitle:SetText(VB.offerSource == "ley" and "Choose a blessing" or "Choose an upgrade")
+    offerFrame.subtitle:SetText(offerFrame.Subtitle())
 
     local count = getn(VB.offer)
     local gap = count <= 3 and 20 or 12
     local width = count <= 3 and 220 or (count == 4 and 200 or 180)
     width = min(width, floor((UIParent:GetWidth() - 40 - (count - 1) * gap) / max(1, count)))
     local left = -((count * width + (count - 1) * gap) / 2) + width / 2
+    local hasLock = VB.offerSource == "chest"
+    offerFrame.cardHeight = CARD_HEIGHT
 
     for index, card in ipairs(offerFrame.cards) do
         local option = VB.offer[index]
         if option then
             card:SetWidth(width)
+            card:SetHeight(CARD_HEIGHT)
             card.x = left + (index - 1) * (width + gap)
             local look = option.name .. option.icon .. option.newLevel .. (option.rarity or "")
             if fresh then
@@ -1090,7 +1159,6 @@ local function ShowOffer(level)
                 card.name:SetPoint("TOP", card, "TOP", 0, -158)
             else
                 card.art:SetTexture("Interface\\TalentFrame\\" .. CardArt(option.icon) .. "-TopLeft")
-                VanillaBonkUI.TalentArtCoords(card.art, width - 18, CARD_HEIGHT - 18)
                 VanillaBonkUI.Shade(card.shade, 0.95, 0.1)
                 card.slot:Show()
                 card.crest:Hide()
@@ -1142,17 +1210,8 @@ local function ShowOffer(level)
             card.line:SetBackdropBorderColor(card.lineColor[1], card.lineColor[2], card.lineColor[3], card.lineColor[4])
             card.borderColor = color and { color.r, color.g, color.b } or { 1, 1, 1 }
             card:SetBackdropBorderColor(card.borderColor[1], card.borderColor[2], card.borderColor[3])
-            local hasLock = VB.offerSource == "chest"
-            if option.stats and getn(option.stats) > 0 then
-                card.descriptionText = ""
-                card.damage:Hide()
-                LayoutStats(card, option.stats, width, FitCardText(card, width, darkmoon, hasLock, 0))
-            else
-                HideStats(card, 1)
-                card.descriptionText = option.description
-                FitCardText(card, width, darkmoon, hasLock, LayoutDamageRow(card, option, hasLock))
-            end
-            if VB.offerSource == "chest" then
+            offerFrame.FitCard(card, option, width, hasLock)
+            if hasLock then
                 card.lock:SetText(option.locked and "Locked" or "Lock")
                 card.lock:Show()
             else
@@ -1166,7 +1225,8 @@ local function ShowOffer(level)
         end
     end
 
-    local hint = "Click a card or press 1-" .. count .. " to choose."
+    local grow = offerFrame.GrowCardsToFit(width, hasLock)
+    local hint = ""
     local keys = {}
     if (VB.skips or 0) > 0 then
         tinsert(keys, "X to skip")
@@ -1183,7 +1243,7 @@ local function ShowOffer(level)
         for index = 2, getn(keys) do
             text = text .. (index == getn(keys) and " or " or ", ") .. keys[index]
         end
-        hint = hint .. " Press " .. text .. "."
+        hint = "Press " .. text .. "."
     end
     offerFrame.hintText = hint
 
@@ -1208,7 +1268,7 @@ local function ShowOffer(level)
     local total = getn(buttons) * 120 + (getn(buttons) - 1) * 12
     for index, button in ipairs(buttons) do
         button:ClearAllPoints()
-        button:SetPoint("CENTER", offerFrame, "CENTER", -total / 2 + 60 + (index - 1) * 132, -170)
+        button:SetPoint("CENTER", offerFrame, "CENTER", -total / 2 + 60 + (index - 1) * 132, -170 - grow)
         button:Show()
     end
 
@@ -2608,6 +2668,10 @@ handlers["find"] = function(f)
 end
 
 handlers["shard"] = function()
+    PlaySound("LOOTWINDOWCOINSOUND")
+end
+
+handlers["valor"] = function()
     PlaySound("LOOTWINDOWCOINSOUND")
 end
 
