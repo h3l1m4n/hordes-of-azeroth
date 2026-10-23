@@ -6,7 +6,7 @@ BONK_CLASSES = {
 	{ token = "PRIEST",  name = "Priest",  races = { "HUMAN", "DWARF", "NIGHTELF", "SCOURGE", "TROLL" } },
 	{ token = "SHAMAN",  name = "Shaman",  races = { "ORC", "TAUREN", "TROLL" } },
 	{ token = "MAGE",    name = "Mage",    races = { "HUMAN", "GNOME", "SCOURGE", "TROLL" } },
-	{ token = "WARLOCK", name = "Warlock", races = { "HUMAN", "GNOME", "ORC", "SCOURGE" }, locked = 1 },
+	{ token = "WARLOCK", name = "Warlock", races = { "HUMAN", "GNOME", "ORC", "SCOURGE" } },
 	{ token = "DRUID",   name = "Druid",   races = { "NIGHTELF", "TAUREN" }, locked = 1 },
 };
 

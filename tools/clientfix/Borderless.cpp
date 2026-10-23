@@ -13,6 +13,8 @@ namespace
     constexpr char CONFIG_PATH[] = "WTF\\Config.wtf";
     constexpr LONG_PTR FRAME_STYLES = WS_CAPTION | WS_THICKFRAME | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX;
     constexpr LONG_PTR FRAME_EX_STYLES = WS_EX_WINDOWEDGE | WS_EX_CLIENTEDGE | WS_EX_DLGMODALFRAME | WS_EX_STATICEDGE;
+    constexpr uintptr_t ACCEPTED_RESOLUTION_WIDTH = 0x00C4EBA8;
+    constexpr uintptr_t ACCEPTED_RESOLUTION_HEIGHT = 0x00C4EBAC;
 
     HWND s_window = nullptr;
     WNDPROC s_originalProc = nullptr;
@@ -141,7 +143,8 @@ namespace
             FitWorkArea(s_window);
         RECT client = {};
         GetClientRect(s_window, &client);
-        Log("borderless: %s, %s, client %ldx%ld", borderless ? "on" : "off", windowed ? "windowed" : "fullscreen", client.right, client.bottom);
+        Log("borderless: %s, %s, client %ldx%ld, resolution %dx%d", borderless ? "on" : "off", windowed ? "windowed" : "fullscreen",
+            client.right, client.bottom, *reinterpret_cast<int const*>(ACCEPTED_RESOLUTION_WIDTH), *reinterpret_cast<int const*>(ACCEPTED_RESOLUTION_HEIGHT));
     }
 
     int __fastcall Lua_SetBorderless(void* L)

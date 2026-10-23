@@ -3,6 +3,7 @@ local UI = VanillaBonkUI
 local SLOTS = 4
 local CARD_HEIGHT = 330
 local CARD_Y = 4
+local DESCRIPTION_BOTTOM = 70
 local VALOR_ICON = "INV_Misc_Coin_04"
 local DARKMOON_CLOTH = "World\\ENVIRONMENT\\DOODAD\\Carnival\\bm_Carnie_tarp01"
 local DARKMOON_BANNER = "World\\ENVIRONMENT\\DOODAD\\Carnival\\Darkmoon_Banner01"
@@ -168,6 +169,10 @@ for index = 1, SLOTS do
     card.description:SetJustifyH("CENTER")
     card.description:SetJustifyV("TOP")
     card.description:SetHeight(84)
+    card.measure = UI.Text(card, 13)
+    card.measure:SetPoint("TOPLEFT", card, "TOPLEFT", 0, 0)
+    card.measure:SetTextColor(0, 0, 0, 0)
+    card.measure:SetShadowColor(0, 0, 0, 0)
 
     card.price = UI.Text(card, 15)
     card.price:SetPoint("BOTTOM", card, "BOTTOM", 9, 50)
@@ -353,9 +358,29 @@ local function CountText(slot)
     return ""
 end
 
+local function FitDescription(card, width, top)
+    local textWidth = width - 40
+    card.description:SetWidth(textWidth)
+    card.measure:SetWidth(textWidth)
+    card.measure:SetText(card.description:GetText() or "")
+    local used = top + card.name:GetHeight() + 4 + card.level:GetHeight() + 11 + 1 + 10
+    local room = CARD_HEIGHT - used - DESCRIPTION_BOTTOM
+    local size = 13
+    while size > 9 do
+        card.measure:SetFont(UI.FONT, size)
+        local needed = card.measure:GetHeight()
+        if not needed or needed == 0 or needed <= room then
+            break
+        end
+        size = size - 1
+    end
+    card.measure:SetFont(UI.FONT, size)
+    card.description:SetFont(UI.FONT, size)
+    card.description:SetHeight(max(room, 12))
+end
+
 local function FillCard(card, slot, width)
     card.name:SetWidth(width - 28)
-    card.description:SetWidth(width - 40)
     card.divider:SetWidth((width - 48) / 2)
     card.dividerRight:SetWidth((width - 48) / 2)
     card.count:SetText(CountText(slot))
@@ -371,7 +396,6 @@ local function FillCard(card, slot, width)
         card.eye.icon:SetTexture(UI.ICON_PATH .. slot.icon)
         card.eye:Show()
         card.name:SetPoint("TOP", card, "TOP", 0, -158)
-        card.description:SetHeight(48)
     else
         card.art:SetTexture("Interface\\TalentFrame\\" .. UI.CardArt(slot.icon) .. "-TopLeft")
         UI.TalentArtCoords(card.art, width - 18, CARD_HEIGHT - 18)
@@ -380,12 +404,12 @@ local function FillCard(card, slot, width)
         card.crest:Hide()
         card.eye:Hide()
         card.name:SetPoint("TOP", card, "TOP", 0, -104)
-        card.description:SetHeight(84)
     end
     card.slot.icon:SetTexture(UI.ICON_PATH .. slot.icon)
     card.name:SetText(slot.name)
     card.level:SetText(LevelText(slot))
     card.description:SetText(slot.description)
+    FitDescription(card, width, darkmoon and 158 or 104)
 
     local rarity = slot.kind == "e" and 4 or slot.rarity
     local color = rarity and UI.RARITY[rarity]

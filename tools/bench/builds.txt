@@ -72,3 +72,14 @@ paladin holyA 837 825 827 829 Holy A
 paladin holyB 838 826 828 830 Holy B
 paladin protA 823 833 835 831 Protection A
 paladin protB 824 834 836 832 Protection B
+warlock demo 900 901 902 903 Demonology base
+warlock aff 904 905 906 907 Affliction base
+warlock destro 907 908 909 910 Destruction base
+warlock demoA 911 913 915 917 Demonology A
+warlock demoB 912 914 916 918 Demonology B
+warlock affA 919 921 923 925 Affliction A
+warlock affB 920 922 924 926 Affliction B
+warlock destroA 925 927 929 931 Destruction A
+warlock destroB 926 928 930 932 Destruction B
+warlock lockA 900 904 906 908 Imp, Corruption, Drain Life, Immolate
+warlock lockS 900 919 906 908 Imp, Seed of Corruption, Drain Life, Immolate

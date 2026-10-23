@@ -70,11 +70,23 @@ namespace BonkTelegraphs
 
     static class Blp
     {
+        const int PaletteOffset = 148;
+
+        public static bool CanRecolour(byte[] blp)
+        {
+            return blp.Length > PaletteOffset + 1024 && BitConverter.ToUInt32(blp, 0) == 0x32504C42u && (blp[8] == 1 || blp[8] == 2);
+        }
+
         public static byte[] Recolour(byte[] blp, ColourRule rule)
         {
             byte[] result = (byte[])blp.Clone();
-            if (BitConverter.ToUInt32(blp, 0) != 0x32504C42u || blp[8] != 2)
-                throw new NotSupportedException("Only DXT BLP2 textures can be recoloured.");
+            if (!CanRecolour(blp))
+                throw new NotSupportedException("Only paletted and DXT BLP2 textures can be recoloured.");
+            if (blp[8] == 1)
+            {
+                RecolourPalette(result, rule);
+                return result;
+            }
             bool dxt1 = blp[10] == 0;
             int blockSize = dxt1 ? 8 : 16, colourAt = dxt1 ? 0 : 8;
             for (int mip = 0; mip < 16; mip++)
@@ -86,6 +98,19 @@ namespace BonkTelegraphs
                     RecolourBlock(result, (int)block + colourAt, dxt1, rule);
             }
             return result;
+        }
+
+        static void RecolourPalette(byte[] data, ColourRule rule)
+        {
+            for (int i = 0; i < 256; i++)
+            {
+                int at = PaletteOffset + i * 4;
+                float b = data[at] / 255f, g = data[at + 1] / 255f, r = data[at + 2] / 255f;
+                rule(ref r, ref g, ref b);
+                data[at] = (byte)Math.Round(Math.Min(1f, b) * 255);
+                data[at + 1] = (byte)Math.Round(Math.Min(1f, g) * 255);
+                data[at + 2] = (byte)Math.Round(Math.Min(1f, r) * 255);
+            }
         }
 
         static void RecolourBlock(byte[] data, int at, bool dxt1, ColourRule rule)

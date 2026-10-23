@@ -50,6 +50,7 @@ namespace HordesOfAzeroth.Launcher
             GameConfig.EnsureDefaults(m_folder, RealmName);
             ClientPatcher.SetFieldOfView(m_folder, widescreen);
             TurboMod.Apply(m_folder);
+            DxvkMod.Apply(m_folder);
         }
 
         public async Task<Process> StartAsync(CancellationToken cancel)

@@ -119,6 +119,7 @@
                                 <MenuItem x:Name="WindowedItem" IsCheckable="True" Header="Window" Click="WindowedItem_Click" />
                                 <MenuItem x:Name="FullscreenItem" IsCheckable="True" Header="Fullscreen" Click="FullscreenItem_Click" />
                                 <MenuItem x:Name="WidescreenItem" IsCheckable="True" Header="Widescreen and ultrawide view" Click="WidescreenItem_Click" />
+                <MenuItem x:Name="VulkanItem" IsCheckable="True" Header="Vulkan graphics" Click="VulkanItem_Click" />
                                 <Separator />
                                 <MenuItem x:Name="BuildItem" IsCheckable="True" Header="Build monster paths while I play" Click="BuildItem_Click" />
                                 <MenuItem Header="Monster path build speed…" Click="BuildSpeedItem_Click" />

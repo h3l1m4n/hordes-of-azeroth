@@ -22,7 +22,8 @@ namespace HordesOfAzeroth.Launcher
         static readonly TimeSpan UpdateInterval = TimeSpan.FromMinutes(15);
         static readonly TimeSpan MenuReopenGuard = TimeSpan.FromMilliseconds(300);
         const string FullRepairText = "The launcher checks every game file, puts back the ones that are missing or damaged and reloads the world. Your characters and unlocks are backed up first and stay as they are.";
-        const string QuickRepairText = "Some game files were missing or damaged, so the launcher puts them back. Your characters and unlocks stay as they are.";
+        const string VulkanTurnedOffText = "The game crashed in its Vulkan graphics, which your graphics card or driver doesn't fully support. The launcher has switched Vulkan off for you, so the game now runs on DirectX 9.\n\nYou don't need to do anything else. Press Play again.\n\nYou can turn Vulkan back on under \"Vulkan graphics\" in the ••• menu next to Play, for example after updating your graphics driver.";
+        const string QuickRepairText ="Some game files were missing or damaged, so the launcher puts them back. Your characters and unlocks stay as they are.";
 
         enum LauncherState { Missing, NotInstalled, Installing, Ready, UpdateAvailable, Starting, Playing, Stopping }
 
@@ -276,6 +277,7 @@ namespace HordesOfAzeroth.Launcher
 
         void ShowProblem(string status, string detail)
         {
+            LauncherLog.Write(m_folder, $"{status}: {detail}");
             StatusText.Text = status;
             StatusText.Foreground = (Brush)FindResource("Problem");
             StatusDetail.Text = "   " + detail;
@@ -1013,6 +1015,8 @@ namespace HordesOfAzeroth.Launcher
                 m_state = LauncherState.Ready;
                 RefreshState();
             }
+            if (DxvkMod.TurnOffAfterCrash(m_folder))
+                MessageBox.Show(this, VulkanTurnedOffText, "Hordes of Azeroth");
         }
 
         async void CheckForUpdates_Click(object sender, RoutedEventArgs e)
@@ -1075,6 +1079,7 @@ namespace HordesOfAzeroth.Launcher
             BuildItem.IsChecked = m_settings.BuildWhilePlaying;
             WidescreenItem.IsChecked = m_settings.Widescreen;
             WidescreenItem.ToolTip = "Widens the view to fit your screen's shape, from 16:9 to 21:9 and 32:9 ultrawide, so the world doesn't look zoomed in. Turn it off for the original 1.12 view.";
+            ShowVulkanItem();
             RepairItem.Visibility = m_folder.IsDevelopmentTree ? Visibility.Collapsed : Visibility.Visible;
             RepairItem.IsEnabled = m_state == LauncherState.Ready || m_state == LauncherState.UpdateAvailable || (m_state == LauncherState.NotInstalled && m_installer.IsComplete);
         }
@@ -1115,6 +1120,29 @@ namespace HordesOfAzeroth.Launcher
         {
             m_settings.Widescreen = WidescreenItem.IsChecked;
             m_settings.Save();
+        }
+
+        void ShowVulkanItem()
+        {
+            bool loader = DxvkMod.HasVulkanLoader;
+            VulkanItem.IsChecked = loader && DxvkMod.IsEnabled(m_folder);
+            VulkanItem.IsEnabled = loader && m_state != LauncherState.Playing && m_state != LauncherState.Starting && m_state != LauncherState.Stopping;
+            ToolTipService.SetShowOnDisabled(VulkanItem, true);
+            VulkanItem.ToolTip = loader
+                ? "Draws the game through Vulkan, which is faster with a crowd on screen. Turn it off if the game crashes when it starts; it then runs on DirectX 9."
+                : "Your PC has no Vulkan support for 32-bit games, so the game runs on DirectX 9.";
+        }
+
+        void VulkanItem_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                DxvkMod.SetEnabled(m_folder, VulkanItem.IsChecked);
+            }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+            {
+                ShowProblem("Vulkan graphics couldn't be changed", ex.Message);
+            }
         }
 
         void BuildItem_Click(object sender, RoutedEventArgs e)

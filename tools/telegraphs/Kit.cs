@@ -43,6 +43,7 @@ namespace BonkTelegraphs
                 projectiles = Projectiles.AddProjectiles(client, files, creatureDisplays, creatureModels);
                 enemyMissiles = Projectiles.AddEnemyMissiles(client, files, creatureDisplays, creatureModels);
                 standIns = StandIns.AddStandIns(creatureDisplays, creatureModels);
+                Console.WriteLine("  " + FelFire.AddFelCreatures(client, files, creatureDisplays, creatureModels));
 
                 spells = new Dbc(client.Read("DBFilesClient\\Spell.dbc"));
                 spellVisuals = new Dbc(client.Read("DBFilesClient\\SpellVisual.dbc"));
@@ -62,6 +63,7 @@ namespace BonkTelegraphs
                 castVisuals.AddRange(AuraLooks.AddAuraLooks(spells, spellVisuals, spellVisualKits, spellEffectNames, new Dbc(client.Read("DBFilesClient\\SpellIcon.dbc"))));
                 castVisuals.AddRange(AuraRings.AddSpells(spells, spellVisuals, spellVisualKits, spellEffectNames));
                 castVisuals.AddRange(PenanceVisuals.AddPenanceVisuals(spells, spellVisuals, spellEffectNames));
+                castVisuals.AddRange(FelFire.AddFelFire(client, files, spells, spellVisuals, spellVisualKits, spellEffectNames));
                 castVisuals.AddRange(LootBeams.AddLootBeams(client, files, spells, spellVisuals, spellVisualKits, spellEffectNames));
 
                 areaPois = new Dbc(client.Read("DBFilesClient\\AreaPOI.dbc"));

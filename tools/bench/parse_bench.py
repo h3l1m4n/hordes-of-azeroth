@@ -6,6 +6,7 @@ from pathlib import Path
 
 WINDOW_FROM = 1.0
 WINDOW_TO = 30.0
+RAMP_WINDOWS = ((1.0, 10.0), (10.0, 20.0), (20.0, 30.0))
 FIELD_KILLS = 4
 FIELD_SLOTS = 13
 LINE = re.compile(r"^(\d+)/(\d+) (\d+):(\d+):(\d+(?:\.\d+)?)\s+(.*)$")
@@ -58,7 +59,25 @@ def measure(start, states, slot_count):
     still_dying = dead_at >= last[0] and kills > 0
     span = max(1.0, dead_at - first[0]) if kills else max(1.0, last[0] - first[0])
     damage = [last[2][i][0] - first[2][i][0] for i in range(slot_count)]
-    return {"kills": kills, "span": span, "finished": not still_dying, "damage": damage}
+    return {"kills": kills, "span": span, "finished": not still_dying, "damage": damage, "ramp": measure_ramp(start, inside)}
+
+
+def measure_ramp(start, inside):
+    ramp = []
+    for low, high in RAMP_WINDOWS:
+        part = [s for s in inside if start + low <= s[0] <= start + high]
+        if len(part) < 2:
+            ramp.append(None)
+            continue
+        dealt = sum(part[-1][2][i][0] - part[0][2][i][0] for i in range(len(part[0][2])))
+        ramp.append(dealt / max(1.0, part[-1][0] - part[0][0]))
+    return ramp
+
+
+def ramp_text(ramp):
+    if not ramp:
+        return ""
+    return "ramp " + " / ".join("-" if r is None else f"{r / 1000:.1f}k" for r in ramp)
 
 
 def describe(build, result):
@@ -78,6 +97,7 @@ def describe(build, result):
         "per_second": total / result["span"],
         "shares": list(zip(names, shares)),
         "top": f"{names[top]} {shares[top]:.0f}%",
+        "ramp": result["ramp"],
     }
 
 
@@ -91,7 +111,7 @@ def print_text(rows):
             print(f"{row['key']:<8} no data")
             continue
         shares = ", ".join(f"{name} {share:.0f}%" for name, share in row["shares"])
-        print(f"{row['key']:<8} kills {row['kills']:3d}  dead {dead_text(row):>5}s  {row['per_second'] / 1000:5.1f}k/s | {shares}")
+        print(f"{row['key']:<8} kills {row['kills']:3d}  dead {dead_text(row):>5}s  {row['per_second'] / 1000:5.1f}k/s  {ramp_text(row['ramp'])} | {shares}")
 
 
 def print_markdown(rows, date, hero):
@@ -118,6 +138,7 @@ def save_results(rows, manifest, path, mode):
             "finished": row["finished"],
             "per_second": round(row["per_second"]),
             "top": row["top"],
+            "ramp": [None if r is None else round(r) for r in row["ramp"]],
         }
     path.write_text(json.dumps(store, indent=2) + "\n", encoding="utf-8")
 
@@ -126,7 +147,7 @@ def show_results(path, mode):
     store = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
     for class_name, builds in sorted(store.get(mode, {}).items()):
         for key, row in builds.items():
-            print(f"{class_name:<8} {key:<7} {row['date']}  kills {row['kills']:3d}  dead {dead_text(row):>5}s  {row['per_second'] / 1000:5.1f}k/s  {row['label']} | {row['top']}")
+            print(f"{class_name:<8} {key:<7} {row['date']}  kills {row['kills']:3d}  dead {dead_text(row):>5}s  {row['per_second'] / 1000:5.1f}k/s  {ramp_text(row.get('ramp'))}  {row['label']} | {row['top']}")
 
 
 def main():

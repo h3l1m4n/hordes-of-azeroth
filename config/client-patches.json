@@ -34,6 +34,16 @@
       "patched": "2F 01"
     },
     {
+      "offset": "0x23A15A",
+      "original": "40 83 F8 07 73 35",
+      "patched": "EB 33 F8 07 73 35"
+    },
+    {
+      "offset": "0x23AC65",
+      "original": "3B C2 0F 85 03 01 00 00",
+      "patched": "85 FF 0F 8F 03 01 00 00"
+    },
+    {
       "offset": "0x4089B4",
       "original": "DB 0F C9 3F",
       "patched": "66 66 F6 3F"

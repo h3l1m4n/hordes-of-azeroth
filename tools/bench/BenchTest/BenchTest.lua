@@ -2,7 +2,7 @@ local SANDBOX_AT = 4
 local SETUP_AT = 8
 local SETUP_GAP = 1
 local BUILD_GAP = 1.2
-local BUILD_SECONDS = 45
+local BUILD_SECONDS = BenchBuildSeconds or 45
 local FALLBACK_QUIT_DELAY = 15
 
 local steps = {}

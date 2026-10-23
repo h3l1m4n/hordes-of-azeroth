@@ -24,6 +24,8 @@ namespace HordesOfAzeroth.Launcher
                 AddText(archive, "about.txt", About(folder));
                 foreach (string file in Logs(folder.ServerLogs, "*.log"))
                     AddTail(archive, "server/" + Path.GetFileName(file), file);
+                foreach (string file in Logs(folder.MariaDbData, "*.err"))
+                    AddTail(archive, "server/mariadb/" + Path.GetFileName(file), file);
                 foreach (string file in Logs(Path.Combine(folder.Root, "Logs"), "*.*"))
                     AddTail(archive, "client/" + Path.GetFileName(file), file);
                 foreach (string file in Logs(Path.Combine(folder.Root, "Logs", "wow_turbo"), "*.log").OrderByDescending(File.GetLastWriteTimeUtc).Take(1))
@@ -69,6 +71,7 @@ namespace HordesOfAzeroth.Launcher
             text.AppendLine($"Windows: {Environment.OSVersion.VersionString}, {(Environment.Is64BitOperatingSystem ? "64" : "32")}-bit");
             text.AppendLine($"Processors: {Environment.ProcessorCount}");
             text.AppendLine($"wow_turbo: {TurboMod.Describe(folder)}");
+            text.AppendLine($"DXVK: {DxvkMod.Describe(folder)}");
             text.AppendLine($"Game folder: {HideUserName(folder.Root)}");
             text.AppendLine($"Saved: {DateTime.Now:yyyy-MM-dd HH:mm:ss zzz}");
             return text.ToString();

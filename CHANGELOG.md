@@ -1,5 +1,54 @@
 # Changelog
 
+## 0.3.0
+
+### Warlock
+- Warlock is now available. Still WIP like every class.
+- 11 spells and 22 evolutions, talents and class quests.
+
+### Bosses
+- Attacks no longer fizzle after a pause: a wind-up that was on screen when a level-up, chest or vendor paused the game still lands afterwards.
+- Warnings vanish as soon as their attack is broken off or the enemy dies, so none are left behind.
+- Leaping bosses finish the leap instead of snapping the last yards.
+- Stomps are 3 yards wider and hit harder. Breaths reach 16 yards on Normal, cones and tail sweeps are 3 yards longer, and all of them grow 20% per difficulty step.
+- Melee specials such as Cleave, Mortal Strike, Knock Away and Uppercut now show a cone warning.
+- War Stomp and Thunderclap circles match their real reach and only hit inside them. Caster bolt circles are slightly smaller.
+- Running into or out of a bolt or eruption circle at the last moment now counts correctly, and big circle hits show a matching big impact.
+- Lingering pools show a molten ring on the ground instead of a red aiming circle.
+
+### Game window
+- Fixed the stretched picture on ultrawide screens such as 3440x1440. The game now keeps your screen's resolution instead of dropping to 1600x1200 when Windows doesn't list that resolution for the game.
+- The widescreen and ultrawide view now shows as much of the world from top to bottom as on 16:9 screens, instead of looking zoomed in on 21:9 and 32:9 screens.
+
+### Launcher
+- If the game crashes in Vulkan, the launcher switches the game to DirectX 9 and tells you once. PCs without Vulkan run on DirectX 9 from the start. A new "Vulkan graphics" checkbox in the "..." menu turns it back on or off.
+- Database errors now show the real error, and the launcher keeps a log file that goes into the log bundle.
+
+### Legendaries
+- Legendaries are 15% stronger than Mythic run epics for their slot, and every legendary weapon has two extra stats that fit its theme.
+- Legendary drop chance starts at 10% on the Mythic stage 2 boss and grows 5% each later stage, up to 40%.
+
+### Mage
+- Slow Time leaves a single time bubble for 10 sec, shown as a purple ring the size of its reach. The next blast after it fades leaves a new one.
+- Only Blink and its evolutions turn your dash into Blink. Blink no longer shows a cooldown on the hotbar.
+- Frostbolt deals 40% more damage, Arcane Missiles, Blizzard and Frost Nova 33% more, Arcane Explosion 29% more. Their evolutions get the same boost.
+
+### Rogue
+- During Shadow Dance, Vanish, Symbols of Death and Shadow Blades, each enemy can be Ambushed at most once a second. Count and fast hits no longer multiply Ambush strikes.
+
+### Paladin
+- Crusader Strike's splash hits each enemy at most once per strike, so overlapping splashes no longer stack.
+
+### Warrior
+- Bloodlust cuts at most 1 sec off its cooldown per strike, down to 3 sec (was down to 1 sec).
+- Aftershock erupts for 30% of the damage with 1 Bleed stack (was 50% and 2).
+
+### Other changes
+- Pets land their special attacks while you run, such as the Felhunter's Shadow Bite and the cat's Claw and Bite.
+- Gear you brought goes back on when you log out or disconnect during a run, instead of ending up in your bags.
+- Level-up, gear and chest choices close when a run ends.
+- Damage you take no longer shows twice sometimes on your character.
+
 ## 0.2.3
 
 ### Innkeeper

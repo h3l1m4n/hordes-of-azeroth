@@ -16,6 +16,9 @@ namespace BonkTelegraphs
         public float StreakAlpha;
         public float RimAlpha;
         public float MaxAlpha;
+        public uint OwnEffectId;
+        public uint OwnKitId;
+        public uint OwnVisualId;
     }
 
     static class AuraRings
@@ -55,6 +58,14 @@ namespace BonkTelegraphs
             new AuraRingLook { Name = "IcePathRing", TemplateSpell = 33424, FirstSpellId = 33425,
                 Dark = new[] { 0.5f, 0.75f, 0.95f }, Bright = new[] { 0.88f, 0.97f, 1f },
                 HazeAlpha = 0.3f, StreakAlpha = 0.42f, RimAlpha = 0.45f, MaxAlpha = 0.8f },
+            new AuraRingLook { Name = "TimeBubbleRing", TemplateSpell = 33424, FirstSpellId = 33471,
+                Dark = new[] { 0.22f, 0.08f, 0.42f }, Bright = new[] { 0.78f, 0.6f, 1f },
+                HazeAlpha = 0.28f, StreakAlpha = 0.4f, RimAlpha = 0.5f, MaxAlpha = 0.8f,
+                OwnEffectId = 3500, OwnKitId = 7800, OwnVisualId = 8900 },
+            new AuraRingLook { Name = "HazardRing", TemplateSpell = 33424, FirstSpellId = 33510,
+                Dark = new[] { 0.3f, 0.06f, 0f }, Bright = new[] { 1f, 0.42f, 0.08f },
+                HazeAlpha = 0.34f, StreakAlpha = 0.46f, RimAlpha = 0.35f, MaxAlpha = 0.8f,
+                OwnEffectId = 3550, OwnKitId = 7850, OwnVisualId = 8950 },
         };
 
         public static List<string> AddSpells(Dbc spells, Dbc visuals, Dbc kits, Dbc effects)
@@ -75,7 +86,10 @@ namespace BonkTelegraphs
                 for (int i = 0; i < StandIns.Sizes.Length; i++, slot++)
                 {
                     string name = ModelName(look, StandIns.Sizes[i]);
-                    uint effectId = FirstEffectId + slot, kitId = FirstKitId + slot, visualId = FirstVisualId + slot, spellId = look.FirstSpellId + (uint)i;
+                    uint effectId = look.OwnEffectId != 0 ? look.OwnEffectId + (uint)i : FirstEffectId + slot;
+                    uint kitId = look.OwnKitId != 0 ? look.OwnKitId + (uint)i : FirstKitId + slot;
+                    uint visualId = look.OwnVisualId != 0 ? look.OwnVisualId + (uint)i : FirstVisualId + slot;
+                    uint spellId = look.FirstSpellId + (uint)i;
                     if (effects.Find(effectId) != null || kits.Find(kitId) != null || visuals.Find(visualId) != null || spells.Find(spellId) != null)
                         throw new InvalidOperationException("The ids for aura ring " + name + " are taken.");
 
@@ -106,7 +120,9 @@ namespace BonkTelegraphs
                 uint last = slot - 1;
                 manifest.Add(string.Format("spells {0}-{1} ({2}, {3}-{4} yd): visuals {5}-{6}, state kits {7}-{8}, base effects {9}-{10}",
                     look.FirstSpellId, look.FirstSpellId + last - firstSlot, look.Name, StandIns.Sizes[0], StandIns.Sizes[StandIns.Sizes.Length - 1],
-                    FirstVisualId + firstSlot, FirstVisualId + last, FirstKitId + firstSlot, FirstKitId + last, FirstEffectId + firstSlot, FirstEffectId + last));
+                    FirstOf(look.OwnVisualId, FirstVisualId + firstSlot), FirstOf(look.OwnVisualId, FirstVisualId + firstSlot) + last - firstSlot,
+                    FirstOf(look.OwnKitId, FirstKitId + firstSlot), FirstOf(look.OwnKitId, FirstKitId + firstSlot) + last - firstSlot,
+                    FirstOf(look.OwnEffectId, FirstEffectId + firstSlot), FirstOf(look.OwnEffectId, FirstEffectId + firstSlot) + last - firstSlot));
             }
             return manifest;
         }
@@ -126,6 +142,8 @@ namespace BonkTelegraphs
                 }
             }
         }
+
+        static uint FirstOf(uint own, uint shared) { return own != 0 ? own : shared; }
 
         static string ModelName(AuraRingLook look, float size)
         {

@@ -77,9 +77,32 @@ frame:SetScript("OnUpdate", function()
     end
 end)
 
+local STOCK_DAMAGE_TYPES = { "DAMAGE", "DAMAGE_CRIT", "SPELL_DAMAGE", "SPLIT_DAMAGE" }
+
+local function MuteStockDamageText()
+    if not COMBAT_TEXT_TYPE_INFO then
+        return
+    end
+    for _, messageType in ipairs(STOCK_DAMAGE_TYPES) do
+        local info = COMBAT_TEXT_TYPE_INFO[messageType]
+        if info then
+            info.show = nil
+        end
+    end
+end
+
+MuteStockDamageText()
+
 local events = CreateFrame("Frame")
 events:RegisterEvent("UNIT_COMBAT")
+events:RegisterEvent("ADDON_LOADED")
 events:SetScript("OnEvent", function()
+    if event == "ADDON_LOADED" then
+        if arg1 == "Blizzard_CombatText" then
+            MuteStockDamageText()
+        end
+        return
+    end
     if arg1 ~= "player" then
         return
     end

@@ -22,7 +22,7 @@ namespace HordesOfAzeroth.Launcher
         const double WidescreenReferenceFieldOfView = 1.925;
         const double WidescreenReferenceAspect = 16.0 / 9.0;
         const double ClassicAspect = 4.0 / 3.0;
-        const double MaxFieldOfView = 2.6;
+        const double MaxFieldOfView = 3.0;
 
         public static void Apply(GameFolder folder)
         {
@@ -77,8 +77,13 @@ namespace HordesOfAzeroth.Launcher
             double aspect = ParseAspect(resolution);
             if (aspect <= ClassicAspect)
                 return ClassicFieldOfView;
-            double verticalSlope = Math.Tan(WidescreenReferenceFieldOfView / 2) / WidescreenReferenceAspect;
-            return (float)Math.Min(MaxFieldOfView, 2 * Math.Atan(verticalSlope * aspect));
+            double verticalFieldOfView = WidescreenReferenceFieldOfView / Diagonal(WidescreenReferenceAspect);
+            return (float)Math.Min(MaxFieldOfView, verticalFieldOfView * Diagonal(aspect));
+        }
+
+        static double Diagonal(double aspect)
+        {
+            return Math.Sqrt(aspect * aspect + 1);
         }
 
         static double ParseAspect(string resolution)

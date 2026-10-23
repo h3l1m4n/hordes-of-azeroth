@@ -270,7 +270,7 @@ namespace HordesOfAzeroth.Launcher
             await Task.Delay(1500);
         }
 
-        static async Task<string> RunToEndAsync(string exe, string workingDirectory, params string[] arguments)
+        async Task<string> RunToEndAsync(string exe, string workingDirectory, params string[] arguments)
         {
             ProcessStartInfo info = new ProcessStartInfo(exe, string.Join(" ", arguments))
             {
@@ -289,15 +289,21 @@ namespace HordesOfAzeroth.Launcher
                 string text = await output;
                 string problem = await error;
                 if (process.ExitCode != 0)
-                    throw new InvalidOperationException($"{Path.GetFileName(exe)} failed (exit code 0x{process.ExitCode:X}): {Details(problem, text)}");
+                {
+                    string failure = $"{Path.GetFileName(exe)} failed (exit code 0x{process.ExitCode:X})";
+                    LauncherLog.Write(m_folder, $"{failure}{Environment.NewLine}stderr:{Environment.NewLine}{problem}{Environment.NewLine}stdout (end):{Environment.NewLine}{string.Join(Environment.NewLine, Lines(text).Reverse().Take(20).Reverse())}");
+                    throw new InvalidOperationException($"{failure}: {Details(problem, text)}");
+                }
                 return text;
             }
         }
 
         static string Details(string error, string output)
         {
-            string line = Lines(error).FirstOrDefault(l => !l.StartsWith("WARNING"))
-                ?? Lines(output).LastOrDefault();
+            List<string> errorLines = Lines(error).ToList();
+            string line = errorLines.FirstOrDefault(l => l.StartsWith("ERROR"))
+                ?? errorLines.FirstOrDefault(l => !l.StartsWith("WARNING") && l.Trim('-').Length > 0)
+                ?? Lines(output).LastOrDefault(l => l.Trim('-').Length > 0);
             return line ?? "no details";
         }
 

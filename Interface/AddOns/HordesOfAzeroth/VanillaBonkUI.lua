@@ -27,8 +27,9 @@ UI.DAMAGE_TYPES = {
     nature = { name = "Nature", r = 0.25, g = 0.78, b = 0.71, icon = "Spell_Nature_Lightning" },
     holy = { name = "Holy", r = 1, g = 0.9, b = 0.5, icon = "Spell_Holy_HolyBolt" },
     decay = { name = "Decay", r = 0.45, g = 0.3, b = 0.7, icon = "Spell_Shadow_ChillTouch", note = "Shadow damage over time." },
+    agony = { name = "Agony", r = 0.55, g = 0.2, b = 0.55, icon = "Spell_Shadow_CurseOfSargeras", note = "Shadow damage over time that grows." },
 }
-UI.DAMAGE_TYPE_BY_KEYWORD = { Bleed = "bleed", Poison = "poison", Burning = "burn", Decay = "decay" }
+UI.DAMAGE_TYPE_BY_KEYWORD = { Bleed = "bleed", Poison = "poison", Burning = "burn", Decay = "decay", Agony = "agony" }
 
 local ICON_SCHOOLS = {
     { "_FIRE_", "fire" }, { "FIREBALL", "fire" }, { "_FROST_", "frost" }, { "_ARCANE_", "arcane" }, { "STARFALL", "arcane" },
