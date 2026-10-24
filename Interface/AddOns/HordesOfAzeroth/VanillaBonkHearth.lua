@@ -116,7 +116,7 @@ end
 tip:SetScript("OnShow", function()
     this.body:SetText("You don't need it to finish a run. It's an emergency exit for when a run turns bad. " ..
         "It opens a ring with an Extraction Vault beside it that holds 1 item. " ..
-        "Put your best find in the vault, then stand in the ring for a few seconds to escape to the Inn.")
+        "Put your best find in the vault, then be inside the ring when it fills to escape to the Inn. If you're outside, it leaves without you.")
     this.key:SetText(KeyLine())
     this:SetHeight(22 + this.title:GetHeight() + 10 + this.body:GetHeight() + 10 + this.key:GetHeight() + 22 + 30)
     SendChatMessage(".bonk menu 1", "SAY")

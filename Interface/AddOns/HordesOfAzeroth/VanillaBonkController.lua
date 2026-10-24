@@ -1492,6 +1492,7 @@ end
 local INTERACT_GLYPH = 30
 local INTERACT_LIFT = 26
 local INTERACT_FADE = 6
+local INTERACT_PLATE_GAP = 4
 local INTERACT_KEYCAP = 26
 local INTERACT_COMMAND = "VANILLABONK_INTERACT"
 local OBJECT_VERBS = { [900001] = "Open", [900002] = "Open", [900003] = "Enter", [900041] = "Open", [900060] = "Search" }
@@ -1501,7 +1502,7 @@ local NPC_FLAG_VENDOR = 4
 local NPC_FLAG_BANKER = 256
 
 local interactPrompt = CreateFrame("Frame", nil, UIParent)
-interactPrompt:SetFrameStrata("BACKGROUND")
+interactPrompt:SetFrameStrata("LOW")
 interactPrompt:SetHeight(INTERACT_GLYPH)
 interactPrompt.glyph = interactPrompt:CreateTexture(nil, "ARTWORK")
 interactPrompt.glyph:SetWidth(INTERACT_GLYPH)
@@ -1565,6 +1566,20 @@ local function DressInteract(keyText)
     return mark:GetWidth()
 end
 
+local function PlaceInteract(headX, headY)
+    local worldScale = WorldFrame:GetEffectiveScale()
+    local screenX = headX * WorldFrame:GetWidth() * worldScale
+    local screenY = headY * WorldFrame:GetHeight() * worldScale
+    local plateTop = VanillaBonkUI.PlateTopAbove(screenX, screenY)
+    if not plateTop then
+        PlaceOnWorld(interactPrompt, "BOTTOM", headX, headY, INTERACT_LIFT)
+        return
+    end
+    local scale = interactPrompt:GetEffectiveScale()
+    interactPrompt:ClearAllPoints()
+    interactPrompt:SetPoint("BOTTOM", WorldFrame, "BOTTOMLEFT", screenX / scale, plateTop / scale + INTERACT_PLATE_GAP)
+end
+
 local function ShowInteract(kind, entry, detail, headX, headY, keyText)
     local key = kind .. entry .. Controller.Style() .. (keyText or "")
     if interactPrompt.key ~= key then
@@ -1573,7 +1588,7 @@ local function ShowInteract(kind, entry, detail, headX, headY, keyText)
         interactPrompt.label:SetText(InteractVerb(kind, entry, detail))
         interactPrompt:SetWidth(DressInteract(keyText) + 4 + interactPrompt.label:GetStringWidth())
     end
-    PlaceOnWorld(interactPrompt, "BOTTOM", headX, headY, INTERACT_LIFT)
+    PlaceInteract(headX, headY)
     interactPrompt:SetAlpha(math.min(1, (GetTime() - interactPrompt.shownAt) * INTERACT_FADE))
     interactPrompt:Show()
 end

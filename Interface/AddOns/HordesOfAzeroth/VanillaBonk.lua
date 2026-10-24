@@ -2794,9 +2794,9 @@ end
 
 local STATS = {
     [0]  = { name = "Power", pct = true, text = "You deal %s more damage." },
-    [1]  = { name = "Haste", pct = true, curve = 75, gearCap = 20, text = "You attack and dots tick %s more often." },
+    [1]  = { name = "Haste", pct = true, curve = 75, gearCap = 20, text = "Your attacks and dots tick %s more often." },
     [2]  = { name = "Count", cap = 5, text = "Your spells fire %s more bolts or shots, swing that many more times, and place or summon that many more. AoE spells are not affected." },
-    [3]  = { name = "Movement speed", pct = true, text = "You run %s faster." },
+    [3]  = { name = "Movement speed", pct = true, cap = 50, text = "You run %s faster." },
     [4]  = { name = "Max health", pct = true, text = "You have %s more maximum health." },
     [5]  = { name = "Regen", pct = true, text = "You regain %s of your maximum health every second." },
     [6]  = { name = "Gold", pct = true, text = "You find %s more gold." },
@@ -2818,7 +2818,7 @@ local STAT_ORDER = { 0, 12, 14, 13, 15, 16, 17, 1, 10, 8, 18, 4, 3, 5, 9, 11, 19
 
 VB.statTips = {
     s0 = { name = "Power", text = "Increases the damage of all your spells and pets." },
-    s1 = { name = "Haste", text = "Your spells cast more often and your damage over time ticks faster. Each point adds a little less than the one before, up to at most 75%." },
+    s1 = { name = "Haste", text = "Your attacks and dots tick more often. Each point is worth a little less than the last, up to at most 75%." },
     s2 = { name = "Count", text = "Your spells fire more bolts or shots, swing more times, and place or summon more. AoE spells are not affected." },
     s3 = { name = "Movement speed", text = "You run faster." },
     s4 = { name = "Maximum health", text = "Raises your maximum health." },
@@ -3285,7 +3285,7 @@ local function RefreshHeroStats()
         local total = fromGear + fromRest
         local shown = stat.cap and min(total, stat.cap) or total
         if stat.curve and total > 0 then
-            shown = stat.curve * (1 - math.exp(-total / stat.curve))
+            shown = floor(10 * stat.curve * (1 - math.exp(-total / stat.curve)) + 0.5) / 10
         end
 
         line.value:SetText(FormatStat(statId, shown))
@@ -3300,12 +3300,12 @@ local function RefreshHeroStats()
             tinsert(line.lines, "Every hero starts with " .. Percent(5) .. ".")
         end
         if stat.gearCap then
-            tinsert(line.lines, "Gear adds at most " .. FormatStat(statId, stat.gearCap) .. ".")
+            tinsert(line.lines, "Gear gives at most " .. FormatStat(statId, stat.gearCap) .. ".")
         end
         if stat.curve then
-            tinsert(line.lines, "Each point adds a little less than the one before, and it never goes past " .. FormatStat(statId, stat.curve) .. ".")
-            if total > shown + 0.05 then
-                tinsert(line.lines, "Yours adds up to " .. FormatStat(statId, total) .. " before that.")
+            tinsert(line.lines, "Each point is worth a little less than the last, up to at most " .. FormatStat(statId, stat.curve) .. ".")
+            if FormatStat(statId, total) ~= FormatStat(statId, shown) then
+                tinsert(line.lines, "Your " .. FormatStat(statId, total) .. " counts as " .. FormatStat(statId, shown) .. ".")
             end
         end
         if stat.cap then
@@ -3423,6 +3423,22 @@ handlers["necrotic"] = function(f)
         necroticText:SetText("Necrotic x" .. stacks .. ": " .. (f[3] or "") .. " less healing")
     else
         necroticText:SetText("")
+    end
+end
+
+do
+    local woundsText = PlayerFrame:CreateFontString(nil, "OVERLAY")
+    SetFont(woundsText, 11)
+    woundsText:SetPoint("TOPLEFT", necroticText, "BOTTOMLEFT", 0, -2)
+    woundsText:SetTextColor(1, 0.3, 0.3)
+
+    handlers["wounds"] = function(f)
+        local stacks = tonumber(f[2]) or 0
+        if stacks > 0 then
+            woundsText:SetText("Wounded x" .. stacks .. ": " .. (f[3] or "") .. " less healing")
+        else
+            woundsText:SetText("")
+        end
     end
 end
 

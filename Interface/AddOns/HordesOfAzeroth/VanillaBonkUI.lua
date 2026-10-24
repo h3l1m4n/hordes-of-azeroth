@@ -69,6 +69,20 @@ function UI.DamageParts(description, total, icon)
     return parts
 end
 
+UI.BAR_FADE = { r = 0.87, g = 0.72, b = 0.88 }
+UI.HEAL_COLOR = { r = 0.29, g = 0.82, b = 0.33 }
+UI.ABSORB_COLOR = { r = 0.86, g = 0.9, b = 1 }
+
+function UI.ShadeBar(fill, color, from, to, brightness)
+    local function Channel(value, fade, position)
+        return value * brightness * (fade + (1 - fade) * position)
+    end
+    local fade = UI.BAR_FADE
+    fill:SetGradient("HORIZONTAL",
+        Channel(color.r, fade.r, from), Channel(color.g, fade.g, from), Channel(color.b, fade.b, from),
+        Channel(color.r, fade.r, to), Channel(color.g, fade.g, to), Channel(color.b, fade.b, to))
+end
+
 UI.CLASS_ICONS = "Interface\\Glues\\CharacterCreate\\UI-CharacterCreate-Classes"
 UI.CLASS_COORDS = {
     WARRIOR = { 0, 0.25, 0, 0.25 },

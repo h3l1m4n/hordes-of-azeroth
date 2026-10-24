@@ -4,17 +4,24 @@ local MAX_WIDTH = 304
 local MIN_WIDTH = 220
 local HERO_BAR_HALF = 372
 local EDGE = 20
-local TAB_HEIGHT = 24
-local TAB_SIDE = 12
-local ROW = 19
-local ROW_GAP = 3
-local PAD = 4
+local HEADER = 24
+local ROW = 20
+local ROW_GAP = 2
+local PAD = 5
 local MAX_ROWS = 10
 local MAX_PARTS = 4
-local BAR_TEXTURE = "Interface\\TargetingFrame\\UI-StatusBar"
-local TAB_TEXTURE = "Interface\\ChatFrame\\ChatFrameTab"
+local BAR_BRIGHTNESS = 0.8
+local BORDER_TEXTURE = "Interface\\Tooltips\\UI-Tooltip-Border"
+local ARROW_TEXTURE = "Interface\\ChatFrame\\UI-ChatIcon-ScrollDown"
 local BAR_SPEED = 8
-local MODE_SPELLS, MODE_TYPES = 1, 2
+local MODE_SPELLS, MODE_TYPES, MODE_HEALING = 1, 2, 3
+local MODES = {
+    { mode = MODE_SPELLS, label = "Damage Done" },
+    { mode = MODE_TYPES, label = "Damage Types" },
+    { mode = MODE_HEALING, label = "Healing Done" },
+}
+local HEAL_COLOR = UI.HEAL_COLOR
+local ABSORB_COLOR = UI.ABSORB_COLOR
 
 local function Short(value)
     if value >= 1000000 then
@@ -31,90 +38,141 @@ local function Percent(part, total)
     return total > 0 and floor(part * 100 / total + 0.5) or 0
 end
 
-local function ColorCode(kind)
-    return format("|cff%02x%02x%02x", kind.r * 255, kind.g * 255, kind.b * 255)
+local function ModeLabel(mode)
+    for _, entry in ipairs(MODES) do
+        if entry.mode == mode then
+            return entry.label
+        end
+    end
+    return MODES[1].label
+end
+
+local function Framed(frame, alpha)
+    frame:SetBackdrop({
+        bgFile = UI.FLAT, edgeFile = BORDER_TEXTURE, tile = false, edgeSize = 12,
+        insets = { left = 3, right = 3, top = 3, bottom = 3 },
+    })
+    frame:SetBackdropColor(0.04, 0.04, 0.05, alpha)
+    frame:SetBackdropBorderColor(0.55, 0.5, 0.42)
 end
 
 local meter = CreateFrame("Frame", "VanillaBonkMeter", UIParent)
 meter:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", -EDGE, EDGE)
 meter:SetWidth(MAX_WIDTH)
-meter:SetHeight(TAB_HEIGHT + PAD * 2 + ROW)
+meter:SetHeight(HEADER + PAD * 2 + ROW)
 meter:SetFrameStrata("LOW")
+Framed(meter, 0.62)
 meter:Hide()
 
-meter.back = meter:CreateTexture(nil, "BACKGROUND")
-meter.back:SetTexture(UI.FLAT)
-meter.back:SetVertexColor(0, 0, 0, 0.42)
-meter.back:SetPoint("TOPLEFT", meter, "TOPLEFT", 0, -(TAB_HEIGHT - 2))
-meter.back:SetPoint("BOTTOMRIGHT", meter, "BOTTOMRIGHT", 0, 0)
+meter.header = meter:CreateTexture(nil, "BORDER")
+meter.header:SetTexture(UI.FLAT)
+meter.header:SetGradientAlpha("VERTICAL", 0.1, 0.08, 0.05, 0.9, 0.24, 0.19, 0.12, 0.9)
+meter.header:SetPoint("TOPLEFT", meter, "TOPLEFT", 3, -3)
+meter.header:SetPoint("TOPRIGHT", meter, "TOPRIGHT", -3, -3)
+meter.header:SetHeight(HEADER - 4)
 
-meter.total = UI.Text(meter, 12, UI.NUMBER_FONT)
-meter.total:SetPoint("TOPRIGHT", meter, "TOPRIGHT", -4, -6)
-meter.total:SetJustifyH("RIGHT")
+meter.rule = meter:CreateTexture(nil, "ARTWORK")
+meter.rule:SetTexture(UI.FLAT)
+meter.rule:SetVertexColor(0.55, 0.45, 0.25, 0.8)
+meter.rule:SetHeight(1)
+meter.rule:SetPoint("TOPLEFT", meter.header, "BOTTOMLEFT", 0, 0)
+meter.rule:SetPoint("TOPRIGHT", meter.header, "BOTTOMRIGHT", 0, 0)
 
 local mode = MODE_SPELLS
 local spells = {}
+local support = {}
 local seconds = 0
 local rows = {}
-local tabs = {}
 local Refresh
 
-local function TabPiece(tab, left, right)
-    local piece = tab:CreateTexture(nil, "BACKGROUND")
-    piece:SetTexture(TAB_TEXTURE)
-    piece:SetTexCoord(left, right, 0, 1)
-    piece:SetHeight(TAB_HEIGHT)
-    return piece
-end
-
-local function ShowTabs()
-    for _, tab in ipairs(tabs) do
-        local active = tab.mode == mode
-        tab:SetAlpha(active and 1 or 0.6)
-        if active then
-            tab.text:SetTextColor(1, 1, 1)
+local menu = CreateFrame("Frame", nil, meter)
+menu:SetFrameStrata("DIALOG")
+Framed(menu, 0.92)
+menu:SetPoint("BOTTOMLEFT", meter, "TOPLEFT", 0, -2)
+menu:SetWidth(132)
+menu:SetHeight(getn(MODES) * 18 + 10)
+menu:Hide()
+menu.options = {}
+menu:SetScript("OnShow", function()
+    for _, option in ipairs(this.options) do
+        if option.mode == mode then
+            option.text:SetTextColor(1, 1, 1)
         else
-            tab.text:SetTextColor(1, 0.82, 0)
+            option.text:SetTextColor(1, 0.82, 0)
         end
     end
-end
+end)
 
-local function Tab(label, tabMode)
-    local tab = CreateFrame("Button", nil, meter)
-    tab:SetHeight(TAB_HEIGHT)
-    tab.mode = tabMode
-    tab.left = TabPiece(tab, 0, 0.25)
-    tab.left:SetWidth(TAB_SIDE)
-    tab.left:SetPoint("TOPLEFT", tab, "TOPLEFT", 0, 0)
-    tab.right = TabPiece(tab, 0.75, 1)
-    tab.right:SetWidth(TAB_SIDE)
-    tab.right:SetPoint("TOPRIGHT", tab, "TOPRIGHT", 0, 0)
-    tab.middle = TabPiece(tab, 0.25, 0.75)
-    tab.middle:SetPoint("TOPLEFT", tab.left, "TOPRIGHT", 0, 0)
-    tab.middle:SetPoint("TOPRIGHT", tab.right, "TOPLEFT", 0, 0)
-    tab.text = UI.Text(tab, 11)
-    tab.text:SetPoint("CENTER", tab, "CENTER", 0, -1)
-    tab.text:SetText(label)
-    tab:SetWidth(floor(tab.text:GetStringWidth() + 2 * TAB_SIDE + 6))
-    tab:SetScript("OnClick", function()
-        mode = this.mode
-        VanillaBonkMeterMode = mode
-        PlaySound("igCharacterInfoTab")
-        ShowTabs()
-        Refresh()
-    end)
-    local previous = tabs[getn(tabs)]
-    if previous then
-        tab:SetPoint("LEFT", previous, "RIGHT", -2, 0)
+local function ToggleMenu()
+    if menu:IsShown() then
+        menu:Hide()
     else
-        tab:SetPoint("TOPLEFT", meter, "TOPLEFT", 0, 0)
+        menu:Show()
     end
-    tinsert(tabs, tab)
-    return tab
+    PlaySound("igMainMenuOptionCheckBoxOn")
 end
 
-Tab("Spells", MODE_SPELLS)
-Tab("Damage types", MODE_TYPES)
+local function ChooseMode(chosen)
+    mode = chosen
+    VanillaBonkMeterMode = mode
+    meter.title:SetText(ModeLabel(mode))
+    menu:Hide()
+    for _, row in ipairs(rows) do
+        row.key = nil
+    end
+    Refresh()
+end
+
+for index, entry in ipairs(MODES) do
+    local option = CreateFrame("Button", nil, menu)
+    option:SetHeight(18)
+    option:SetPoint("TOPLEFT", menu, "TOPLEFT", 5, -5 - (index - 1) * 18)
+    option:SetPoint("TOPRIGHT", menu, "TOPRIGHT", -5, -5 - (index - 1) * 18)
+    option.mode = entry.mode
+    option.text = UI.Text(option, 11)
+    option.text:SetPoint("LEFT", option, "LEFT", 6, 0)
+    option.text:SetText(entry.label)
+    option.glow = option:CreateTexture(nil, "BACKGROUND")
+    option.glow:SetTexture(UI.FLAT)
+    option.glow:SetAllPoints(option)
+    option.glow:SetVertexColor(1, 0.82, 0, 0.18)
+    option.glow:Hide()
+    tinsert(menu.options, option)
+    option:SetScript("OnEnter", function() this.glow:Show() end)
+    option:SetScript("OnLeave", function() this.glow:Hide() end)
+    option:SetScript("OnClick", function()
+        PlaySound("igCharacterInfoTab")
+        ChooseMode(this.mode)
+    end)
+end
+
+local picker = CreateFrame("Button", nil, meter)
+picker:SetWidth(20)
+picker:SetHeight(20)
+picker:SetPoint("TOPLEFT", meter, "TOPLEFT", 4, -3)
+picker:SetNormalTexture(ARROW_TEXTURE .. "-Up")
+picker:SetPushedTexture(ARROW_TEXTURE .. "-Down")
+picker:SetHighlightTexture(ARROW_TEXTURE .. "-Highlight")
+picker:SetScript("OnClick", ToggleMenu)
+
+local titleButton = CreateFrame("Button", nil, meter)
+titleButton:SetHeight(HEADER - 4)
+titleButton:SetPoint("LEFT", picker, "RIGHT", 2, 0)
+titleButton:SetWidth(120)
+titleButton:SetScript("OnClick", ToggleMenu)
+
+meter.title = UI.Text(titleButton, 13)
+meter.title:SetPoint("LEFT", titleButton, "LEFT", 2, 0)
+meter.title:SetTextColor(1, 0.82, 0)
+meter.title:SetText(ModeLabel(mode))
+
+meter.total = UI.Text(meter, 12, UI.NUMBER_FONT)
+meter.total:SetPoint("RIGHT", meter.header, "RIGHT", -6, 0)
+meter.total:SetJustifyH("RIGHT")
+
+meter.empty = UI.Text(meter, 11)
+meter.empty:SetPoint("TOPLEFT", meter, "TOPLEFT", PAD + 4, -(HEADER + PAD + 4))
+meter.empty:SetTextColor(0.6, 0.6, 0.6)
 
 local function AddPartLines(entry)
     for _, part in ipairs(entry.parts) do
@@ -146,14 +204,24 @@ local function TypeTooltip(entry, share)
     end
 end
 
+local function HealTooltip(entry, share)
+    GameTooltip:AddLine(entry.name, 1, 1, 1)
+    GameTooltip:AddDoubleLine("Healed", Short(entry.healed), HEAL_COLOR.r, HEAL_COLOR.g, HEAL_COLOR.b, 1, 1, 1)
+    GameTooltip:AddDoubleLine("Absorbed", Short(entry.absorbed), ABSORB_COLOR.r, ABSORB_COLOR.g, ABSORB_COLOR.b, 1, 1, 1)
+    GameTooltip:AddDoubleLine("Per second", Short(seconds > 0 and entry.damage / seconds or 0), 1, 0.82, 0, 1, 1, 1)
+    GameTooltip:AddDoubleLine("Share", share .. "%", 1, 0.82, 0, 1, 1, 1)
+end
+
 local function ShowRowTooltip()
     local entry = this.entry
     if not entry then
         return
     end
-    this.track:SetVertexColor(1, 1, 1, 0.14)
+    this.glow:Show()
     GameTooltip:SetOwner(this, "ANCHOR_LEFT")
-    if entry.sources then
+    if entry.healed then
+        HealTooltip(entry, this.share or 0)
+    elseif entry.sources then
         TypeTooltip(entry, this.share or 0)
     else
         SpellTooltip(entry, this.share or 0)
@@ -162,13 +230,13 @@ local function ShowRowTooltip()
 end
 
 local function HideRowTooltip()
-    this.track:SetVertexColor(1, 1, 1, 0.06)
+    this.glow:Hide()
     GameTooltip:Hide()
 end
 
 for index = 1, MAX_ROWS do
     local row = CreateFrame("Frame", nil, meter)
-    local top = -(TAB_HEIGHT + PAD + (index - 1) * (ROW + ROW_GAP))
+    local top = -(HEADER + PAD + (index - 1) * (ROW + ROW_GAP))
     row:SetHeight(ROW)
     row:SetPoint("TOPLEFT", meter, "TOPLEFT", PAD, top)
     row:SetPoint("TOPRIGHT", meter, "TOPRIGHT", -PAD, top)
@@ -176,32 +244,44 @@ for index = 1, MAX_ROWS do
     row:SetScript("OnEnter", ShowRowTooltip)
     row:SetScript("OnLeave", HideRowTooltip)
 
+    row.frame = row:CreateTexture(nil, "BACKGROUND")
+    row.frame:SetTexture(UI.FLAT)
+    row.frame:SetVertexColor(0, 0, 0, 0.9)
+    row.frame:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 0)
+    row.frame:SetWidth(ROW)
+    row.frame:SetHeight(ROW)
+
     row.icon = row:CreateTexture(nil, "ARTWORK")
-    row.icon:SetWidth(ROW)
-    row.icon:SetHeight(ROW)
-    row.icon:SetPoint("LEFT", row, "LEFT", 0, 0)
+    row.icon:SetPoint("TOPLEFT", row.frame, "TOPLEFT", 1, -1)
+    row.icon:SetPoint("BOTTOMRIGHT", row.frame, "BOTTOMRIGHT", -1, 1)
     row.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
 
     row.track = row:CreateTexture(nil, "BACKGROUND")
     row.track:SetTexture(UI.FLAT)
-    row.track:SetVertexColor(1, 1, 1, 0.06)
-    row.track:SetPoint("TOPLEFT", row.icon, "TOPRIGHT", 2, 0)
+    row.track:SetVertexColor(0, 0, 0, 0.55)
+    row.track:SetPoint("TOPLEFT", row.frame, "TOPRIGHT", 2, 0)
     row.track:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 0)
+
+    row.glow = row:CreateTexture(nil, "OVERLAY")
+    row.glow:SetTexture(UI.FLAT)
+    row.glow:SetVertexColor(1, 1, 1, 0.12)
+    row.glow:SetAllPoints(row.track)
+    row.glow:Hide()
 
     row.parts = {}
     for part = 1, MAX_PARTS do
         local fill = row:CreateTexture(nil, "BORDER")
-        fill:SetTexture(BAR_TEXTURE)
+        fill:SetTexture(UI.FLAT)
         fill:SetHeight(ROW)
         fill:Hide()
         row.parts[part] = fill
     end
 
-    row.value = UI.Text(row, 12, UI.NUMBER_FONT)
-    row.value:SetPoint("RIGHT", row, "RIGHT", -4, 0)
+    row.value = UI.Text(row, 13, UI.NUMBER_FONT)
+    row.value:SetPoint("RIGHT", row, "RIGHT", -5, 0)
     row.value:SetJustifyH("RIGHT")
     row.name = UI.Text(row, 11)
-    row.name:SetPoint("LEFT", row.track, "LEFT", 4, 0)
+    row.name:SetPoint("LEFT", row.track, "LEFT", 5, 0)
     row.name:SetPoint("RIGHT", row.value, "LEFT", -4, 0)
     row.name:SetJustifyH("LEFT")
 
@@ -209,6 +289,13 @@ for index = 1, MAX_ROWS do
     row.target = 0
     row:Hide()
     rows[index] = row
+end
+
+local function PartColor(part)
+    if part.color then
+        return part.color
+    end
+    return UI.DamageType(part.key)
 end
 
 local function DrawRow(row)
@@ -219,8 +306,8 @@ local function DrawRow(row)
         local part = entry and entry.parts[index]
         local partWidth = (part and entry.damage > 0) and width * part.damage / entry.damage or 0
         if partWidth >= 0.5 then
-            local kind = UI.DamageType(part.key)
-            fill:SetVertexColor(kind.r, kind.g, kind.b)
+            local color = PartColor(part)
+            UI.ShadeBar(fill, color, x / width, (x + partWidth) / width, BAR_BRIGHTNESS)
             fill:SetWidth(partWidth)
             fill:ClearAllPoints()
             fill:SetPoint("TOPLEFT", row.track, "TOPLEFT", x, 0)
@@ -270,15 +357,39 @@ local function TypeEntries()
     return entries
 end
 
+local function HealEntries()
+    local entries = {}
+    for index, source in ipairs(support) do
+        local total = source.healed + source.absorbed
+        if total > 0 then
+            tinsert(entries, {
+                id = "h" .. source.name, index = index, icon = source.icon, name = source.name, damage = total,
+                healed = source.healed, absorbed = source.absorbed,
+                parts = { { color = HEAL_COLOR, damage = source.healed }, { color = ABSORB_COLOR, damage = source.absorbed } },
+            })
+        end
+    end
+    return entries
+end
+
 local function MeterWidth()
     local room = floor(UIParent:GetWidth() / 2 - HERO_BAR_HALF - EDGE * 2)
     return max(MIN_WIDTH, min(MAX_WIDTH, room))
 end
 
+local function Entries()
+    if mode == MODE_TYPES then
+        return TypeEntries()
+    elseif mode == MODE_HEALING then
+        return HealEntries()
+    end
+    return SpellEntries()
+end
+
 Refresh = function()
     local width = MeterWidth()
     meter:SetWidth(width)
-    local entries = mode == MODE_TYPES and TypeEntries() or SpellEntries()
+    local entries = Entries()
     local total, top = 0, 0
     for _, entry in ipairs(entries) do
         total = total + entry.damage
@@ -304,8 +415,8 @@ Refresh = function()
                 row.shown = row.target
             end
             row.icon:SetTexture(UI.ICON_PATH .. entry.icon)
-            row.name:SetText(entry.name)
-            row.value:SetText(Short(entry.damage) .. " |cffa0a0a0" .. row.share .. "%|r")
+            row.name:SetText(index .. ". " .. entry.name)
+            row.value:SetText(Short(entry.damage))
             DrawRow(row)
             row:Show()
         else
@@ -314,7 +425,13 @@ Refresh = function()
             row:Hide()
         end
     end
-    meter:SetHeight(TAB_HEIGHT + PAD * 2 + max(1, count) * (ROW + ROW_GAP) - ROW_GAP)
+    if count == 0 then
+        meter.empty:SetText(mode == MODE_HEALING and "No healing yet." or "No damage yet.")
+        meter.empty:Show()
+    else
+        meter.empty:Hide()
+    end
+    meter:SetHeight(HEADER + PAD * 2 + max(1, count) * (ROW + ROW_GAP) - ROW_GAP)
     meter.total:SetText(Short(total) .. " |cffa0a0a0(" .. Short(seconds > 0 and total / seconds or 0) .. "/s)|r")
 end
 
@@ -332,15 +449,18 @@ meter:SetScript("OnUpdate", function()
     end
 end)
 
+meter:SetScript("OnHide", function()
+    menu:Hide()
+end)
+
 local events = CreateFrame("Frame")
 events:RegisterEvent("VARIABLES_LOADED")
 events:SetScript("OnEvent", function()
-    if VanillaBonkMeterMode == MODE_TYPES then
-        mode = MODE_TYPES
+    if VanillaBonkMeterMode == MODE_TYPES or VanillaBonkMeterMode == MODE_HEALING then
+        mode = VanillaBonkMeterMode
     end
-    ShowTabs()
+    meter.title:SetText(ModeLabel(mode))
 end)
-ShowTabs()
 
 local handlers = {}
 
@@ -370,6 +490,7 @@ end
 
 handlers["start"] = function()
     spells = {}
+    support = {}
     seconds = 0
     for _, row in ipairs(rows) do
         row.key = nil
@@ -400,6 +521,22 @@ handlers["state"] = function(f)
     end
     Refresh()
     ShowMeter()
+end
+
+handlers["support"] = function(f)
+    support = {}
+    for _, item in ipairs(UI.Split(f[2] or "", ",")) do
+        local _, _, icon, healed, absorbed, name = strfind(item, "^([^:]*):(%d+):(%d+):(.+)$")
+        if name then
+            tinsert(support, {
+                icon = icon ~= "" and icon or "INV_Misc_QuestionMark", name = name,
+                healed = tonumber(healed) or 0, absorbed = tonumber(absorbed) or 0,
+            })
+        end
+    end
+    if mode == MODE_HEALING then
+        Refresh()
+    end
 end
 
 handlers["loadout"] = function(f)

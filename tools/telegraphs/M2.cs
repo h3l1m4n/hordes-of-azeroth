@@ -16,6 +16,8 @@ namespace BonkTelegraphs
         public bool FaceCamera;
         public uint SpinMs;
         public bool CastsNoShadow;
+        public bool GrowThenHold;
+        public float GrowFrom;
     }
 
     sealed class Mesh
@@ -48,9 +50,19 @@ namespace BonkTelegraphs
 
             uint length = quad.GrowMs > 0 ? quad.WaitMs + quad.GrowMs + HoldMs : 1000;
             float radius = Math.Max(Math.Max(Math.Abs(quad.MinX), Math.Abs(quad.MaxX)), Math.Max(Math.Abs(quad.MinY), Math.Abs(quad.MaxY))) * 1.5f;
+            bool growThenHold = quad.GrowThenHold && quad.GrowMs > 0;
+            uint holdStartMs = quad.GrowMs + SpinHoldStartMs - SpinStandMs;
 
             uint ofs = Begin(w);
-            if (quad.SpinMs > 0)
+            if (growThenHold)
+            {
+                WriteSequence(w, quad, StandAnim, 0, quad.GrowMs, StandFlags, radius);
+                WriteSequence(w, quad, HoldAnim, holdStartMs, holdStartMs + HoldMs, 0, radius);
+                arrays["animations"] = Pair(2, ofs);
+                arrays["animationLookup"] = Pair(HoldAnim + 1u, WriteHoldAnimationLookup(w));
+                playableLookup = PlayHoldAsHold(playableLookup);
+            }
+            else if (quad.SpinMs > 0)
             {
                 WriteSequence(w, quad, StandAnim, 0, SpinStandMs, StandFlags, radius);
                 WriteSequence(w, quad, HoldAnim, SpinHoldStartMs, SpinHoldStartMs + quad.SpinMs, 0, radius);
@@ -70,8 +82,26 @@ namespace BonkTelegraphs
             arrays["playableAnimationLookup"] = Pair((uint)(playableLookup.Length / 4), ofs);
 
             Mesh mesh = Square(quad);
-            uint rangesOfs = 0, timesOfs = 0, valuesOfs = 0, keyCount = 0;
-            if (quad.GrowMs > 0)
+            uint rangesOfs = 0, timesOfs = 0, valuesOfs = 0, keyCount = 0, rangeCount = 1;
+            if (growThenHold)
+            {
+                uint[] times = { 0, quad.GrowMs, holdStartMs, holdStartMs + HoldMs };
+                keyCount = (uint)times.Length;
+                rangeCount = 2;
+                rangesOfs = Begin(w);
+                w.Write(0u); w.Write(1u);
+                w.Write(2u); w.Write(3u);
+                timesOfs = Begin(w);
+                foreach (uint t in times)
+                    w.Write(t);
+                valuesOfs = Begin(w);
+                for (int i = 0; i < keyCount; i++)
+                {
+                    float scale = i == 0 ? 0.02f : 1f;
+                    w.Write(scale); w.Write(scale); w.Write(1f);
+                }
+            }
+            else if (quad.GrowMs > 0)
             {
                 List<uint> times = new List<uint> { 0 };
                 if (quad.WaitMs > 0)
@@ -87,7 +117,7 @@ namespace BonkTelegraphs
                 foreach (uint t in times)
                     w.Write(t);
                 valuesOfs = Begin(w);
-                float speck = quad.GrowAlongX ? 0.001f : 0.02f;
+                float speck = Math.Max(quad.GrowFrom, quad.GrowAlongX ? 0.001f : 0.02f);
                 for (int i = 0; i < keyCount; i++)
                 {
                     bool full = i >= keyCount - 2;
@@ -97,7 +127,7 @@ namespace BonkTelegraphs
                 }
             }
             ofs = Begin(w);
-            WriteBone(w, BoneFlags(quad), rangesOfs, keyCount, timesOfs, quad.GrowMs > 0 ? valuesOfs : 0);
+            WriteBone(w, BoneFlags(quad), rangeCount, rangesOfs, keyCount, timesOfs, quad.GrowMs > 0 ? valuesOfs : 0);
             arrays["bones"] = Pair(1, ofs);
 
             ofs = Begin(w);
@@ -179,7 +209,8 @@ namespace BonkTelegraphs
             w.Write(textureNameOfs);
             arrays["textures"] = Pair(1, ofs);
 
-            arrays["transparency"] = Pair(1, quad.SpinMs > 0 ? WriteOpaqueOverSequences(w) : WriteOpaque(w));
+            arrays["transparency"] = Pair(1, quad.SpinMs > 0 ? WriteOpaqueOverSequences(w, SpinHoldStartMs) :
+                growThenHold ? WriteOpaqueOverSequences(w, holdStartMs) : WriteOpaque(w));
 
             arrays["texReplace"] = Pair(1, WriteShorts(w, 0));
             ofs = Begin(w);
@@ -226,7 +257,7 @@ namespace BonkTelegraphs
             return mesh;
         }
 
-        static void WriteBone(BinaryWriter w, uint flags, uint rangesOfs, uint keyCount, uint timesOfs, uint scalesOfs)
+        static void WriteBone(BinaryWriter w, uint flags, uint rangeCount, uint rangesOfs, uint keyCount, uint timesOfs, uint scalesOfs)
         {
             w.Write(-1);
             w.Write(flags);
@@ -238,7 +269,7 @@ namespace BonkTelegraphs
             {
                 w.Write((ushort)1);
                 w.Write((short)-1);
-                w.Write(1u); w.Write(rangesOfs);
+                w.Write(rangeCount); w.Write(rangesOfs);
                 w.Write(keyCount); w.Write(timesOfs);
                 w.Write(keyCount); w.Write(scalesOfs);
             }
@@ -313,14 +344,14 @@ namespace BonkTelegraphs
             return ofs;
         }
 
-        static uint WriteOpaqueOverSequences(BinaryWriter w)
+        static uint WriteOpaqueOverSequences(BinaryWriter w, uint holdStartMs)
         {
             uint rangesOfs = Begin(w);
             w.Write(0u); w.Write(0u);
             w.Write(1u); w.Write(1u);
             uint timesOfs = Begin(w);
             w.Write(0u);
-            w.Write(SpinHoldStartMs);
+            w.Write(holdStartMs);
             uint valuesOfs = Begin(w);
             w.Write(Opaque);
             w.Write(Opaque);

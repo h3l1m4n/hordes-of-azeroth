@@ -49,6 +49,14 @@ namespace BonkTelegraphs
             return name + "_" + size.ToString("0.#", CultureInfo.InvariantCulture).Replace('.', '_');
         }
 
+        public static void AddSizedDisplay(Dbc displays, Dbc models, uint displayId, uint modelId, string name)
+        {
+            uint[] templateDisplay = displays.Find(TemplateDisplayId), templateModel = models.Find(TemplateModelId);
+            if (templateDisplay == null || templateModel == null)
+                throw new InvalidDataException("The rows stand-ins copy are not where 1.12 has them.");
+            AddDisplay(displays, templateDisplay, displayId, AddModel(models, templateModel, modelId, name), 1f);
+        }
+
         static uint AddModel(Dbc models, uint[] template, uint modelId, string name)
         {
             if (models.Find(modelId) != null)

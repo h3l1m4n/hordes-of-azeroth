@@ -41,7 +41,12 @@ namespace
     uintptr_t const FUN_PLACE_SCREEN_RECT  = 0x00509520;
     uintptr_t const FUN_SCENE_ADVANCE      = 0x007074B0;
     uintptr_t const WORLD_SCENE_ADVANCE_RETURN = 0x0048367E;
+    uintptr_t const FUN_AREA_EMITTER_UPDATE = 0x006EBAD0;
     int const COMBAT_TEXT_RECT_BUCKET      = 1;
+    uintptr_t const FUN_BEAM_CASTER_END    = 0x006EC6F0;
+    uintptr_t const FUN_MODEL_HAS_ATTACHMENT = 0x00712CB0;
+    uintptr_t const FUN_MODEL_ATTACHMENT_POS = 0x00712D50;
+    int const ATTACH_CHEST                 = 34;
     uintptr_t const FUN_TICK_MS            = 0x0042B790;
     uintptr_t const VAR_INPUT_CONTROLLER   = 0x00BE1148;
     uintptr_t const VAR_INPUT_TIME         = 0x00CF0BC8;
@@ -56,6 +61,9 @@ namespace
     uint32_t const OFF_WALK_SPEED     = 0x88;
     uint32_t const OFF_RUN_SPEED      = 0x8C;
     uint32_t const OFF_INPUT_KEYS     = 0x04;
+    uint32_t const OFF_OBJECT_TYPE    = 0x14;
+    uint32_t const OFF_UNIT_MODEL     = 0xD8;
+    uint32_t const TYPE_UNIT          = 3;
 
     uint32_t const MOVEFLAG_MOVES         = 0x1 | 0x2 | 0x4 | 0x8;
     uint32_t const MOVEFLAG_ROOT          = 0x1000;
@@ -87,6 +95,8 @@ namespace
     uint8_t const SET_RUN_SPEED_START[]      = { 0x55, 0x8B, 0xEC, 0x56, 0x8B, 0xF1 };
     uint8_t const PLACE_SCREEN_RECT_START[]  = { 0x55, 0x8B, 0xEC, 0x83, 0xEC, 0x30 };
     uint8_t const SCENE_ADVANCE_START[]      = { 0x55, 0x8B, 0xEC, 0x53, 0x8B, 0x5D, 0x08 };
+    uint8_t const AREA_EMITTER_UPDATE_START[] = { 0x55, 0x8B, 0xEC, 0x83, 0xEC, 0x6C };
+    uint8_t const BEAM_CASTER_END_START[]    = { 0x55, 0x8B, 0xEC, 0x83, 0xEC, 0x18 };
     size_t const STOLEN_BYTES = 6;
 
     using MoverUpdate_t = void(__fastcall*)(void* self, void* edx, uint32_t now, uint32_t last);
@@ -108,6 +118,16 @@ namespace
     using SceneAdvance_t = void(__fastcall*)(void* scene, void* edx, uint32_t ms);
 
     SceneAdvance_t s_sceneAdvance = nullptr;
+
+    using AreaEmitterUpdate_t = int(__fastcall*)(void* emitter, void* edx);
+
+    AreaEmitterUpdate_t s_areaEmitterUpdate = nullptr;
+
+    using BeamCasterEnd_t = float*(__fastcall*)(float* out, void* caster);
+    using ModelHasAttachment_t = int(__thiscall*)(void* model, int attachment);
+    using ModelAttachmentPos_t = float*(__thiscall*)(void* model, float* out, int attachment);
+
+    BeamCasterEnd_t s_beamCasterEnd = nullptr;
 
     void __fastcall OnPlaceScreenRect(int bucket, float* rect)
     {
@@ -200,6 +220,25 @@ namespace
         if (uintptr_t(_ReturnAddress()) == WORLD_SCENE_ADVANCE_RETURN && IsHeroPaused())
             ms = 0;
         s_sceneAdvance(scene, edx, ms);
+    }
+
+    int __fastcall OnAreaEmitterUpdate(void* emitter, void* edx)
+    {
+        if (IsHeroPaused())
+            return 1;
+        return s_areaEmitterUpdate(emitter, edx);
+    }
+
+    float* __fastcall OnBeamCasterEnd(float* out, void* caster)
+    {
+        void* model = Read<void*>(caster, OFF_UNIT_MODEL);
+        if (model && Read<uint32_t>(caster, OFF_OBJECT_TYPE) == TYPE_UNIT &&
+            reinterpret_cast<ModelHasAttachment_t>(FUN_MODEL_HAS_ATTACHMENT)(model, ATTACH_CHEST))
+        {
+            reinterpret_cast<ModelAttachmentPos_t>(FUN_MODEL_ATTACHMENT_POS)(model, out, ATTACH_CHEST);
+            return out;
+        }
+        return s_beamCasterEnd(out, caster);
     }
 
     bool ResumeHeldMovement(void* movement, uint32_t flags, uint32_t time)
@@ -765,41 +804,71 @@ namespace
     }
 }
 
+namespace
+{
+    void StartClientFix()
+    {
+        PrepareBorderless();
+
+        s_moverUpdate = reinterpret_cast<MoverUpdate_t>(Hook(FUN_MOVER_UPDATE, MOVER_UPDATE_START, reinterpret_cast<void*>(&OnMoverUpdate)));
+        if (s_moverUpdate)
+            s_applyKnockback = reinterpret_cast<ApplyKnockback_t>(Hook(FUN_APPLY_KNOCKBACK, APPLY_KNOCKBACK_START, reinterpret_cast<void*>(&OnApplyKnockback)));
+        s_moverStep = reinterpret_cast<MoverStep_t>(Hook(FUN_MOVER_STEP, MOVER_STEP_START, reinterpret_cast<void*>(&OnMoverStep)));
+        s_jump = reinterpret_cast<Jump_t>(Hook(FUN_JUMP, JUMP_START, reinterpret_cast<void*>(&OnJump)));
+        s_applyPendingStop = reinterpret_cast<ApplyPendingStop_t>(Hook(FUN_APPLY_PENDING_STOP, APPLY_PENDING_STOP_START,
+            reinterpret_cast<void*>(&OnApplyPendingStop)));
+        s_setRunSpeed = reinterpret_cast<SetRunSpeed_t>(Hook(FUN_SET_RUN_SPEED, SET_RUN_SPEED_START, reinterpret_cast<void*>(&OnSetRunSpeed)));
+        Log("loaded: mover update hook %s, knockback hook %s, mover step hook %s, jump hook %s, landing stop hook %s, run speed hook %s",
+            s_moverUpdate ? "on" : "OFF", s_applyKnockback ? "on" : "OFF", s_moverStep ? "on" : "OFF", s_jump ? "on" : "OFF",
+            s_applyPendingStop ? "on" : "OFF", s_setRunSpeed ? "on" : "OFF");
+
+        s_sceneAdvance = reinterpret_cast<SceneAdvance_t>(HookBytes(FUN_SCENE_ADVANCE, SCENE_ADVANCE_START, sizeof(SCENE_ADVANCE_START),
+            reinterpret_cast<void*>(&OnSceneAdvance)));
+        Log("world animation holds during pauses: %s", s_sceneAdvance ? "on" : "OFF");
+
+        s_areaEmitterUpdate = reinterpret_cast<AreaEmitterUpdate_t>(Hook(FUN_AREA_EMITTER_UPDATE, AREA_EMITTER_UPDATE_START,
+            reinterpret_cast<void*>(&OnAreaEmitterUpdate)));
+        Log("area rain holds during pauses: %s", s_areaEmitterUpdate ? "on" : "OFF");
+
+        s_beamCasterEnd = reinterpret_cast<BeamCasterEnd_t>(Hook(FUN_BEAM_CASTER_END, BEAM_CASTER_END_START,
+            reinterpret_cast<void*>(&OnBeamCasterEnd)));
+        Log("creature beams start at the chest: %s", s_beamCasterEnd ? "on" : "OFF");
+
+        s_placeScreenRect = reinterpret_cast<PlaceScreenRect_t>(Hook(FUN_PLACE_SCREEN_RECT, PLACE_SCREEN_RECT_START,
+            reinterpret_cast<void*>(&OnPlaceScreenRect)));
+        Log("damage numbers stack in place: %s", s_placeScreenRect ? "on" : "OFF");
+
+        bool const sounds = HookImportJump(THUNK_STREAM_OPEN, SLOT_STREAM_OPEN, reinterpret_cast<void*>(&OnStreamOpen)) &&
+            HookImportJump(THUNK_SET_VOLUME, SLOT_SET_VOLUME, reinterpret_cast<void*>(&OnSetVolume)) &&
+            HookImportJump(THUNK_STREAM_PLAYEX, SLOT_STREAM_PLAYEX, reinterpret_cast<void*>(&OnStreamPlayEx));
+        Log("sound limit %s, coin sound on money %s", sounds ? "on" : "OFF", SilenceCoinSound() ? "off" : "ON");
+        Log("idle away and sit %s", DisableIdleAway() ? "off" : "ON");
+        Log("addon sound files at once: %s", RaiseFileSoundCap() ? "8" : "2 (stock)");
+
+        if (HANDLE retitle = CreateThread(nullptr, 0, &RetitleGameWindow, nullptr, 0, nullptr))
+            CloseHandle(retitle);
+    }
+
+    DWORD StartClientFixGuarded()
+    {
+        __try
+        {
+            StartClientFix();
+            return 0;
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER)
+        {
+            return GetExceptionCode();
+        }
+    }
+}
+
 BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID)
 {
     if (reason != DLL_PROCESS_ATTACH)
         return TRUE;
     DisableThreadLibraryCalls(instance);
-    PrepareBorderless();
-
-    s_moverUpdate = reinterpret_cast<MoverUpdate_t>(Hook(FUN_MOVER_UPDATE, MOVER_UPDATE_START, reinterpret_cast<void*>(&OnMoverUpdate)));
-    if (s_moverUpdate)
-        s_applyKnockback = reinterpret_cast<ApplyKnockback_t>(Hook(FUN_APPLY_KNOCKBACK, APPLY_KNOCKBACK_START, reinterpret_cast<void*>(&OnApplyKnockback)));
-    s_moverStep = reinterpret_cast<MoverStep_t>(Hook(FUN_MOVER_STEP, MOVER_STEP_START, reinterpret_cast<void*>(&OnMoverStep)));
-    s_jump = reinterpret_cast<Jump_t>(Hook(FUN_JUMP, JUMP_START, reinterpret_cast<void*>(&OnJump)));
-    s_applyPendingStop = reinterpret_cast<ApplyPendingStop_t>(Hook(FUN_APPLY_PENDING_STOP, APPLY_PENDING_STOP_START,
-        reinterpret_cast<void*>(&OnApplyPendingStop)));
-    s_setRunSpeed = reinterpret_cast<SetRunSpeed_t>(Hook(FUN_SET_RUN_SPEED, SET_RUN_SPEED_START, reinterpret_cast<void*>(&OnSetRunSpeed)));
-    Log("loaded: mover update hook %s, knockback hook %s, mover step hook %s, jump hook %s, landing stop hook %s, run speed hook %s",
-        s_moverUpdate ? "on" : "OFF", s_applyKnockback ? "on" : "OFF", s_moverStep ? "on" : "OFF", s_jump ? "on" : "OFF",
-        s_applyPendingStop ? "on" : "OFF", s_setRunSpeed ? "on" : "OFF");
-
-    s_sceneAdvance = reinterpret_cast<SceneAdvance_t>(HookBytes(FUN_SCENE_ADVANCE, SCENE_ADVANCE_START, sizeof(SCENE_ADVANCE_START),
-        reinterpret_cast<void*>(&OnSceneAdvance)));
-    Log("world animation holds during pauses: %s", s_sceneAdvance ? "on" : "OFF");
-
-    s_placeScreenRect = reinterpret_cast<PlaceScreenRect_t>(Hook(FUN_PLACE_SCREEN_RECT, PLACE_SCREEN_RECT_START,
-        reinterpret_cast<void*>(&OnPlaceScreenRect)));
-    Log("damage numbers stack in place: %s", s_placeScreenRect ? "on" : "OFF");
-
-    bool const sounds = HookImportJump(THUNK_STREAM_OPEN, SLOT_STREAM_OPEN, reinterpret_cast<void*>(&OnStreamOpen)) &&
-        HookImportJump(THUNK_SET_VOLUME, SLOT_SET_VOLUME, reinterpret_cast<void*>(&OnSetVolume)) &&
-        HookImportJump(THUNK_STREAM_PLAYEX, SLOT_STREAM_PLAYEX, reinterpret_cast<void*>(&OnStreamPlayEx));
-    Log("sound limit %s, coin sound on money %s", sounds ? "on" : "OFF", SilenceCoinSound() ? "off" : "ON");
-    Log("idle away and sit %s", DisableIdleAway() ? "off" : "ON");
-    Log("addon sound files at once: %s", RaiseFileSoundCap() ? "8" : "2 (stock)");
-
-    if (HANDLE retitle = CreateThread(nullptr, 0, &RetitleGameWindow, nullptr, 0, nullptr))
-        CloseHandle(retitle);
+    if (DWORD const fault = StartClientFixGuarded())
+        Log("startup stopped by exception 0x%08lX; this client's code is not where 1.12.1 has it, so the remaining fixes are off", fault);
     return TRUE;
 }

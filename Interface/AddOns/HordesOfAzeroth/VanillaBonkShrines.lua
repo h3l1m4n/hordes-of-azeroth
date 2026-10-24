@@ -5,7 +5,9 @@ local MOONWELL_WIDTH = 240
 local FILL_SPEED = 6
 local FADE = 0.15
 local FLASH = 0.6
-local DONE_TEXT = { Hearthstone = "Returning to the Inn" }
+local STACK_GAP = 6
+
+local Restack
 
 local function Bar(width, r, g, b)
     local rim = UI.CastRim(UIParent, width)
@@ -51,12 +53,18 @@ local function SetValue(rim, value)
 end
 
 local function FadeIn(rim)
-    rim.want = 1
+    if rim.want ~= 1 then
+        rim.want = 1
+        Restack()
+    end
     rim:Show()
 end
 
 local function FadeOut(rim)
-    rim.want = 0
+    if rim.want ~= 0 then
+        rim.want = 0
+        Restack()
+    end
 end
 
 local function Update(rim, elapsed)
@@ -89,21 +97,41 @@ local function Update(rim, elapsed)
 end
 
 local capture = Bar(CAPTURE_WIDTH, 0.45, 0.6, 1.0)
-capture:SetPoint("CENTER", UIParent, "CENTER", 0, -150)
 capture:SetScript("OnUpdate", function() Update(this, arg1) end)
 
+local hearth = Bar(CAPTURE_WIDTH, 0.45, 0.6, 1.0)
+hearth:SetScript("OnUpdate", function() Update(this, arg1) end)
+
 local moonwell = Bar(MOONWELL_WIDTH, 0.3, 0.9, 0.75)
-moonwell:SetPoint("TOP", capture, "BOTTOM", 0, -6)
 moonwell:SetScript("OnUpdate", function() Update(this, arg1) end)
 moonwell.total = 0
 
 local event = Bar(CAPTURE_WIDTH, 1, 0.55, 0.1)
-event:SetPoint("BOTTOM", capture, "TOP", 0, 6)
 event:SetScript("OnUpdate", function() Update(this, arg1) end)
+
+local stack = { event, hearth, capture, moonwell }
+
+Restack = function()
+    local above
+    for _, rim in ipairs(stack) do
+        if rim.want == 1 or not above then
+            rim:ClearAllPoints()
+            if above then
+                rim:SetPoint("TOP", above, "BOTTOM", 0, -STACK_GAP)
+            else
+                rim:SetPoint("CENTER", UIParent, "CENTER", 0, -150)
+            end
+        end
+        if rim.want == 1 then
+            above = rim
+        end
+    end
+end
+Restack()
 
 local function HideAll()
     event.endsAt = nil
-    for _, rim in ipairs({ capture, moonwell, event }) do
+    for _, rim in ipairs(stack) do
         rim.want, rim.alpha = 0, 0
         rim.value, rim.target = 0, 0
         rim.flashLeft = 0
@@ -134,7 +162,7 @@ handlers["capture"] = function(f)
     capture.target = min(1, percent / 100)
     if percent >= 100 then
         SetValue(capture, 1)
-        capture.text:SetText("|cff80ff80" .. (DONE_TEXT[label] or (label .. " captured")) .. "|r")
+        capture.text:SetText("|cff80ff80" .. label .. " captured|r")
         if capture.flashLeft == 0 then
             capture.flashLeft = FLASH
             PlaySound("igQuestListComplete")
@@ -145,6 +173,40 @@ handlers["capture"] = function(f)
         capture.flash:SetAlpha(0)
     end
     FadeIn(capture)
+end
+
+handlers["hearth"] = function(f)
+    local percent = tonumber(f[2] or "")
+    if not percent or percent < 0 then
+        if hearth.flashLeft > 0 then
+            hearth.goAfterFlash = true
+        else
+            FadeOut(hearth)
+        end
+        return
+    end
+    hearth.goAfterFlash = nil
+    if not hearth:IsShown() or hearth.want == 0 then
+        SetValue(hearth, percent / 100)
+    end
+    hearth.target = min(1, percent / 100)
+    local seconds = tonumber(f[4] or "") or 0
+    if percent >= 100 then
+        SetValue(hearth, 1)
+        hearth.bar:SetStatusBarColor(0.45, 0.6, 1.0)
+        hearth.text:SetText("|cff80ff80Returning to the Inn|r")
+        if hearth.flashLeft == 0 then
+            hearth.flashLeft = FLASH
+            PlaySound("igQuestListComplete")
+        end
+    elseif f[3] == "1" then
+        hearth.bar:SetStatusBarColor(0.45, 0.6, 1.0)
+        hearth.text:SetText("Hearthstone  " .. seconds .. "s")
+    else
+        hearth.bar:SetStatusBarColor(0.8, 0.25, 0.2)
+        hearth.text:SetText("|cffff7060Get back in the ring!|r  " .. seconds .. "s")
+    end
+    FadeIn(hearth)
 end
 
 handlers["moonwell"] = function(f)

@@ -126,7 +126,7 @@ for index, mode in ipairs(UI.HEALTH_BAR_MODES) do
 end
 cursor = cursor + ROW + 6
 for index, setting in ipairs(UI.DISPLAY_SETTINGS) do
-    Check(setting, math.mod(index - 1, 2) + 1, math.mod(index, 2) == 0)
+    Check(setting, math.mod(index - 1, 2) + 1, math.mod(index, 2) == 0 or index == table.getn(UI.DISPLAY_SETTINGS))
 end
 
 Section("Keys")

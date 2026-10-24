@@ -573,6 +573,32 @@ local function LayoutPlates()
     end
 end
 
+local PLATE_PICK_BELOW = 30
+local PLATE_PICK_ABOVE = 140
+
+function VanillaBonkUI.PlateTopAbove(screenX, screenY)
+    local bestTop, bestDistance
+    for _, plate in ipairs(stackPlates) do
+        if plate.vbStackWidth and plate:IsVisible() and not plate.vbMuted then
+            local x, y = plate.vbHealth:GetCenter()
+            if x then
+                local scale = plate.vbHealth:GetEffectiveScale()
+                x, y = x * scale, y * scale
+                local rise = y - screenY
+                local reach = plate.vbStackWidth / 2 * scale
+                if abs(x - screenX) <= reach and rise >= -PLATE_PICK_BELOW * scale and rise <= PLATE_PICK_ABOVE * scale then
+                    local distance = abs(x - screenX) + abs(rise)
+                    if not bestDistance or distance < bestDistance then
+                        bestDistance = distance
+                        bestTop = y + plate.vbStackAbove * scale
+                    end
+                end
+            end
+        end
+    end
+    return bestTop
+end
+
 local scanner = CreateFrame("Frame")
 local knownChildren = 0
 local stackTimer = 0

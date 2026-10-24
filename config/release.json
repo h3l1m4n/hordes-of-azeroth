@@ -33,6 +33,7 @@
     { "name": "addon", "git": ["Interface/AddOns/HordesOfAzeroth"] },
     { "name": "glue", "git": ["Interface/GlueXML"] },
     { "name": "client-fix", "files": [{ "from": "HordesOfAzerothClientFix.dll" }] },
+    { "name": "client-runtime", "build": "client-runtime", "files": [{ "from": "release/build/client-runtime/vcruntime140.dll", "to": "vcruntime140.dll" }] },
     {
       "name": "wow-turbo",
       "files": [

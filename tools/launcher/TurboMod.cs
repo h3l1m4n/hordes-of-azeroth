@@ -22,6 +22,7 @@ namespace HordesOfAzeroth.Launcher
         const string DllName = "wow_turbo.dll";
         const string LineMarker = "wow_turbo";
         const string StateFileName = "wow_turbo.txt";
+        const string RuntimeDll = "vcruntime140.dll";
         public const string SkipVariable = "WOW_TURBO_SKIP";
         public const string SkippedHooks = "FloatingTextPlaceRect__509520,FloatingFrame_AnchorAtScreenPos__509ec0,CreateWorldText__6c73f0,WorldTextOwner__Destroy__6c6cd0,WorldTextOwner__Draw__6c6e00,WorldTextOwner__Update__6c6d40,WorldText__Release__6c86a0,WorldText__Update__6c7cc0";
 
@@ -64,8 +65,13 @@ namespace HordesOfAzeroth.Launcher
             TurboBuild chosen = (TurboBuild)Math.Min((int)supported, (int)state.Allowed);
             if (chosen != TurboBuild.Off && !File.Exists(DllPath(folder, chosen)))
                 chosen = TurboBuild.Off;
+            bool runtimeMissing = chosen != TurboBuild.Off && !RuntimePresent(folder);
+            if (runtimeMissing)
+                chosen = TurboBuild.Off;
             state.Loaded = chosen;
-            if (state.Allowed == TurboBuild.Avx)
+            if (runtimeMissing)
+                state.Reason = $"{RuntimeDll} is missing, so Windows can't load it";
+            else if (state.Allowed == TurboBuild.Avx)
                 state.Reason = hardware;
 
             WriteDllsTxt(folder, chosen);
@@ -97,6 +103,10 @@ namespace HordesOfAzeroth.Launcher
             IntPtr ntdll = GetModuleHandle("ntdll.dll");
             return ntdll != IntPtr.Zero && GetProcAddress(ntdll, "wine_get_version") != IntPtr.Zero;
         }
+
+        static bool RuntimePresent(GameFolder folder) =>
+            File.Exists(Path.Combine(folder.Root, RuntimeDll))
+            || File.Exists(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.SystemX86), RuntimeDll));
 
         static string Name(TurboBuild build) => build.ToString().ToLowerInvariant();
 

@@ -27,12 +27,15 @@ namespace HordesOfAzeroth.Launcher
 
         public bool IsRunning => Process.GetProcessesByName(ProcessName).Length > 0;
 
+        public DateTime LaunchedAt { get; private set; }
+
         public void Prepare(bool widescreen)
         {
             if (!File.Exists(m_folder.GameExe))
                 throw new FileNotFoundException($"{m_folder.GameExeName} is missing. {LocalServer.RepairAdvice}");
 
             Directory.CreateDirectory(m_folder.GlueXml);
+            Directory.CreateDirectory(Path.Combine(m_folder.Root, "Logs"));
             File.WriteAllLines(Path.Combine(m_folder.GlueXml, "BonkAccount.lua"), new[]
             {
                 $"BONK_ACCOUNT = {LuaString(Account)};",
@@ -62,6 +65,7 @@ namespace HordesOfAzeroth.Launcher
             info.WorkingDirectory = m_folder.Root;
             info.UseShellExecute = false;
             info.EnvironmentVariables[TurboMod.SkipVariable] = TurboMod.SkippedHooks;
+            LaunchedAt = DateTime.UtcNow;
             Process.Start(info);
 
             Stopwatch clock = Stopwatch.StartNew();

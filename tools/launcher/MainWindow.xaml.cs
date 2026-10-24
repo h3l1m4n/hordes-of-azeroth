@@ -1015,7 +1015,9 @@ namespace HordesOfAzeroth.Launcher
                 m_state = LauncherState.Ready;
                 RefreshState();
             }
-            if (DxvkMod.TurnOffAfterCrash(m_folder))
+            if (SmartAppControl.BlockedClientFix(m_folder, m_game.LaunchedAt))
+                MessageBox.Show(this, SmartAppControl.BlockedText, "Hordes of Azeroth");
+            else if (DxvkMod.TurnOffAfterCrash(m_folder))
                 MessageBox.Show(this, VulkanTurnedOffText, "Hordes of Azeroth");
         }
 

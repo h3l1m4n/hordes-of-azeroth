@@ -8,7 +8,7 @@ local FALLBACK_QUIT_DELAY = 15
 local steps = {}
 
 local function at(seconds, action)
-    table.insert(steps, { t = seconds, f = action })
+    table.insert(steps, { t = seconds, f = action, order = table.getn(steps) })
 end
 
 local function sandbox(verb)
@@ -56,14 +56,32 @@ local function scheduleAll()
     end)
     at(t + 1, function() sandbox("forget 0") end)
     at(t + FALLBACK_QUIT_DELAY, function() ForceQuit() end)
+    if BenchCrowdProbeEvery then
+        for probe = SETUP_AT, t, BenchCrowdProbeEvery do
+            at(probe, function() SendChatMessage(".bonk crowd", "SAY") end)
+        end
+    end
 end
 
 scheduleAll()
+table.sort(steps, function(a, b)
+    if a.t ~= b.t then
+        return a.t < b.t
+    end
+    return a.order < b.order
+end)
 
 local frame = CreateFrame("Frame")
 local started, index = nil, 1
 frame:RegisterEvent("PLAYER_ENTERING_WORLD")
+frame:RegisterEvent("CHAT_MSG_SYSTEM")
 frame:SetScript("OnEvent", function()
+    if event == "CHAT_MSG_SYSTEM" then
+        if BenchCrowdProbeEvery and string.find(arg1, "enemies walk in the crowd", 1, true) then
+            mark(arg1)
+        end
+        return
+    end
     VanillaBonkPlateGuideDone = true
     LoggingChat(1)
     if not started then

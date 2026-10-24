@@ -16,7 +16,6 @@ local SUB_HEIGHT = 13
 local SUB_GAP = 3
 local SUB_INDENT = 18
 local COLUMN_WIDTH = 44
-local COLUMNS_WIDTH = 3 * COLUMN_WIDTH
 local MAX_LINES = 12
 local MAX_PARTS = 4
 local TYPE_BAR_HEIGHT = 7
@@ -24,7 +23,9 @@ local LEGEND_LINE = 13
 local FOOTER_HEIGHT = 24
 local BUTTON_WIDTH = 110
 local FADE = 0.3
-local BAR_TEXTURE = "Interface\\TargetingFrame\\UI-StatusBar"
+local BAR_BRIGHTNESS = 0.8
+local TAB_GAP = 18
+local MODE_DAMAGE, MODE_HEALING = 1, 2
 local TITLE_DEFEAT = { 1, 0.23, 0.15 }
 local TITLE_VICTORY = { 1, 0.82, 0 }
 local TITLE_HOME = { 0.35, 1, 0.35 }
@@ -132,26 +133,90 @@ panel.dividerLow:SetWidth(1)
 panel.dividerLow:SetPoint("TOP", panel.divider, "BOTTOM", 0, 0)
 panel.dividerLow:SetGradientAlpha("VERTICAL", 1, 0.82, 0, 0, 1, 0.82, 0, 0.5)
 
-panel.heading = UI.Text(panel, 12)
-panel.heading:SetPoint("TOPLEFT", panel, "TOPLEFT", RIGHT_X, -PAD_TOP)
-panel.heading:SetTextColor(1, 0.82, 0)
-panel.heading:SetText("Damage by spell")
+local mode = MODE_DAMAGE
+local Render
 
-local COLUMNS = { { "Damage", 2 * COLUMN_WIDTH }, { "Share", COLUMN_WIDTH }, { "Kills", 0 } }
-for _, column in ipairs(COLUMNS) do
-    local label = UI.Text(panel, 10)
-    label:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -PAD_X - column[2], -PAD_TOP - 1)
-    label:SetWidth(COLUMN_WIDTH)
-    label:SetJustifyH("RIGHT")
-    label:SetTextColor(0.62, 0.62, 0.62)
-    label:SetText(column[1])
+panel.tabs = {}
+for index, label in ipairs({ "Damage Done", "Healing Done" }) do
+    local tab = CreateFrame("Button", nil, panel)
+    tab.mode = index
+    tab:SetHeight(HEADER_HEIGHT - 4)
+    tab.text = UI.Text(tab, 12)
+    tab.text:SetPoint("LEFT", tab, "LEFT", 0, 0)
+    tab.text:SetText(label)
+    tab:SetWidth(tab.text:GetStringWidth() + 2)
+    tab.underline = tab:CreateTexture(nil, "ARTWORK")
+    tab.underline:SetTexture(UI.FLAT)
+    tab.underline:SetHeight(1)
+    tab.underline:SetPoint("TOPLEFT", tab, "BOTTOMLEFT", 0, 1)
+    tab.underline:SetPoint("TOPRIGHT", tab, "BOTTOMRIGHT", 0, 1)
+    tab.underline:SetVertexColor(1, 0.82, 0, 0.8)
+    tab:SetScript("OnClick", function()
+        if mode ~= this.mode then
+            mode = this.mode
+            PlaySound("igCharacterInfoTab")
+            Render()
+        end
+    end)
+    tab:SetScript("OnEnter", function()
+        if mode ~= this.mode then
+            this.text:SetTextColor(1, 1, 1)
+        end
+    end)
+    tab:SetScript("OnLeave", function()
+        if mode ~= this.mode then
+            this.text:SetTextColor(0.6, 0.6, 0.6)
+        end
+    end)
+    local previous = panel.tabs[index - 1]
+    if previous then
+        tab:SetPoint("LEFT", previous, "RIGHT", TAB_GAP, 0)
+    else
+        tab:SetPoint("TOPLEFT", panel, "TOPLEFT", RIGHT_X, -PAD_TOP + 2)
+    end
+    panel.tabs[index] = tab
 end
 
-local function ColumnText(parent, right)
+local COLUMNS = {
+    [MODE_DAMAGE] = { "Damage", "Share", "Kills" },
+    [MODE_HEALING] = { "Healed", "Absorb", "Share" },
+}
+local COLUMN_OFFSETS = { 2 * COLUMN_WIDTH, COLUMN_WIDTH, 0 }
+panel.columns = {}
+for index = 1, 3 do
+    local label = UI.Text(panel, 10)
+    label:SetJustifyH("RIGHT")
+    label:SetTextColor(0.62, 0.62, 0.62)
+    label:SetWidth(COLUMN_WIDTH)
+    label.slot = index
+    panel.columns[index] = label
+end
+
+panel.empty = UI.Text(panel, 11)
+panel.empty:SetPoint("TOPLEFT", panel, "TOPLEFT", RIGHT_X, -PAD_TOP - HEADER_HEIGHT - 4)
+panel.empty:SetTextColor(0.6, 0.6, 0.6)
+
+local function ShowTabs()
+    for _, tab in ipairs(panel.tabs) do
+        if tab.mode == mode then
+            tab.text:SetTextColor(1, 0.82, 0)
+            tab.underline:Show()
+        else
+            tab.text:SetTextColor(0.6, 0.6, 0.6)
+            tab.underline:Hide()
+        end
+    end
+    for index, label in ipairs(panel.columns) do
+        label:ClearAllPoints()
+        label:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -PAD_X - COLUMN_OFFSETS[label.slot], -PAD_TOP - 1)
+        label:SetText(COLUMNS[mode][index])
+    end
+end
+
+local function ColumnText(parent, slot)
     local text = UI.Text(parent, 13, UI.NUMBER_FONT)
-    text:SetWidth(COLUMN_WIDTH)
     text:SetJustifyH("RIGHT")
-    text.right = right
+    text.slot = slot
     return text
 end
 
@@ -186,13 +251,23 @@ local function EffectLineTooltip(line, entry)
     GameTooltip:Show()
 end
 
+local function HealLineTooltip(line, entry)
+    GameTooltip:SetOwner(line, "ANCHOR_RIGHT")
+    GameTooltip:AddLine(entry.name, 1, 1, 1)
+    GameTooltip:AddDoubleLine("Healed", Thousands(entry.healed), UI.HEAL_COLOR.r, UI.HEAL_COLOR.g, UI.HEAL_COLOR.b, 1, 1, 1)
+    GameTooltip:AddDoubleLine("Absorbed", Thousands(entry.absorbed), UI.ABSORB_COLOR.r, UI.ABSORB_COLOR.g, UI.ABSORB_COLOR.b, 1, 1, 1)
+    GameTooltip:Show()
+end
+
 local function ShowLineTooltip(line)
     local entry = line.entry
     if not entry then
         return
     end
     line.track:SetVertexColor(0.25, 0.2, 0.05, 0.8)
-    if entry.parent then
+    if entry.healed then
+        HealLineTooltip(line, entry)
+    elseif entry.parent then
         EffectLineTooltip(line, entry)
     else
         SpellLineTooltip(line, entry)
@@ -216,14 +291,14 @@ for index = 1, MAX_LINES do
     line.parts = {}
     for part = 1, MAX_PARTS do
         local fill = line:CreateTexture(nil, "BORDER")
-        fill:SetTexture(BAR_TEXTURE)
+        fill:SetTexture(UI.FLAT)
         line.parts[part] = fill
     end
     line.name = UI.Text(line, 11)
     line.name:SetJustifyH("LEFT")
-    line.damage = ColumnText(line, 2 * COLUMN_WIDTH)
-    line.share = ColumnText(line, COLUMN_WIDTH)
-    line.kills = ColumnText(line, 0)
+    line.damage = ColumnText(line, 1)
+    line.share = ColumnText(line, 2)
+    line.kills = ColumnText(line, 3)
     line:EnableMouse(true)
     line:SetScript("OnEnter", function() ShowLineTooltip(this) end)
     line:SetScript("OnLeave", HideLineTooltip)
@@ -244,7 +319,7 @@ local function TypeSegment(index)
     local segment = panel.typeBar.parts[index]
     if not segment then
         segment = panel.typeBar:CreateTexture(nil, "ARTWORK")
-        segment:SetTexture(BAR_TEXTURE)
+        segment:SetTexture(UI.FLAT)
         segment:SetHeight(TYPE_BAR_HEIGHT - 2)
         panel.typeBar.parts[index] = segment
     end
@@ -331,9 +406,270 @@ panel.done:SetWidth(BUTTON_WIDTH)
 panel.done:SetHeight(22)
 panel.done:SetText("Continue")
 
+local RECAP_WIDTH = PANEL_WIDTH - 2 * PAD_X
+local RECAP_GRAPH_TOP = 22
+local RECAP_GRAPH_HEIGHT = 84
+local RECAP_LEGEND_GAP = 6
+local RECAP_LEGEND_LINE = 15
+local RECAP_COLUMN = 3
+local RECAP_LINE_TOP = 6
+local RECAP_LINE_BOTTOM = 14
+local RECAP_LINE_THICKNESS = 2
+local RECAP_TICK_MIN = 3
+local RECAP_TICK_MAX = 24
+local RECAP_SLOTS = 100
+local RECAP_SECONDS = 10
+local RECAP_SKULL = 18
+local RECAP_GREEN = { 0.31, 0.82, 0.35 }
+local RECAP_BOSS_COLOR = { 0.62, 0.26, 0.68 }
+local RECAP_SOURCE_COLORS = {
+    { 0.70, 0.24, 0.18 },
+    { 0.86, 0.46, 0.16 },
+    { 0.80, 0.64, 0.18 },
+    { 0.27, 0.58, 0.80 },
+    { 0.55, 0.55, 0.55 },
+}
+
+local recap = {}
+local recapFrame = CreateFrame("Frame", nil, panel)
+recapFrame:SetWidth(RECAP_WIDTH)
+recapFrame:Hide()
+
+recapFrame.rule = recapFrame:CreateTexture(nil, "ARTWORK")
+recapFrame.rule:SetTexture(UI.FLAT)
+recapFrame.rule:SetHeight(1)
+recapFrame.rule:SetWidth(RECAP_WIDTH / 2)
+recapFrame.rule:SetPoint("TOPLEFT", recapFrame, "TOPLEFT", 0, 0)
+recapFrame.rule:SetGradientAlpha("HORIZONTAL", 1, 0.82, 0, 0, 1, 0.82, 0, 0.55)
+recapFrame.ruleRight = recapFrame:CreateTexture(nil, "ARTWORK")
+recapFrame.ruleRight:SetTexture(UI.FLAT)
+recapFrame.ruleRight:SetHeight(1)
+recapFrame.ruleRight:SetWidth(RECAP_WIDTH / 2)
+recapFrame.ruleRight:SetPoint("LEFT", recapFrame.rule, "RIGHT", 0, 0)
+recapFrame.ruleRight:SetGradientAlpha("HORIZONTAL", 1, 0.82, 0, 0.55, 1, 0.82, 0, 0)
+
+recapFrame.title = UI.Text(recapFrame, 12)
+recapFrame.title:SetPoint("TOPLEFT", recapFrame, "TOPLEFT", 0, -8)
+recapFrame.title:SetTextColor(1, 0.82, 0)
+recapFrame.title:SetText("Your last 10 seconds")
+recapFrame.summary = UI.Text(recapFrame, 11)
+recapFrame.summary:SetPoint("LEFT", recapFrame.title, "RIGHT", 10, 0)
+recapFrame.summary:SetTextColor(0.8, 0.8, 0.8)
+
+local graph = CreateFrame("Frame", nil, recapFrame)
+graph:SetWidth(RECAP_WIDTH)
+graph:SetHeight(RECAP_GRAPH_HEIGHT)
+graph:SetPoint("TOPLEFT", recapFrame, "TOPLEFT", 0, -RECAP_GRAPH_TOP)
+graph:SetBackdrop({ bgFile = UI.FLAT, edgeFile = UI.FLAT, edgeSize = 1 })
+graph:SetBackdropColor(0, 0, 0, 0.5)
+graph:SetBackdropBorderColor(0, 0, 0, 1)
+graph.columns = {}
+graph.ticks = {}
+graph.inner = RECAP_WIDTH - 2
+
+for second = 2, RECAP_SECONDS - 2, 2 do
+    local x = 1 + graph.inner * second / RECAP_SECONDS
+    local line = graph:CreateTexture(nil, "BORDER")
+    line:SetTexture(UI.FLAT)
+    line:SetVertexColor(1, 1, 1, 0.07)
+    line:SetWidth(1)
+    line:SetPoint("TOPLEFT", graph, "TOPLEFT", x, -1)
+    line:SetPoint("BOTTOMLEFT", graph, "BOTTOMLEFT", x, 1)
+    local label = UI.Text(graph, 9, UI.NUMBER_FONT)
+    label:SetPoint("TOPLEFT", graph, "TOPLEFT", x + 3, -3)
+    label:SetTextColor(0.47, 0.47, 0.47)
+    label:SetText("-" .. (RECAP_SECONDS - second) .. "s")
+end
+
+graph.maxLabel = UI.Text(graph, 9, UI.NUMBER_FONT)
+graph.maxLabel:SetPoint("TOPLEFT", graph, "TOPLEFT", 5, -RECAP_LINE_TOP - 3)
+graph.maxLabel:SetTextColor(0.6, 0.9, 0.6)
+
+graph.skull = graph:CreateTexture(nil, "OVERLAY")
+graph.skull:SetTexture("Interface\\TargetingFrame\\UI-TargetingFrame-Skull")
+graph.skull:SetWidth(RECAP_SKULL)
+graph.skull:SetHeight(RECAP_SKULL)
+
+for index = 1, floor(graph.inner / RECAP_COLUMN) do
+    local column = {}
+    column.area = graph:CreateTexture(nil, "ARTWORK")
+    column.area:SetTexture(UI.FLAT)
+    column.area:SetVertexColor(RECAP_GREEN[1], RECAP_GREEN[2], RECAP_GREEN[3], 0.18)
+    column.area:SetWidth(RECAP_COLUMN)
+    column.top = graph:CreateTexture(nil, "ARTWORK")
+    column.top:SetTexture(UI.FLAT)
+    column.top:SetVertexColor(RECAP_GREEN[1], RECAP_GREEN[2], RECAP_GREEN[3], 1)
+    column.top:SetWidth(RECAP_COLUMN)
+    graph.columns[index] = column
+end
+
+recapFrame.legend = {}
+
+local function RecapTick(index)
+    local tick = graph.ticks[index]
+    if not tick then
+        tick = graph:CreateTexture(nil, "OVERLAY")
+        tick:SetTexture(UI.FLAT)
+        tick:SetWidth(3)
+        graph.ticks[index] = tick
+    end
+    return tick
+end
+
+local function RecapLegend(index)
+    local entry = recapFrame.legend[index]
+    if not entry then
+        entry = CreateFrame("Frame", nil, recapFrame)
+        entry:SetHeight(RECAP_LEGEND_LINE)
+        entry.swatch = entry:CreateTexture(nil, "ARTWORK")
+        entry.swatch:SetTexture(UI.FLAT)
+        entry.swatch:SetWidth(8)
+        entry.swatch:SetHeight(8)
+        entry.swatch:SetPoint("LEFT", entry, "LEFT", 0, 0)
+        entry.icon = entry:CreateTexture(nil, "ARTWORK")
+        entry.icon:SetWidth(13)
+        entry.icon:SetHeight(13)
+        entry.icon:SetPoint("LEFT", entry.swatch, "RIGHT", 4, 0)
+        entry.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+        entry.text = UI.Text(entry, 10)
+        entry.text:SetPoint("LEFT", entry.icon, "RIGHT", 4, 0)
+        entry.text:SetTextColor(0.85, 0.85, 0.85)
+        recapFrame.legend[index] = entry
+    end
+    return entry
+end
+
+local function RecapColor(source)
+    if source and (source.kind == "b" or source.kind == "m") then
+        return RECAP_BOSS_COLOR
+    end
+    return RECAP_SOURCE_COLORS[source and source.index or 5] or RECAP_SOURCE_COLORS[5]
+end
+
+local function RecapLineY(permille)
+    local span = RECAP_GRAPH_HEIGHT - RECAP_LINE_TOP - RECAP_LINE_BOTTOM
+    return RECAP_LINE_BOTTOM + span * max(0, min(1000, permille)) / 1000
+end
+
+local function RecapSlotX(slot)
+    return 1 + graph.inner * min(RECAP_SLOTS, slot) / RECAP_SLOTS
+end
+
+local function HealthAtSlot(slot)
+    local health = recap.startHealth
+    for _, event in ipairs(recap.events) do
+        if event.slot > slot then
+            break
+        end
+        health = event.health
+    end
+    return health
+end
+
+local function DrawRecapLine()
+    local count = getn(graph.columns)
+    local previous
+    for index, column in ipairs(graph.columns) do
+        local slot = (index - 0.5) / count * RECAP_SLOTS
+        local y = RecapLineY(index == count and 0 or HealthAtSlot(slot))
+        local x = 1 + (index - 1) * RECAP_COLUMN
+        column.area:ClearAllPoints()
+        column.area:SetPoint("BOTTOMLEFT", graph, "BOTTOMLEFT", x, 1)
+        column.area:SetHeight(max(0.5, y - 1))
+        local low = min(y, previous or y)
+        local high = max(y, previous or y)
+        column.top:ClearAllPoints()
+        column.top:SetPoint("BOTTOMLEFT", graph, "BOTTOMLEFT", x, low - RECAP_LINE_THICKNESS / 2)
+        column.top:SetHeight(high - low + RECAP_LINE_THICKNESS)
+        previous = y
+    end
+end
+
+local function DrawRecapTicks()
+    local biggest = 1
+    for _, event in ipairs(recap.events) do
+        if event.source > 0 then
+            biggest = max(biggest, event.amount)
+        end
+    end
+    for index, event in ipairs(recap.events) do
+        local tick = RecapTick(index)
+        local color = event.source == 0 and RECAP_GREEN or RecapColor(recap.sources[event.source])
+        tick:SetVertexColor(color[1], color[2], color[3], 1)
+        tick:SetHeight(max(RECAP_TICK_MIN, min(RECAP_TICK_MAX, RECAP_TICK_MAX * event.amount / biggest)))
+        tick:ClearAllPoints()
+        tick:SetPoint("BOTTOM", graph, "BOTTOMLEFT", RecapSlotX(event.slot), 2)
+        tick:Show()
+    end
+    for index = getn(recap.events) + 1, getn(graph.ticks) do
+        graph.ticks[index]:Hide()
+    end
+    graph.skull:ClearAllPoints()
+    graph.skull:SetPoint("CENTER", graph, "BOTTOMLEFT", RecapSlotX(RECAP_SLOTS) - RECAP_SKULL / 2, RecapLineY(0))
+end
+
+local function KillerText()
+    local killer = recap.sources[recap.killer]
+    if not killer then
+        return ""
+    end
+    local blow = killer.spell == "Melee" and (killer.name .. "'s melee hit") or killer.spell ~= "" and (killer.name .. "'s " .. killer.spell) or killer.name
+    local numbers = Thousands(recap.killAmount)
+    if recap.overkill > 0 then
+        numbers = numbers .. ", " .. Thousands(recap.overkill) .. " overkill"
+    end
+    return " · killed by |cffff6a50" .. blow .. " (" .. numbers .. ")|r"
+end
+
+local function FillRecapLegend()
+    local x, row = 0, 0
+    local shown = 0
+    for index = 1, 5 do
+        local source = recap.sources[index]
+        if source then
+            shown = shown + 1
+            local entry = RecapLegend(shown)
+            local color = RecapColor(source)
+            entry.swatch:SetVertexColor(color[1], color[2], color[3])
+            entry.icon:SetTexture(UI.ICON_PATH .. source.icon)
+            local spell = (source.spell ~= "" and source.spell ~= "Melee") and (" |cff999999" .. source.spell .. "|r") or ""
+            entry.text:SetText(source.name .. spell .. " |cffffffff" .. Thousands(source.damage) .. "|r")
+            local width = 29 + entry.text:GetStringWidth()
+            if x > 0 and x + width > RECAP_WIDTH then
+                x = 0
+                row = row + 1
+            end
+            entry:SetWidth(width)
+            entry:ClearAllPoints()
+            entry:SetPoint("TOPLEFT", recapFrame, "TOPLEFT", x, -(RECAP_GRAPH_TOP + RECAP_GRAPH_HEIGHT + RECAP_LEGEND_GAP + row * RECAP_LEGEND_LINE))
+            entry:Show()
+            x = x + width + 16
+        end
+    end
+    for index = shown + 1, getn(recapFrame.legend) do
+        recapFrame.legend[index]:Hide()
+    end
+    return row + 1
+end
+
+local function LayoutRecap(y)
+    recapFrame.summary:SetText("Took |cffffffff" .. Thousands(recap.taken) .. "|r · healed |cffffffff" .. Thousands(recap.healed) .. "|r" .. KillerText())
+    graph.maxLabel:SetText(Thousands(recap.maxHealth))
+    DrawRecapLine()
+    DrawRecapTicks()
+    local rows = FillRecapLegend()
+    local height = RECAP_GRAPH_TOP + RECAP_GRAPH_HEIGHT + RECAP_LEGEND_GAP + rows * RECAP_LEGEND_LINE
+    recapFrame:SetHeight(height)
+    recapFrame:ClearAllPoints()
+    recapFrame:SetPoint("TOPLEFT", panel, "TOPLEFT", PAD_X, -y)
+    recapFrame:Show()
+    return y + height
+end
+
 local run = {}
 local weapons = {}
 local passives = {}
+local support = {}
 
 local function Close()
     if screen.closing or not screen:IsShown() then
@@ -385,12 +721,12 @@ local function DrawBar(line, x, width, fraction, parts, total)
     line.track:SetWidth(max(1, width))
     line.track:SetHeight(line:GetHeight())
     local filled = 0
+    local barWidth = width * fraction
     for index, fill in ipairs(line.parts) do
         local part = parts[index]
-        local partWidth = (part and total > 0) and width * fraction * part.damage / total or 0
+        local partWidth = (part and total > 0) and barWidth * part.damage / total or 0
         if partWidth >= 0.5 then
-            local kind = UI.DamageType(part.key)
-            fill:SetVertexColor(kind.r, kind.g, kind.b)
+            UI.ShadeBar(fill, part.color or UI.DamageType(part.key), filled / barWidth, (filled + partWidth) / barWidth, BAR_BRIGHTNESS)
             fill:ClearAllPoints()
             fill:SetPoint("TOPLEFT", line.track, "TOPLEFT", filled, 0)
             fill:SetWidth(partWidth)
@@ -417,10 +753,18 @@ local function FillLine(line, entry, top, total, y)
     line.icon:ClearAllPoints()
     line.icon:SetPoint("LEFT", line, "LEFT", indent, 0)
 
+    local columnsWidth = 3 * COLUMN_WIDTH
     local barX = indent + height + 5
-    local fullWidth = RIGHT_WIDTH - COLUMNS_WIDTH - ROW_HEIGHT - 11
-    local barWidth = RIGHT_WIDTH - COLUMNS_WIDTH - barX - 6
-    local parts = sub and { { key = entry.school, damage = entry.damage } } or WeaponParts(entry)
+    local fullWidth = RIGHT_WIDTH - columnsWidth - ROW_HEIGHT - 11
+    local barWidth = RIGHT_WIDTH - columnsWidth - barX - 6
+    local parts
+    if entry.healed then
+        parts = { { color = UI.HEAL_COLOR, damage = entry.healed }, { color = UI.ABSORB_COLOR, damage = entry.absorbed } }
+    elseif sub then
+        parts = { { key = entry.school, damage = entry.damage } }
+    else
+        parts = WeaponParts(entry)
+    end
     DrawBar(line, barX, barWidth, top > 0 and min(1, entry.damage / top * fullWidth / barWidth) or 0, parts, entry.damage)
 
     line.name:ClearAllPoints()
@@ -429,10 +773,21 @@ local function FillLine(line, entry, top, total, y)
     for _, text in ipairs({ line.damage, line.share, line.kills }) do
         text:SetFont(UI.NUMBER_FONT, sub and 11 or 13)
         text:ClearAllPoints()
-        text:SetPoint("RIGHT", line, "RIGHT", -text.right, 0)
+        text:SetPoint("RIGHT", line, "RIGHT", -COLUMN_OFFSETS[text.slot], 0)
+        text:SetWidth(COLUMN_WIDTH)
         text:SetHeight(height)
     end
-    if sub then
+    if entry.healed then
+        line.name:SetText("|cffffffff" .. entry.name .. "|r")
+        line.damage:SetTextColor(1, 1, 1)
+        line.share:SetTextColor(1, 1, 1)
+        line.kills:SetTextColor(0.78, 0.78, 0.78)
+        line.damage:SetText(Short(entry.healed))
+        line.share:SetText(Short(entry.absorbed))
+        line.kills:SetText(Percent(entry.damage, total) .. "%")
+        line:Show()
+        return height + ROW_GAP
+    elseif sub then
         line.name:SetText("|cffc8c8c8" .. entry.name .. "|r")
         line.damage:SetTextColor(0.78, 0.78, 0.78)
         line.kills:SetTextColor(0.78, 0.78, 0.78)
@@ -463,20 +818,38 @@ local function TypeTotals()
         end
     end
     table.sort(list, function(a, b) return a.damage > b.damage end)
+    for _, entry in ipairs(list) do
+        local kind = UI.DamageType(entry.key)
+        entry.color = kind
+        entry.name = kind.name
+    end
     return list
 end
 
-local function FillTypes(y, total)
-    local types = TypeTotals()
+local function SupportTotals()
+    local healed, absorbed = 0, 0
+    for _, source in ipairs(support) do
+        healed = healed + source.healed
+        absorbed = absorbed + source.absorbed
+    end
+    local list = {}
+    for _, entry in ipairs({ { UI.HEAL_COLOR, "Healed", healed }, { UI.ABSORB_COLOR, "Absorbed", absorbed } }) do
+        if entry[3] > 0 then
+            tinsert(list, { color = entry[1], name = entry[2], damage = entry[3] })
+        end
+    end
+    return list
+end
+
+local function FillTypes(y, total, types)
     panel.typeBar:ClearAllPoints()
     panel.typeBar:SetPoint("TOPLEFT", panel, "TOPLEFT", RIGHT_X, -y)
     local x = 1
     local width = RIGHT_WIDTH - 2
     for index, entry in ipairs(types) do
         local segment = TypeSegment(index)
-        local kind = UI.DamageType(entry.key)
         local segmentWidth = total > 0 and width * entry.damage / total or 0
-        segment:SetVertexColor(kind.r, kind.g, kind.b)
+        UI.ShadeBar(segment, entry.color, (x - 1) / width, (x - 1 + segmentWidth) / width, BAR_BRIGHTNESS)
         segment:ClearAllPoints()
         segment:SetPoint("TOPLEFT", panel.typeBar, "TOPLEFT", x, -1)
         segment:SetWidth(max(0.5, segmentWidth))
@@ -494,9 +867,8 @@ local function FillTypes(y, total)
     local legendX, legendY = 0, y + TYPE_BAR_HEIGHT + 4
     for index, entry in ipairs(types) do
         local legend = LegendEntry(index)
-        local kind = UI.DamageType(entry.key)
-        legend.swatch:SetVertexColor(kind.r, kind.g, kind.b)
-        legend.text:SetText(kind.name .. " " .. Percent(entry.damage, total) .. "%")
+        legend.swatch:SetVertexColor(entry.color.r, entry.color.g, entry.color.b)
+        legend.text:SetText(entry.name .. " " .. Percent(entry.damage, total) .. "%")
         local width = 10 + legend.text:GetStringWidth()
         if legendX > 0 and legendX + width > RIGHT_WIDTH then
             legendX = 0
@@ -642,27 +1014,30 @@ local function LayoutFooter(y, buildWidth)
     return y + FOOTER_HEIGHT
 end
 
-local function ShowSummary()
-    if VanillaBonkResults then
-        VanillaBonkResults:Hide()
-    end
-
-    FillHeading()
-
-    table.sort(weapons, function(a, b) return a.damage > b.damage end)
-    local total, top = 0, 0
-    for _, weapon in ipairs(weapons) do
-        total = total + weapon.damage
-        top = max(top, weapon.damage)
-    end
-
+local function ModeEntries()
     local entries = {}
+    if mode == MODE_HEALING then
+        for _, source in ipairs(support) do
+            tinsert(entries, source)
+        end
+        return entries
+    end
     for _, weapon in ipairs(weapons) do
         tinsert(entries, weapon)
-        table.sort(weapon.subs, function(a, b) return a.damage > b.damage end)
         for _, sub in ipairs(weapon.subs) do
-            sub.parent = weapon
             tinsert(entries, sub)
+        end
+    end
+    return entries
+end
+
+local function RenderLines()
+    local entries = ModeEntries()
+    local total, top = 0, 0
+    for _, entry in ipairs(entries) do
+        if not entry.parent then
+            total = total + entry.damage
+            top = max(top, entry.damage)
         end
     end
 
@@ -672,16 +1047,66 @@ local function ShowSummary()
         if entry then
             y = y + FillLine(line, entry, top, total, y)
         else
+            line.entry = nil
             line:Hide()
         end
     end
-    y = FillTypes(y + 3, total)
 
-    local columnBottom = max(y, PAD_TOP + STATS_TOP + 7 * STAT_ROW)
+    local empty = getn(entries) == 0
+    if empty then
+        panel.empty:SetText(mode == MODE_HEALING and "No healing or absorbs this run." or "No damage this run.")
+        panel.empty:Show()
+        y = y + 20
+    else
+        panel.empty:Hide()
+    end
+    local types = mode == MODE_HEALING and SupportTotals() or TypeTotals()
+    if empty then
+        panel.typeBar:Hide()
+    else
+        panel.typeBar:Show()
+    end
+    return FillTypes(y + 3, total, types)
+end
+
+Render = function()
+    ShowTabs()
+    RenderLines()
+end
+
+local function ShowSummary()
+    if VanillaBonkResults then
+        VanillaBonkResults:Hide()
+    end
+
+    FillHeading()
+
+    table.sort(weapons, function(a, b) return a.damage > b.damage end)
+    for _, weapon in ipairs(weapons) do
+        table.sort(weapon.subs, function(a, b) return a.damage > b.damage end)
+        for _, sub in ipairs(weapon.subs) do
+            sub.parent = weapon
+        end
+    end
+    table.sort(support, function(a, b) return a.damage > b.damage end)
+
+    mode = MODE_HEALING
+    local tallest = RenderLines()
+    mode = MODE_DAMAGE
+    tallest = max(tallest, RenderLines())
+    ShowTabs()
+
+    local columnBottom = max(tallest, PAD_TOP + STATS_TOP + 7 * STAT_ROW)
     local divider = columnBottom - PAD_TOP
     panel.divider:SetHeight(divider / 2)
     panel.dividerLow:SetHeight(divider / 2)
-    y = LayoutFooter(columnBottom + 12, FillBuild())
+    local y = columnBottom + 12
+    if not run.victory and not run.wentHome and recap.events and getn(recap.events) > 0 then
+        y = LayoutRecap(y) + 10
+    else
+        recapFrame:Hide()
+    end
+    y = LayoutFooter(y, FillBuild())
     panel:SetHeight(y + PAD_BOTTOM)
     FillStats()
 
@@ -701,7 +1126,65 @@ handlers["start"] = function(f)
     run.map = f[2] or ""
     run.difficulty = f[3] or ""
     passives = {}
+    support = {}
+    recap = {}
     screen:Hide()
+end
+
+handlers["dr"] = function(f)
+    recap = {
+        maxHealth = tonumber(f[2]) or 0,
+        startHealth = tonumber(f[3]) or 1000,
+        killer = tonumber(f[4]) or 0,
+        killAmount = tonumber(f[5]) or 0,
+        overkill = tonumber(f[6]) or 0,
+        taken = tonumber(f[7]) or 0,
+        healed = tonumber(f[8]) or 0,
+        sources = {},
+        events = {},
+    }
+end
+
+handlers["drs"] = function(f)
+    local index = tonumber(f[2])
+    if not recap.sources or not index then
+        return
+    end
+    recap.sources[index] = {
+        index = index,
+        icon = f[3] ~= "" and f[3] or "INV_Misc_QuestionMark",
+        name = f[4] or "",
+        spell = f[5] or "",
+        kind = f[6] or "",
+        damage = tonumber(f[7]) or 0,
+    }
+end
+
+handlers["dre"] = function(f)
+    if not recap.events then
+        return
+    end
+    for _, item in ipairs(UI.Split(f[2] or "", ",")) do
+        local parts = UI.Split(item, ":")
+        local slot, source, amount, health = tonumber(parts[1]), tonumber(parts[2]), tonumber(parts[3]), tonumber(parts[4])
+        if slot and source and amount and health then
+            tinsert(recap.events, { slot = slot, source = source, amount = amount, health = health })
+        end
+    end
+end
+
+handlers["support"] = function(f)
+    support = {}
+    for _, item in ipairs(UI.Split(f[2] or "", ",")) do
+        local _, _, icon, healed, absorbed, name = strfind(item, "^([^:]*):(%d+):(%d+):(.+)$")
+        healed, absorbed = tonumber(healed or "") or 0, tonumber(absorbed or "") or 0
+        if name and healed + absorbed > 0 then
+            tinsert(support, {
+                icon = icon ~= "" and icon or "INV_Misc_QuestionMark", name = name,
+                healed = healed, absorbed = absorbed, damage = healed + absorbed,
+            })
+        end
+    end
 end
 
 handlers["loadout"] = function(f)

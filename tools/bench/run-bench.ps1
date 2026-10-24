@@ -5,6 +5,7 @@ param(
     [string]$Hero = '',
     [switch]$Dummies,
     [switch]$Melee,
+    [switch]$Crowd,
     [switch]$NoAnchor,
     [switch]$Markdown,
     [switch]$Singles,
@@ -90,11 +91,17 @@ function Get-Spells([object[]]$BuildList) {
 function Write-AddonBuilds([object[]]$BuildList, [hashtable]$Spells) {
     $setupSteps = @('bench', "level $Level", 'quiet', "minute $Minute") + @($Passives | ForEach-Object { "passive $($_ -replace ':', ' ')" })
     if ($Dummies) { $setupSteps += 'deep' }
+    if ($Crowd) { $setupSteps += 'unkillable' }
     $setup = ($setupSteps | ForEach-Object { '"' + $_ + '"' }) -join ', '
     $lines = @("BenchSetup = { $setup }", "BenchBuildSeconds = $BuildSeconds", '')
     if ($Dummies) { $lines += "BenchDummies = `"$DummyCount $DummyRingYards`"" }
-    if ($Melee) { $lines += 'BenchPack = "pack 150 1"' }
+    if ($Melee -or $Crowd) { $lines += 'BenchPack = "pack 150 1"' }
+    if ($Crowd) { $lines += 'BenchCrowdProbeEvery = 2' }
     $lines += 'BenchBuilds = {'
+    if ($Crowd) {
+        $lines += '    { name = "crowd", steps = { } },'
+        $BuildList = @()
+    }
 
     foreach ($build in $BuildList) {
         $stepList = @($build.Ids | ForEach-Object { $Spells[$_].Verb + ' ' + $_ })
@@ -204,11 +211,23 @@ try {
     $lastHero = Set-LastHero $hero
     $chatStart = if (Test-Path $chatLog) { (Get-Item $chatLog).Length } else { 0 }
     $game = Enter-World $chatStart
-    Wait-BenchDone $game $chatStart $buildList.Count
+    Wait-BenchDone $game $chatStart $(if ($Crowd) { 1 } else { $buildList.Count })
 } finally {
     Get-GameProcess | Stop-Process -Force -ErrorAction SilentlyContinue
     if ($null -ne $lastHero) { Set-LastHero $lastHero | Out-Null }
     if (Test-Path $addonTarget) { Remove-Item $addonTarget -Recurse -Force }
+}
+
+if ($Crowd) {
+    $stream = [System.IO.File]::Open($chatLog, 'Open', 'Read', 'ReadWrite')
+    try {
+        $stream.Seek($chatStart, 'Begin') | Out-Null
+        (New-Object System.IO.StreamReader($stream)).ReadToEnd() -split "`n" |
+            Where-Object { $_ -match 'whispers: .*enemies walk in the crowd' } | ForEach-Object { $_.Substring(6, 8) + ' ' + $_.Substring($_.IndexOf('whispers: ') + 10).Trim() }
+    } finally {
+        $stream.Close()
+    }
+    return
 }
 
 Write-Manifest $buildList $spells $hero $since

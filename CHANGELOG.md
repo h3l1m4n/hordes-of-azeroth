@@ -1,5 +1,52 @@
 # Changelog
 
+## 0.3.1
+
+### Enemies
+- Enemies now move as a crowd: they no longer stack inside each other, and blocked enemies walk around the pack to an open side.
+- Enemies emerge hidden and appear with a teleport flash. Spawns are more spread out and start farther away.
+
+### Bosses
+- Heroic and Mythic bosses fight harder: faster moves, marks that follow you, bombardment at range, wounds that cut healing, recovery when kited, healing wards, eruption lanes and Blink.
+- Boss affix circles no longer stack on top of their wind-ups, and circles no longer spawn oversized.
+
+### Movement speed
+- Movement speed is capped at 50%. Temporary boosts such as Swiftness Potion, Body and Soul and Last Stand can go above it.
+- Level-up passives, Darkmoon Cards and Ley Line buffs that would only add capped speed are no longer offered.
+- The stats panel shows the 50% cap.
+
+### Hearthstone
+- The hearth timer keeps going when leaving the circle.
+- A blue 5 yard ring fills up over the hearth time. If you are outside the ring when it fills, you are left behind as the ring and vault teleport away.
+
+### Damage meter and death recap
+- Redesigned damage meter.
+- Healing and absorbs are credited to the spell, passive, card, glyph, talent, Moonwell or Healing Orb that made them, and show on the results screen.
+- New death recap on the defeat screen: your health over the last 10 seconds with hit ticks, who killed you and the top damage sources.
+
+### Hotbar
+- New "Cooldown Numbers" option in Interface settings turns the countdown numbers on or off. It shows on spells with a cooldown of 2 seconds or more.
+
+### Paladin
+- Crusader Strike damage lands 300 ms after the swing, matching the animation.
+- Seal spells no longer show a cooldown pie or "Casts every" line.
+
+### Warlock
+- Conflagrate's tooltip now says each struck enemy spreads fire to enemies within 5 yards for half damage and applies 1 stack of Burning.
+
+### Launcher
+- Shows a notice when Windows Smart App Control blocks the game.
+- Ships the 32-bit Visual C++ runtime, so the performance DLL loads on PCs that didn't have it (fixes "VanillaFixes DLL error (0)").
+- Hardened startup for the client fix DLL.
+
+### Other changes
+- Area rain spells hold still during pauses.
+- Drain Life and other channel beams start at the caster's chest instead of in the air on flying and tall models.
+- Pet tooltips show attack speed.
+- The interact prompt draws over the hero health bar and sits above NPC nameplates.
+- The magnet drop map pin uses a new icon.
+- Extracted items show in the mailbox right away, without a relog.
+
 ## 0.3.0
 
 ### Warlock

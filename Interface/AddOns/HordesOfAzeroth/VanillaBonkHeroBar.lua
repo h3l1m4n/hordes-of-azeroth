@@ -258,6 +258,41 @@ function VanillaBonkUI.Short(value)
     return tostring(floor(value))
 end
 
+local STEEL = { 0.62, 0.62, 0.66 }
+
+local function StyleBadge(slot)
+    local badge = slot.badge
+    badge:SetWidth(slot.isSpell and 16 or 13)
+    badge:SetHeight(slot.isSpell and 14 or 11)
+    badge:SetPoint("BOTTOMRIGHT", slot, "BOTTOMRIGHT", 0, 0)
+    badge.disc:SetTexture(UI.FLAT)
+    badge.disc:SetVertexColor(0.05, 0.05, 0.06, 0.9)
+    badge.disc:SetAllPoints(badge)
+    badge.rim:SetTexture(UI.FLAT)
+    badge.rim:SetVertexColor(STEEL[1], STEEL[2], STEEL[3], 0.9)
+    badge.rim:SetPoint("TOPLEFT", badge, "TOPLEFT", 0, 0)
+    badge.rim:SetPoint("TOPRIGHT", badge, "TOPRIGHT", 0, 0)
+    badge.rim:SetHeight(1)
+    badge.edge:SetTexture(UI.FLAT)
+    badge.edge:SetVertexColor(STEEL[1], STEEL[2], STEEL[3], 0.9)
+    badge.edge:SetPoint("TOPLEFT", badge, "TOPLEFT", 0, 0)
+    badge.edge:SetPoint("BOTTOMLEFT", badge, "BOTTOMLEFT", 0, 0)
+    badge.edge:SetWidth(1)
+    slot.rank:SetPoint("CENTER", badge, "CENTER", 1, 0)
+end
+
+local COUNTDOWN_MIN_INTERVAL = 2
+local COUNTDOWN_HIDE_BELOW = 1
+
+local function CountdownColor(remaining)
+    if remaining <= 3 then
+        return 0.3, 1, 0.3
+    elseif remaining <= 6 then
+        return 1, 0.85, 0.2
+    end
+    return 1, 0.25, 0.2
+end
+
 local function CreateSlot(parent, size, isSpell)
     local slot = CreateFrame("Button", nil, parent)
     slot:SetWidth(size)
@@ -306,8 +341,19 @@ local function CreateSlot(parent, size, isSpell)
     slot.highlight:SetBlendMode("ADD")
     slot.highlight:SetAllPoints(slot)
 
-    slot.rank = UI.Text(top, isSpell and 15 or 12, UI.NUMBER_FONT, "OUTLINE")
-    slot.rank:SetPoint("BOTTOMRIGHT", slot, "BOTTOMRIGHT", -1, 2)
+    local badge = CreateFrame("Frame", nil, slot)
+    badge:SetFrameLevel(top:GetFrameLevel() + 1)
+    badge.rim = badge:CreateTexture(nil, "ARTWORK")
+    badge.edge = badge:CreateTexture(nil, "ARTWORK")
+    badge.disc = badge:CreateTexture(nil, "BORDER")
+    slot.badge = badge
+    slot.rank = UI.Text(badge, isSpell and 11 or 10, UI.NUMBER_FONT, "OUTLINE")
+    StyleBadge(slot)
+
+    if isSpell then
+        slot.countdown = UI.Text(top, 20, UI.NUMBER_FONT, "THICKOUTLINE")
+        slot.countdown:SetPoint("CENTER", slot, "CENTER", 1, 0)
+    end
 
     slot:SetScript("OnEnter", ShowSlotTooltip)
     slot:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -346,11 +392,27 @@ local function RestartCooldown(slot)
     CooldownFrame_SetTimer(slot.cooldown, slot.cycleStart, interval, 1)
 end
 
+local function UpdateCountdown(slot)
+    local info = slot.entry and run.info[slot.entry.index]
+    local interval = info and info.interval and info.interval / 1000 or 0
+    local remaining = slot.cycleStart and interval - (GetTime() - slot.cycleStart) or 0
+    if info and not info.held and UI.Option("cooldownNumbers", true) and interval >= COUNTDOWN_MIN_INTERVAL and remaining >= COUNTDOWN_HIDE_BELOW then
+        slot.countdown:SetText(floor(remaining))
+        slot.countdown:SetTextColor(CountdownColor(remaining))
+        slot.countdown:Show()
+    else
+        slot.countdown:Hide()
+    end
+end
+
 local function UpdateSlot(slot, entry)
     slot.entry = entry
     if not entry then
         slot.icon:Hide()
-        slot.rank:SetText("")
+        slot.badge:Hide()
+        if slot.countdown then
+            slot.countdown:Hide()
+        end
         if slot.glow then
             slot.glow:Hide()
             slot.ready:Hide()
@@ -360,6 +422,7 @@ local function UpdateSlot(slot, entry)
     end
     slot.icon:SetTexture(UI.ICON_PATH .. entry.icon)
     slot.icon:Show()
+    slot.badge:Show()
     slot.rank:SetText(entry.rank)
     if not slot.glow then
         slot.rank:SetTextColor(1, 1, 1)
@@ -452,6 +515,7 @@ spellBar:SetScript("OnUpdate", function()
         if slot.cycleStart and info and info.interval and GetTime() - slot.cycleStart >= info.interval / 1000 then
             RestartCooldown(slot)
         end
+        UpdateCountdown(slot)
     end
 end)
 

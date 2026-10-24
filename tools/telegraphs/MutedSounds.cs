@@ -24,6 +24,19 @@ namespace BonkTelegraphs
             return manifest;
         }
 
+        const int SpellVisualField = 115;
+        const uint HearthstoneSpell = 8690;
+        const uint HearthstoneVisual = 220;
+
+        public static string ClearHearthstoneCast(Dbc spells)
+        {
+            uint[] spell = spells.Find(HearthstoneSpell);
+            if (spell == null || spell[SpellVisualField] != HearthstoneVisual)
+                throw new InvalidDataException("Spell " + HearthstoneSpell + " does not show the Hearthstone's cast visual " + HearthstoneVisual + ".");
+            spell[SpellVisualField] = 0;
+            return string.Format("spell {0}: Hearthstone cast visual {1} and its hum cleared; the run's ring shows the cast instead", HearthstoneSpell, HearthstoneVisual);
+        }
+
         static readonly uint[][] SoundSwaps =
         {
             new uint[] { 487, 3320, 1273 },

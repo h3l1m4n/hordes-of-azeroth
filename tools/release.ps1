@@ -144,12 +144,13 @@ function Invoke-Quiet([string]$What, [string]$Exe, [string[]]$Arguments) {
     if ($LASTEXITCODE -ne 0) { throw "$What failed with exit code $LASTEXITCODE." }
 }
 
-function Copy-Runtime([string]$Instance, [string[]]$Targets) {
+function Copy-Runtime([string]$Instance, [string[]]$Targets, [string]$Architecture = 'x64', [string[]]$Dlls = $runtimeDlls) {
     $redist = Get-ChildItem (Join-Path $Instance 'VC\Redist\MSVC') -Directory | Sort-Object Name -Descending |
-        ForEach-Object { Join-Path $_.FullName 'x64\Microsoft.VC143.CRT' } | Where-Object { Test-Path $_ } | Select-Object -First 1
+        ForEach-Object { Join-Path $_.FullName "$Architecture\Microsoft.VC143.CRT" } | Where-Object { Test-Path $_ } | Select-Object -First 1
     if (-not $redist) { throw 'The Visual C++ redistributable files were not found in the Build Tools.' }
     foreach ($target in $Targets) {
-        foreach ($dll in $runtimeDlls) { Copy-Item (Join-Path $redist $dll) $target -Force }
+        New-Item -ItemType Directory -Force $target | Out-Null
+        foreach ($dll in $Dlls) { Copy-Item (Join-Path $redist $dll) $target -Force }
     }
 }
 
@@ -189,6 +190,7 @@ function Invoke-PackageBuild([string]$Name) {
             if ($LASTEXITCODE -ne 0) { throw 'TelegraphKit did not compile.' }
         }
         'server' { Invoke-ServerBuild }
+        'client-runtime' { Copy-Runtime (Get-CMake).Instance @(Join-Path $buildDir 'client-runtime') 'x86' @('vcruntime140.dll') }
         'version' { [System.IO.File]::WriteAllText((Join-Path $buildDir 'VERSION'), "$version`n") }
         'launcher' {
             $project = Join-Path (Get-CommittedTree) 'tools\launcher\HordesOfAzerothLauncher.csproj'

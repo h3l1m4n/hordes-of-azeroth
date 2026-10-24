@@ -22,6 +22,8 @@ UI.DISPLAY_SETTINGS = {
         tooltip = "Shows the damage you take as numbers beside your hero." },
     { key = "healthNumbers", label = "Health Bar Numbers", default = true,
         tooltip = "Shows your health as numbers on your health bars.", apply = function() UI.ApplyHealthNumbers() end },
+    { key = "cooldownNumbers", label = "Cooldown Numbers", default = true,
+        tooltip = "Shows the seconds left on spells with a cooldown of 2 seconds or more." },
 }
 
 UI.INTERACT_SETTINGS = {}

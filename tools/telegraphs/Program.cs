@@ -99,6 +99,7 @@ namespace BonkTelegraphs
             catch (Exception e)
             {
                 Console.Error.WriteLine(e);
+                Console.Error.WriteLine(e.GetType().Name + ": " + e.Message);
                 return 1;
             }
         }

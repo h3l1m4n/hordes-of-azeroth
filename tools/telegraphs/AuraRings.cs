@@ -19,6 +19,9 @@ namespace BonkTelegraphs
         public uint OwnEffectId;
         public uint OwnKitId;
         public uint OwnVisualId;
+        public bool Telegraph;
+        public bool TelegraphFill;
+        public uint GrowMs;
     }
 
     static class AuraRings
@@ -66,6 +69,12 @@ namespace BonkTelegraphs
                 Dark = new[] { 0.3f, 0.06f, 0f }, Bright = new[] { 1f, 0.42f, 0.08f },
                 HazeAlpha = 0.34f, StreakAlpha = 0.46f, RimAlpha = 0.35f, MaxAlpha = 0.8f,
                 OwnEffectId = 3550, OwnKitId = 7850, OwnVisualId = 8950 },
+            new AuraRingLook { Name = "MarkOutline", TemplateSpell = 33424, FirstSpellId = 33540, Telegraph = true,
+                Dark = new[] { 0.85f, 0.62f, 0.02f }, Bright = new[] { 1f, 0.92f, 0.25f },
+                OwnEffectId = 3600, OwnKitId = 7900, OwnVisualId = 9000 },
+            new AuraRingLook { Name = "MarkFill", TemplateSpell = 33424, FirstSpellId = 33562, Telegraph = true, TelegraphFill = true, GrowMs = 4000,
+                Dark = new[] { 0.85f, 0.62f, 0.02f }, Bright = new[] { 1f, 0.92f, 0.25f },
+                OwnEffectId = 3622, OwnKitId = 7922, OwnVisualId = 9022 },
         };
 
         public static List<string> AddSpells(Dbc spells, Dbc visuals, Dbc kits, Dbc effects)
@@ -131,13 +140,21 @@ namespace BonkTelegraphs
         {
             foreach (AuraRingLook look in Looks)
             {
+                bool painted = !look.Telegraph;
                 string texture = Folder + look.Name + ".blp";
-                files[texture] = Blp.WriteDxt3(Paint(look), true);
+                files[texture] = Blp.WriteDxt3(painted ? Paint(look) : Kit.PaintCircle(look.TelegraphFill, look.Bright, look.Dark), true);
                 foreach (float size in StandIns.Sizes)
                 {
                     string name = ModelName(look, size);
-                    float half = QuadHalf * size;
-                    Quad quad = new Quad { MinX = -half, MaxX = half, MinY = -half, MaxY = half, Z = Lift, Texture = texture, FaceCamera = true, SpinMs = SwirlMs };
+                    float half = painted ? QuadHalf * size : size;
+                    Quad quad = new Quad { MinX = -half, MaxX = half, MinY = -half, MaxY = half, Z = Lift, Texture = texture, FaceCamera = true };
+                    if (painted)
+                        quad.SpinMs = SwirlMs;
+                    else if (look.GrowMs > 0)
+                    {
+                        quad.GrowMs = look.GrowMs;
+                        quad.GrowThenHold = true;
+                    }
                     files[Folder + name + ".m2"] = M2.Write("BonkTelegraph" + name, quad, playableLookup);
                 }
             }

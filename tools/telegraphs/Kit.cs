@@ -29,21 +29,29 @@ namespace BonkTelegraphs
             List<string> projectiles, enemyMissiles, castVisuals;
             byte[] ticketShard, chainEffects;
             int standIns, landmarks;
+            string hearthRings, hearthTide;
             List<string> addonTextures;
             using (ClientData client = new ClientData(dataDir, new[] { PatchName }))
             {
                 addonTextures = AddonTextures.Write(client, root);
                 creatureDisplays = new Dbc(client.Read("DBFilesClient\\CreatureDisplayInfo.dbc"));
                 creatureModels = new Dbc(client.Read("DBFilesClient\\CreatureModelData.dbc"));
-                Wisps.AddWisps(client, files, creatureDisplays, creatureModels);
-                Pickups.AddJewels(client, files, creatureDisplays, creatureModels);
-                Pickups.AddTurkey(client, creatureDisplays, creatureModels);
-                Traps.AddTraps(client, files, creatureDisplays, creatureModels);
-                ticketShard = Pickups.ReadTicket(client);
-                projectiles = Projectiles.AddProjectiles(client, files, creatureDisplays, creatureModels);
-                enemyMissiles = Projectiles.AddEnemyMissiles(client, files, creatureDisplays, creatureModels);
+                Dbc[] creatureTables = { creatureDisplays, creatureModels };
+                IfClientHasArt("the spell orb wisps", files, creatureTables, () => Wisps.AddWisps(client, files, creatureDisplays, creatureModels));
+                IfClientHasArt("the XP orb jewels", files, creatureTables, () => Pickups.AddJewels(client, files, creatureDisplays, creatureModels));
+                IfClientHasArt("the Turkey Leg heal drop", files, creatureTables, () => Pickups.AddTurkey(client, creatureDisplays, creatureModels));
+                IfClientHasArt("the thrown trap looks", files, creatureTables, () => Traps.AddTraps(client, files, creatureDisplays, creatureModels));
+                ticketShard = IfClientHasArt("the Darkmoon Ticket's crystal", files, new Dbc[0], () => Pickups.ReadTicket(client), null);
+                projectiles = IfClientHasArt("the projectiles", files, creatureTables,
+                    () => Projectiles.AddProjectiles(client, files, creatureDisplays, creatureModels), new List<string>());
+                enemyMissiles = IfClientHasArt("the enemy bolts", files, creatureTables,
+                    () => Projectiles.AddEnemyMissiles(client, files, creatureDisplays, creatureModels), new List<string>());
                 standIns = StandIns.AddStandIns(creatureDisplays, creatureModels);
-                Console.WriteLine("  " + FelFire.AddFelCreatures(client, files, creatureDisplays, creatureModels));
+                hearthRings = HearthRings.AddDisplays(creatureDisplays, creatureModels);
+                hearthTide = IfClientHasArt("the Hearthstone ring's swirl", files, creatureTables,
+                    () => HearthTide.Add(client, files, creatureDisplays, creatureModels), "Hearthstone swirl skipped");
+                Console.WriteLine("  " + IfClientHasArt("the fel creatures", files, creatureTables,
+                    () => FelFire.AddFelCreatures(client, files, creatureDisplays, creatureModels), "fel creatures skipped"));
 
                 spells = new Dbc(client.Read("DBFilesClient\\Spell.dbc"));
                 spellVisuals = new Dbc(client.Read("DBFilesClient\\SpellVisual.dbc"));
@@ -58,13 +66,17 @@ namespace BonkTelegraphs
                 castVisuals.AddRange(ExploderVisuals.AddExploderVisuals(spells, spellVisuals, spellVisualKits));
                 castVisuals.AddRange(MutedSounds.MuteMeleeSwings(spellVisualKits));
                 castVisuals.AddRange(MutedSounds.SwapKitSounds(spellVisualKits));
+                castVisuals.Add(MutedSounds.ClearHearthstoneCast(spells));
                 castVisuals.AddRange(QuietKits.AddQuietCopies(spellVisualKits));
                 castVisuals.AddRange(BossLooks.AddLooks(spellVisualKits, spellEffectNames));
                 castVisuals.AddRange(AuraLooks.AddAuraLooks(spells, spellVisuals, spellVisualKits, spellEffectNames, new Dbc(client.Read("DBFilesClient\\SpellIcon.dbc"))));
                 castVisuals.AddRange(AuraRings.AddSpells(spells, spellVisuals, spellVisualKits, spellEffectNames));
                 castVisuals.AddRange(PenanceVisuals.AddPenanceVisuals(spells, spellVisuals, spellEffectNames));
-                castVisuals.AddRange(FelFire.AddFelFire(client, files, spells, spellVisuals, spellVisualKits, spellEffectNames));
-                castVisuals.AddRange(LootBeams.AddLootBeams(client, files, spells, spellVisuals, spellVisualKits, spellEffectNames));
+                Dbc[] spellTables = { spells, spellVisuals, spellVisualKits, spellEffectNames };
+                castVisuals.AddRange(IfClientHasArt("the fel fire", files, spellTables,
+                    () => FelFire.AddFelFire(client, files, spells, spellVisuals, spellVisualKits, spellEffectNames), new List<string>()));
+                castVisuals.AddRange(IfClientHasArt("the loot beams", files, spellTables,
+                    () => LootBeams.AddLootBeams(client, files, spells, spellVisuals, spellVisualKits, spellEffectNames), new List<string>()));
 
                 areaPois = new Dbc(client.Read("DBFilesClient\\AreaPOI.dbc"));
                 landmarks = Landmarks.HideFromMinimap(areaPois);
@@ -130,7 +142,9 @@ namespace BonkTelegraphs
                 }
 
             AuraRings.AddModels(files, playableLookup);
-            Pickups.AddTicket(ticketShard, files, displays);
+            HearthRings.AddModels(files, playableLookup);
+            if (ticketShard != null)
+                Pickups.AddTicket(ticketShard, files, displays);
 
             Dictionary<string, byte[]> tables = new Dictionary<string, byte[]>
             {
@@ -165,6 +179,8 @@ namespace BonkTelegraphs
             for (int i = 0; i < enemyMissiles.Count; i++)
                 Console.WriteLine("  creature display {0}: enemy bolt {1}", Projectiles.FirstEnemyDisplayId + i, enemyMissiles[i]);
             Console.WriteLine("  creature displays {0}-{1}: telegraph stand-ins", StandIns.FirstDisplayId, StandIns.FirstDisplayId + standIns - 1);
+            Console.WriteLine("  " + hearthRings);
+            Console.WriteLine("  " + hearthTide);
             foreach (string line in castVisuals)
                 Console.WriteLine("  " + line);
 
@@ -177,6 +193,40 @@ namespace BonkTelegraphs
             }
             else
                 Console.WriteLine("No server data at {0}: extract it, then rerun this.", serverDbc);
+            foreach (string skipped in SkippedLooks)
+                Console.WriteLine("Skipped {0}", skipped);
+        }
+
+        static readonly List<string> SkippedLooks = new List<string>();
+
+        static void IfClientHasArt(string look, Dictionary<string, byte[]> files, Dbc[] tables, Action build)
+        {
+            IfClientHasArt(look, files, tables, () => { build(); return true; }, false);
+        }
+
+        static T IfClientHasArt<T>(string look, Dictionary<string, byte[]> files, Dbc[] tables, Func<T> build, T without)
+        {
+            Dictionary<string, byte[]> filesBefore = new Dictionary<string, byte[]>(files, StringComparer.Ordinal);
+            List<uint[]>[] rowsBefore = new List<uint[]>[tables.Length];
+            for (int i = 0; i < tables.Length; i++)
+                rowsBefore[i] = tables[i].Records.ConvertAll(row => (uint[])row.Clone());
+            try
+            {
+                return build();
+            }
+            catch (FileNotFoundException e)
+            {
+                files.Clear();
+                foreach (KeyValuePair<string, byte[]> file in filesBefore)
+                    files[file.Key] = file.Value;
+                for (int i = 0; i < tables.Length; i++)
+                {
+                    tables[i].Records.Clear();
+                    tables[i].Records.AddRange(rowsBefore[i]);
+                }
+                SkippedLooks.Add(look + ": " + e.Message);
+                return without;
+            }
         }
 
         static Quad GetLayout(string shape)
@@ -229,7 +279,17 @@ namespace BonkTelegraphs
         const float FillRimAlpha = 0.75f, FillWashAlpha = 0.42f;
         const float RimWidth = 0.05f;
 
+        public static Image PaintCircle(bool fill, float[] rimColor, float[] washColor)
+        {
+            return Paint("Circle", GetLayout("Circle"), fill, rimColor, washColor);
+        }
+
         static Image Paint(string shape, Quad quad, bool fill)
+        {
+            return Paint(shape, quad, fill, Rim, Wash);
+        }
+
+        static Image Paint(string shape, Quad quad, bool fill, float[] rimColor, float[] washColor)
         {
             if (shape == "Line")
                 return PaintLinePiece(quad, fill, false, false);
@@ -247,13 +307,14 @@ namespace BonkTelegraphs
                     float coverage = Clamp01(0.5f - edge / pixel);
                     if (coverage <= 0)
                     {
-                        image.Set(px, py, Wash[0], Wash[1], Wash[2], 0);
+                        image.Set(px, py, washColor[0], washColor[1], washColor[2], 0);
                         continue;
                     }
                     float depth = fill ? lead : -edge;
                     float rim = Clamp01((RimWidth - depth) / pixel + 0.5f);
                     float alpha = fill ? Lerp(FillWashAlpha, FillRimAlpha, rim) : Lerp(OutlineWashAlpha, OutlineRimAlpha, rim);
-                    image.Set(px, py, Lerp(Wash[0], Rim[0], rim), Lerp(Wash[1], Rim[1], rim), Lerp(Wash[2], Rim[2], rim), alpha * coverage);
+                    image.Set(px, py, Lerp(washColor[0], rimColor[0], rim), Lerp(washColor[1], rimColor[1], rim), Lerp(washColor[2], rimColor[2], rim),
+                        alpha * coverage);
                 }
             return image;
         }
