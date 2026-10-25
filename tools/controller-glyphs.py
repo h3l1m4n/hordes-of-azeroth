@@ -250,27 +250,45 @@ ARC_OUT = os.path.join(ROOT, "Interface", "AddOns", "HordesOfAzeroth", "Textures
 ARC_FRAME = 64
 ARC_COLUMNS = 8
 ARC_ROWS = 4
-ARC_RADIUS = 25.0
-ARC_WIDTH = 5.0
+ARC_HALF_SIDE = 27.0
+ARC_WIDTH = 4.0
+ARC_CORNER = 4.0
 ARC_COLOR = (255, 209, 0)
 
 
-def draw_arc_frame(fraction):
+def square_distance(dx, dy):
     import math
+    inner = ARC_HALF_SIDE - ARC_CORNER
+    qx, qy = abs(dx) - inner, abs(dy) - inner
+    edge = math.hypot(max(qx, 0.0), max(qy, 0.0)) + min(max(qx, qy), 0.0) - ARC_CORNER
+    return edge + ARC_HALF_SIDE
+
+
+def perimeter_position(dx, dy):
+    side = ARC_HALF_SIDE
+    if abs(dy) >= abs(dx):
+        if dy < 0:
+            return dx if dx >= 0 else 8 * side + dx
+        return 4 * side - dx
+    if dx > 0:
+        return 2 * side + dy
+    return 6 * side - dy
+
+
+def draw_arc_frame(fraction):
     big = ARC_FRAME * SCALE
     centre = big / 2
     alpha = Image.new("L", (big, big), 0)
     pixels = alpha.load()
-    sweep = fraction * 2 * math.pi
+    sweep = fraction * 8 * ARC_HALF_SIDE
     for y in range(big):
         for x in range(big):
-            dx, dy = x + 0.5 - centre, y + 0.5 - centre
-            radius = math.hypot(dx, dy) / SCALE
-            band = max(0.0, 1.0 - max(0.0, abs(radius - ARC_RADIUS) - ARC_WIDTH / 2) / 1.0)
+            dx, dy = (x + 0.5 - centre) / SCALE, (y + 0.5 - centre) / SCALE
+            distance = square_distance(dx, dy)
+            band = max(0.0, 1.0 - max(0.0, abs(distance - ARC_HALF_SIDE) - ARC_WIDTH / 2) / 1.0)
             if band <= 0:
                 continue
-            angle = math.atan2(dx, -dy) % (2 * math.pi)
-            if angle <= sweep:
+            if perimeter_position(dx, dy) <= sweep:
                 pixels[x, y] = int(255 * band)
     frame = Image.new("RGBA", (big, big), ARC_COLOR + (0,))
     frame.putalpha(alpha)

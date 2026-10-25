@@ -4,13 +4,21 @@ param(
     [string]$Account = 'player',
     [string]$Hero = '',
     [switch]$Dummies,
+    [switch]$DummyCrowd,
     [switch]$Melee,
     [switch]$Crowd,
+    [switch]$Waves,
     [switch]$NoAnchor,
     [switch]$Markdown,
     [switch]$Singles,
     [int]$Rank = 0,
     [string[]]$Passives = @(),
+    [int[]]$Glyphs = @(),
+    [string[]]$Cards = @(),
+    [string[]]$Talents = @(),
+    [switch]$Mortal,
+    [int]$Tier = 0,
+    [int]$Stage = 1,
     [int]$Minute = 5,
     [int]$Level = 20,
     [string]$Tag = '',
@@ -19,6 +27,8 @@ param(
 . "$PSScriptRoot\..\common.ps1"
 $Builds = @($Builds | ForEach-Object { $_ -split ',' } | Where-Object { $_ })
 $Passives = @($Passives | ForEach-Object { $_ -split ',' } | Where-Object { $_ })
+$Cards = @($Cards | ForEach-Object { $_ -split ',' } | Where-Object { $_ })
+$Talents = @($Talents | ForEach-Object { $_ -split ',' } | Where-Object { $_ })
 
 $ClassIds = @{ warrior = 1; paladin = 2; hunter = 3; rogue = 4; priest = 5; shaman = 7; mage = 8; warlock = 9; druid = 11 }
 $AnchorKey = 'anchor'
@@ -28,6 +38,8 @@ $DummyRingYards = 7
 $SetupSeconds = if ($Dummies) { 14 } else { 13 }
 $EnterWaitSeconds = 10
 $QuitMarginSeconds = 90
+$WaveSeconds = 3
+$VitalsSeconds = 2
 
 $mariadb = Join-Path $MariaDir 'bin\mariadb.exe'
 $addonSource = Join-Path $PSScriptRoot 'BenchTest'
@@ -77,6 +89,34 @@ function Read-Builds {
     @($anchor) + $chosen
 }
 
+function Show-Vitals([long]$From) {
+    $stream = [System.IO.File]::Open($chatLog, 'Open', 'Read', 'ReadWrite')
+    try {
+        $stream.Seek($From, 'Begin') | Out-Null
+        $text = (New-Object System.IO.StreamReader($stream)).ReadToEnd()
+    } finally {
+        $stream.Close()
+    }
+    $build = $null
+    $samples = @{}
+    foreach ($line in $text -split "`n") {
+        if ($line -match 'To \S+: window pack (\S+)') { $build = $Matches[1]; $samples[$build] = @(); continue }
+        if ($build -and $line -match 'vitals hp (\d+) shield (\d+) taken (\d+) absorbed (\d+) deaths (\d+)') {
+            $samples[$build] += ,[int64[]]@($Matches[1], $Matches[2], $Matches[3], $Matches[4], $Matches[5])
+        }
+    }
+    foreach ($key in $samples.Keys) {
+        $rows = @($samples[$key] | Select-Object -Skip 1)
+        if ($rows.Count -lt 2) { continue }
+        $first = $rows[0]; $last = $rows[-1]
+        $hit = ($last[2] - $first[2]) + ($last[3] - $first[3])
+        $absorbedPct = if ($hit -gt 0) { [math]::Round(100 * ($last[3] - $first[3]) / $hit) } else { 0 }
+        $minHp = ($rows | ForEach-Object { $_[0] } | Measure-Object -Minimum).Minimum
+        $avgShield = [math]::Round(($rows | ForEach-Object { $_[1] } | Measure-Object -Average).Average)
+        "{0,-8} vitals  min hp {1,3}%  avg shield {2,3}%  hits {3,9}  absorbed {4,3}%  to health {5,8}  deaths {6}" -f $key, $minHp, $avgShield, $hit, $absorbedPct, ($last[2] - $first[2]), ($last[4] - $first[4])
+    }
+}
+
 function Get-Spells([object[]]$BuildList) {
     $ids = ($BuildList | ForEach-Object { $_.Ids } | Sort-Object -Unique) -join ','
     $spells = @{}
@@ -88,15 +128,26 @@ function Get-Spells([object[]]$BuildList) {
     $spells
 }
 
+$DruidForms = @{ balance = 1; feral = 2; bear = 3; resto = 4; ssmoon = 1; sscat = 2; ssbear = 3; sstree = 4;
+    balanceA = 1; balanceB = 1; feralA = 2; feralB = 2; bearA = 3; bearB = 3; restoA = 4; restoB = 4; rootsA = 4; rootsB = 4 }
+$DruidCycles = @{ ssdance = 3000; ssurge = 3000; sspirit = 3000; hybrid2 = 3000; hybrid3 = 3000 }
+
 function Write-AddonBuilds([object[]]$BuildList, [hashtable]$Spells) {
-    $setupSteps = @('bench', "level $Level", 'quiet', "minute $Minute") + @($Passives | ForEach-Object { "passive $($_ -replace ':', ' ')" })
+    $setupSteps = @('bench', "level $Level", 'quiet', "minute $Minute") + @(if ($Tier) { "tier $Tier $Stage" }) + @($Passives | ForEach-Object { "passive $($_ -replace ':', ' ')" }) + @($Glyphs | ForEach-Object { "glyph $_" }) + @($Cards | ForEach-Object { "card $($_ -replace ':', ' ')" }) + @($Talents | ForEach-Object { "talent $($_ -replace ':', ' ')" })
     if ($Dummies) { $setupSteps += 'deep' }
     if ($Crowd) { $setupSteps += 'unkillable' }
     $setup = ($setupSteps | ForEach-Object { '"' + $_ + '"' }) -join ', '
     $lines = @("BenchSetup = { $setup }", "BenchBuildSeconds = $BuildSeconds", '')
     if ($Dummies) { $lines += "BenchDummies = `"$DummyCount $DummyRingYards`"" }
+    if ($Dummies -and $DummyCrowd) { $lines += 'BenchDummyVerb = "crowddummies"' }
     if ($Melee -or $Crowd) { $lines += 'BenchPack = "pack 150 1"' }
     if ($Crowd) { $lines += 'BenchCrowdProbeEvery = 2' }
+    if ($Waves) { $lines += "BenchWaveEvery = $WaveSeconds" }
+    if ($Mortal) {
+        $setup += ', "god"'
+        $lines[0] = "BenchSetup = { $setup }"
+        $lines += "BenchVitalsEvery = $VitalsSeconds"
+    }
     $lines += 'BenchBuilds = {'
     if ($Crowd) {
         $lines += '    { name = "crowd", steps = { } },'
@@ -106,6 +157,8 @@ function Write-AddonBuilds([object[]]$BuildList, [hashtable]$Spells) {
     foreach ($build in $BuildList) {
         $stepList = @($build.Ids | ForEach-Object { $Spells[$_].Verb + ' ' + $_ })
         if ($Rank -gt 1) { $stepList += @($build.Ids | ForEach-Object { "maxrank $_ $Rank" }) }
+        if ($build.Class -eq 'druid' -and $DruidForms.ContainsKey($build.Key)) { $stepList += "form $($DruidForms[$build.Key])" }
+        if ($build.Class -eq 'druid' -and $DruidCycles.ContainsKey($build.Key)) { $stepList += "formcycle $($DruidCycles[$build.Key])" }
         $steps = ($stepList | ForEach-Object { '"' + $_ + '"' }) -join ', '
         $lines += "    { name = `"$($build.Key)`", steps = { $steps } },"
     }
@@ -233,7 +286,8 @@ if ($Crowd) {
 Write-Manifest $buildList $spells $hero $since
 $parseArgs = @((Join-Path $PSScriptRoot 'parse_bench.py'), $manifestFile)
 if ($Markdown) { $parseArgs += '--markdown' }
-$mode = if ($Dummies) { 'dummies' } elseif ($Melee) { 'melee' } else { 'pack' }
+$mode = if ($Dummies) { 'dummies' } elseif ($Melee) { 'melee' } elseif ($Waves) { 'waves' } else { 'pack' }
 if ($Tag) { $mode = "$mode-$Tag" }
 $parseArgs += @('--save', (Join-Path $PSScriptRoot 'results.json'), '--mode', $mode)
 & python @parseArgs
+if ($Mortal) { Show-Vitals $chatStart }

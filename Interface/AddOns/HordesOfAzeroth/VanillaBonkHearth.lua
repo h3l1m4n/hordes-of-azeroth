@@ -2,9 +2,8 @@ local UI = VanillaBonkUI
 
 local HEARTH = "VANILLABONK_HEARTH"
 local HEARTHSTONE_ITEM = "item:900230:"
-local SIZE = 44
-local BAR_OFFSET_X = 366
-local BAR_OFFSET_Y = 4
+local SIZE = 32
+local EMPTY_ICON = UI.ICON_PATH .. "INV_Misc_Rune_01"
 local PULSE_SPEED = 3
 local ARROW = "Interface\\AddOns\\HordesOfAzeroth\\Textures\\TutorialArrow"
 local ARROW_SIZE = 40
@@ -31,11 +30,10 @@ function VanillaBonk_UseHearthstone()
     end
 end
 
-local button = UI.Slot(VanillaBonkHeroBar, SIZE)
-button:SetFrameStrata("MEDIUM")
-button:SetPoint("BOTTOMLEFT", VanillaBonkHeroBar, "BOTTOM", BAR_OFFSET_X, BAR_OFFSET_Y)
+local button = UI.Slot(UI.HearthDock, SIZE)
+button:SetPoint("CENTER", UI.HearthDock, "CENTER", 0, 0)
+button:SetFrameLevel(UI.HearthDock:GetFrameLevel() + 2)
 button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-button:Hide()
 button.glow = button:CreateTexture(nil, "OVERLAY")
 button.glow:SetTexture("Interface\\Buttons\\UI-ActionButton-Border")
 button.glow:SetBlendMode("ADD")
@@ -50,10 +48,13 @@ button.key:SetTextColor(0.75, 0.75, 0.75)
 button:SetScript("OnClick", VanillaBonk_UseHearthstone)
 button:SetScript("OnEnter", function()
     local bag, slot = FindHearthstone()
+    GameTooltip:SetOwner(this, "ANCHOR_TOPLEFT")
     if not bag then
+        GameTooltip:AddDoubleLine("Hearthstone", "Not found yet", 1, 1, 1, 0.5, 0.5, 0.5)
+        GameTooltip:AddLine("Elites and mini-bosses sometimes drop one. It lets you escape the run early and takes you back to the Inn with 1 item from your Extraction Vault.", 1, 0.82, 0, 1)
+        GameTooltip:Show()
         return
     end
-    GameTooltip:SetOwner(this, "ANCHOR_TOPLEFT")
     GameTooltip:SetBagItem(bag, slot)
     local key = UI.BindingText(HEARTH)
     if key ~= "" then
@@ -134,19 +135,25 @@ tip:SetScript("OnUpdate", function()
 end)
 
 local function Refresh()
-    if FindHearthstone() then
+    local found = FindHearthstone() ~= nil
+    if found then
         button.icon:SetTexture(GetContainerItemInfo(FindHearthstone()))
+        UI.CropIcon(button.icon)
+        button.icon:SetVertexColor(1, 1, 1)
         button.key:SetText(UI.BindingText(HEARTH))
-        if not button:IsShown() then
-            button:Show()
-            if not VanillaBonkHearthTipDone then
-                tip:Show()
-            end
+        button.glow:Show()
+        if not button.found and not VanillaBonkHearthTipDone then
+            tip:Show()
         end
     else
-        button:Hide()
+        button.icon:SetTexture(EMPTY_ICON)
+        UI.CropIcon(button.icon)
+        button.icon:SetVertexColor(0.3, 0.3, 0.3)
+        button.key:SetText("")
+        button.glow:Hide()
         tip:Hide()
     end
+    button.found = found
 end
 
 local events = CreateFrame("Frame")

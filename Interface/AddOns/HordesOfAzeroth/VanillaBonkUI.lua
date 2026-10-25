@@ -28,6 +28,10 @@ UI.DAMAGE_TYPES = {
     holy = { name = "Holy", r = 1, g = 0.9, b = 0.5, icon = "Spell_Holy_HolyBolt" },
     decay = { name = "Decay", r = 0.45, g = 0.3, b = 0.7, icon = "Spell_Shadow_ChillTouch", note = "Shadow damage over time." },
     agony = { name = "Agony", r = 0.55, g = 0.2, b = 0.55, icon = "Spell_Shadow_CurseOfSargeras", note = "Shadow damage over time that grows." },
+    moonkin = { name = "Moonkin Form", r = 0.55, g = 0.6, b = 1, icon = "Spell_Nature_ForceOfNature", note = "Wrath and Starfall." },
+    cat = { name = "Cat Form", r = 1, g = 0.82, b = 0.25, icon = "Ability_Druid_CatForm", note = "Claw." },
+    bear = { name = "Bear Form", r = 0.75, g = 0.45, b = 0.25, icon = "Ability_Racial_BearForm", note = "Maul." },
+    tree = { name = "Tree of Life", r = 0.35, g = 0.85, b = 0.35, icon = "Spell_Nature_ProtectionformNature", note = "Vines." },
 }
 UI.DAMAGE_TYPE_BY_KEYWORD = { Bleed = "bleed", Poison = "poison", Burning = "burn", Decay = "decay", Agony = "agony" }
 
@@ -411,6 +415,20 @@ function UI.SetStripHighlight(strip, on)
     end
 end
 
+local ICON_BORDER_CROP = 0.08
+
+function UI.CropIcon(texture)
+    texture:SetTexCoord(ICON_BORDER_CROP, 1 - ICON_BORDER_CROP, ICON_BORDER_CROP, 1 - ICON_BORDER_CROP)
+end
+
+local QUICKSLOT_TEXELS = 64
+local QUICKSLOT_ART_OFFSET = 1
+
+function UI.CenterSlotFrame(frame, slot, size)
+    local texel = size * 66 / 36 / QUICKSLOT_TEXELS
+    frame:SetPoint("CENTER", slot, "CENTER", texel * QUICKSLOT_ART_OFFSET, -texel * QUICKSLOT_ART_OFFSET)
+end
+
 function UI.Slot(parent, size, kind)
     local slot = CreateFrame(kind or "Button", nil, parent)
     slot:SetWidth(size)
@@ -421,7 +439,7 @@ function UI.Slot(parent, size, kind)
     slot.frame:SetTexture("Interface\\Buttons\\UI-Quickslot2")
     slot.frame:SetWidth(size * 66 / 36)
     slot.frame:SetHeight(size * 66 / 36)
-    slot.frame:SetPoint("CENTER", slot, "CENTER", 0, 0)
+    UI.CenterSlotFrame(slot.frame, slot, size)
     return slot
 end
 

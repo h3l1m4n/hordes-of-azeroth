@@ -24,6 +24,7 @@ namespace BonkTelegraphs
         const uint ThornsStateEffectCopy = 3150, WhirlwindStateEffectCopy = 3151;
         public const uint ThornsStateKit = 7350, WhirlwindStateKit = 7351, WhirlwindSpinOnlyKit = 7352, LootSparkleStateKit = 7353, MailSparkleStateKit = 7354;
         const uint PartyFeverStateKit = 560, LootSparkleEffect = 14;
+        const uint SandVortexKit = 6472;
         const uint PresenceOfMindStateKit = 4013, BerserkerRageStateKit = 108, RetaliationStateKit = 6443, ArcanePowerStateKit = 3769, ManaShieldStateKit = 990;
 
         const int Attributes = 6, AttributesEx = 7;
@@ -50,6 +51,7 @@ namespace BonkTelegraphs
             new AuraLook { SpellId = 33453, Name = "Phase Rush", Icon = "Spell_Magic_LesserInvisibilty", ToolTip = "Immune to damage.", StateKit = ManaShieldStateKit },
             new AuraLook { SpellId = 33454, Name = "Loot Sparkle", Icon = "Spell_Holy_HolyBolt", ToolTip = "Something worth picking up.", StateKit = LootSparkleStateKit },
             new AuraLook { SpellId = 33455, Name = "Mail Sparkle", Icon = "Spell_Holy_HolyBolt", ToolTip = "You have mail.", StateKit = MailSparkleStateKit },
+            new AuraLook { SpellId = 33460, Name = "Sand Vortex", Icon = "Spell_Nature_Cyclone", ToolTip = "A sand vortex.", StateKit = SandVortexKit },
         };
 
         public static List<string> AddAuraLooks(Dbc spells, Dbc visuals, Dbc kits, Dbc effects, Dbc icons)

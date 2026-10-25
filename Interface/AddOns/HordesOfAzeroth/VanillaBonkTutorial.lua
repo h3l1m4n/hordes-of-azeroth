@@ -259,7 +259,7 @@ guideArrow.distance = UI.Text(guideArrow, 12, UI.NUMBER_FONT, "OUTLINE")
 guideArrow.distance:SetPoint("TOP", guideArrow, "BOTTOM", 0, -2)
 
 local function IsBlink()
-    return UI.DashRing.icon == UI.DashRing.blinkIcon
+    return UI.DashButton.icon == UI.DashButton.blinkIcon
 end
 
 local function DashText()
@@ -389,9 +389,9 @@ function tutorial:ShowDash()
     dashBox.body:SetText("")
     SetBody(dashBox, DashText(), 30)
     dashArrow:ClearAllPoints()
-    dashArrow:SetPoint("BOTTOM", UI.DashRing, "TOP", 0, 4)
+    dashArrow:SetPoint("BOTTOM", UI.DashButton, "TOP", 0, 4)
     dashBox:ClearAllPoints()
-    dashBox:SetPoint("BOTTOM", UI.DashRing, "TOP", 0, DASH_ARROW_SIZE + BOB_HEIGHT + 6)
+    dashBox:SetPoint("BOTTOM", UI.DashButton, "TOP", 0, DASH_ARROW_SIZE + BOB_HEIGHT + 6)
     dashBox:Show()
     dashArrow:Show()
 end
@@ -605,7 +605,7 @@ local function IsSummaryOpen()
 end
 
 local function ReadyToStart()
-    return inWorld and not inRun and UI.DashRing:IsVisible() and IsAtCamp() and not IsSummaryOpen()
+    return inWorld and not inRun and UI.DashButton:IsVisible() and IsAtCamp() and not IsSummaryOpen()
 end
 
 local LESSONS = {
@@ -664,7 +664,7 @@ tutorial:SetScript("OnUpdate", function()
         end
     elseif step == "dash" then
         SetBody(dashBox, DashText(), 30)
-        dashArrow:SetPoint("BOTTOM", UI.DashRing, "TOP", 0, 4 + Bob())
+        dashArrow:SetPoint("BOTTOM", UI.DashButton, "TOP", 0, 4 + Bob())
         if dashedAt and GetTime() - dashedAt >= DASHED_DELAY then
             this:ShowCurrencies()
         end

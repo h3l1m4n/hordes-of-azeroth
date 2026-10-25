@@ -132,6 +132,7 @@ end
 Section("Keys")
 KeyRow(UI.KEYS[2])
 KeyRow(UI.KEYS[3])
+KeyRow(UI.KEYS[4])
 
 window.settings = UI.Button(window, 150, "All Game Settings", function()
     PlaySound("igMainMenuOption")

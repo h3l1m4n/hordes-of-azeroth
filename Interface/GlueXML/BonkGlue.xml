@@ -1,55 +1,260 @@
 <Ui xmlns="http://www.blizzard.com/wow/ui/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.blizzard.com/wow/ui/
 ..\FrameXML\UI.xsd">
+	<Script file="BonkClassInfo.lua"/>
 	<Script file="BonkGlue.lua"/>
 
-	<CheckButton name="BonkClassTileTemplate" virtual="true">
+	<Font name="BonkFontSoft" inherits="MasterFont" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight>
+			<AbsValue val="11"/>
+		</FontHeight>
+		<Color r="0.78" g="0.75" b="0.68"/>
+	</Font>
+	<Font name="BonkFontTiny" inherits="MasterFont" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight>
+			<AbsValue val="10"/>
+		</FontHeight>
+		<Color r="0.62" g="0.6" b="0.55"/>
+	</Font>
+
+	<Frame name="BonkPanelTemplate" virtual="true">
+		<Backdrop bgFile="Interface\DialogFrame\UI-DialogBox-Background" edgeFile="Interface\DialogFrame\UI-DialogBox-Border" tile="true">
+			<BackgroundInsets>
+				<AbsInset left="11" right="12" top="12" bottom="11"/>
+			</BackgroundInsets>
+			<TileSize>
+				<AbsValue val="32"/>
+			</TileSize>
+			<EdgeSize>
+				<AbsValue val="32"/>
+			</EdgeSize>
+		</Backdrop>
+	</Frame>
+
+	<Frame name="BonkSidePanelTemplate" inherits="BonkPanelTemplate" virtual="true">
 		<Size>
-			<AbsDimension x="88" y="104"/>
+			<AbsDimension x="340" y="600"/>
 		</Size>
 		<Layers>
-			<Layer level="BACKGROUND">
-				<Texture name="$parentGlow" file="Interface\Glues\CharacterCreate\UI-CharacterCreate-IconShadow" alphaMode="ADD" hidden="true">
+			<Layer level="OVERLAY">
+				<Texture name="$parentHeader" file="Interface\DialogFrame\UI-DialogBox-Header">
 					<Size>
-						<AbsDimension x="84" y="84"/>
+						<AbsDimension x="256" y="64"/>
 					</Size>
 					<Anchors>
 						<Anchor point="TOP">
 							<Offset>
-								<AbsDimension x="0" y="10"/>
+								<AbsDimension x="0" y="12"/>
+							</Offset>
+						</Anchor>
+					</Anchors>
+				</Texture>
+				<FontString name="$parentTitle" inherits="GlueFontNormal">
+					<Anchors>
+						<Anchor point="TOP" relativeTo="$parentHeader">
+							<Offset>
+								<AbsDimension x="0" y="-14"/>
+							</Offset>
+						</Anchor>
+					</Anchors>
+				</FontString>
+			</Layer>
+		</Layers>
+	</Frame>
+
+	<Frame name="BonkInsetTemplate" virtual="true">
+		<Backdrop bgFile="Interface\Tooltips\UI-Tooltip-Background" edgeFile="Interface\Tooltips\UI-Tooltip-Border" tile="true">
+			<BackgroundInsets>
+				<AbsInset left="4" right="4" top="4" bottom="4"/>
+			</BackgroundInsets>
+			<TileSize>
+				<AbsValue val="16"/>
+			</TileSize>
+			<EdgeSize>
+				<AbsValue val="16"/>
+			</EdgeSize>
+		</Backdrop>
+		<Layers>
+			<Layer level="ARTWORK">
+				<FontString name="$parentCaption" inherits="GlueFontNormalSmall" justifyH="LEFT">
+					<Anchors>
+						<Anchor point="BOTTOMLEFT" relativePoint="TOPLEFT">
+							<Offset>
+								<AbsDimension x="2" y="2"/>
+							</Offset>
+						</Anchor>
+					</Anchors>
+				</FontString>
+			</Layer>
+		</Layers>
+		<Scripts>
+			<OnLoad>
+				this:SetBackdropColor(0, 0, 0, 0.55);
+				this:SetBackdropBorderColor(0.6, 0.6, 0.6);
+			</OnLoad>
+		</Scripts>
+	</Frame>
+
+	<Button name="BonkCharRowTemplate" virtual="true">
+		<Size>
+			<AbsDimension x="300" y="56"/>
+		</Size>
+		<Layers>
+			<Layer level="BACKGROUND">
+				<Texture name="$parentSelected" file="Interface\Glues\CharacterSelect\Glue-CharacterSelect-Highlight" alphaMode="ADD" hidden="true">
+					<Size>
+						<AbsDimension x="340" y="74"/>
+					</Size>
+					<Anchors>
+						<Anchor point="LEFT">
+							<Offset>
+								<AbsDimension x="-20" y="0"/>
 							</Offset>
 						</Anchor>
 					</Anchors>
 				</Texture>
 			</Layer>
 			<Layer level="ARTWORK">
-				<Texture name="$parentIcon">
+				<Texture name="$parentIcon" file="Interface\Glues\CharacterCreate\UI-CharacterCreate-Classes">
 					<Size>
-						<AbsDimension x="52" y="52"/>
+						<AbsDimension x="40" y="40"/>
 					</Size>
 					<Anchors>
-						<Anchor point="TOP">
+						<Anchor point="LEFT">
 							<Offset>
-								<AbsDimension x="0" y="-6"/>
+								<AbsDimension x="6" y="0"/>
 							</Offset>
 						</Anchor>
 					</Anchors>
 				</Texture>
-			</Layer>
-			<Layer level="OVERLAY">
-				<FontString name="$parentClass" inherits="GlueFontNormalSmall">
+				<FontString name="$parentName" inherits="GlueFontNormal" justifyH="LEFT">
 					<Anchors>
-						<Anchor point="TOP" relativeTo="$parentIcon" relativePoint="BOTTOM">
+						<Anchor point="TOPLEFT" relativeTo="$parentIcon" relativePoint="TOPRIGHT">
+							<Offset>
+								<AbsDimension x="10" y="-2"/>
+							</Offset>
+						</Anchor>
+					</Anchors>
+				</FontString>
+				<FontString name="$parentSub" inherits="GlueFontHighlightSmall" justifyH="LEFT">
+					<Anchors>
+						<Anchor point="TOPLEFT" relativeTo="$parentName" relativePoint="BOTTOMLEFT">
 							<Offset>
 								<AbsDimension x="0" y="-4"/>
 							</Offset>
 						</Anchor>
 					</Anchors>
 				</FontString>
-				<FontString name="$parentHero" inherits="GlueFontHighlightSmall">
+			</Layer>
+		</Layers>
+		<Scripts>
+			<OnLoad>
+				getglobal(this:GetName().."Highlight"):SetAlpha(0.35);
+				getglobal(this:GetName().."Selected"):SetAlpha(0.5);
+			</OnLoad>
+			<OnClick>
+				BonkHero_SelectClass(this:GetID());
+			</OnClick>
+			<OnDoubleClick>
+				BonkHero_Play();
+			</OnDoubleClick>
+		</Scripts>
+		<HighlightTexture name="$parentHighlight" file="Interface\Glues\CharacterSelect\Glue-CharacterSelect-Highlight" alphaMode="ADD">
+			<Size>
+				<AbsDimension x="340" y="74"/>
+			</Size>
+			<Anchors>
+				<Anchor point="LEFT">
+					<Offset>
+						<AbsDimension x="-20" y="0"/>
+					</Offset>
+				</Anchor>
+			</Anchors>
+		</HighlightTexture>
+	</Button>
+
+	<Frame name="BonkSpellRowTemplate" enableMouse="true" virtual="true">
+		<Size>
+			<AbsDimension x="296" y="30"/>
+		</Size>
+		<Layers>
+			<Layer level="ARTWORK">
+				<Texture name="$parentIcon">
+					<Size>
+						<AbsDimension x="26" y="26"/>
+					</Size>
 					<Anchors>
-						<Anchor point="TOP" relativeTo="$parentClass" relativePoint="BOTTOM">
+						<Anchor point="LEFT"/>
+					</Anchors>
+				</Texture>
+				<FontString name="$parentName" inherits="GlueFontHighlightSmall" justifyH="LEFT">
+					<Anchors>
+						<Anchor point="TOPLEFT" relativeTo="$parentIcon" relativePoint="TOPRIGHT">
 							<Offset>
-								<AbsDimension x="0" y="-2"/>
+								<AbsDimension x="8" y="0"/>
+							</Offset>
+						</Anchor>
+					</Anchors>
+				</FontString>
+				<FontString name="$parentTag" inherits="BonkFontTiny" justifyH="LEFT">
+					<Anchors>
+						<Anchor point="BOTTOMLEFT" relativeTo="$parentName" relativePoint="BOTTOMRIGHT">
+							<Offset>
+								<AbsDimension x="6" y="0"/>
+							</Offset>
+						</Anchor>
+					</Anchors>
+				</FontString>
+				<FontString name="$parentLine" inherits="BonkFontTiny" justifyH="LEFT">
+					<Anchors>
+						<Anchor point="BOTTOMLEFT" relativeTo="$parentIcon" relativePoint="BOTTOMRIGHT">
+							<Offset>
+								<AbsDimension x="8" y="0"/>
+							</Offset>
+						</Anchor>
+					</Anchors>
+				</FontString>
+			</Layer>
+		</Layers>
+		<Scripts>
+			<OnEnter>
+				BonkHero_ShowSpellTip(this);
+			</OnEnter>
+			<OnLeave>
+				BonkTip:Hide();
+			</OnLeave>
+		</Scripts>
+	</Frame>
+
+	<Frame name="BonkRaceIconTemplate" enableMouse="true" virtual="true">
+		<Size>
+			<AbsDimension x="22" y="22"/>
+		</Size>
+		<Layers>
+			<Layer level="ARTWORK">
+				<Texture name="$parentIcon" file="Interface\Glues\CharacterCreate\UI-CharacterCreate-Races" setAllPoints="true"/>
+			</Layer>
+		</Layers>
+		<Scripts>
+			<OnEnter>
+				BonkHero_ShowRaceTip(this);
+			</OnEnter>
+			<OnLeave>
+				BonkTip:Hide();
+			</OnLeave>
+		</Scripts>
+	</Frame>
+
+	<CheckButton name="BonkSpecButtonTemplate" virtual="true">
+		<Size>
+			<AbsDimension x="34" y="34"/>
+		</Size>
+		<Layers>
+			<Layer level="OVERLAY">
+				<FontString name="$parentLabel" inherits="GlueFontHighlightSmall">
+					<Anchors>
+						<Anchor point="TOP" relativePoint="BOTTOM">
+							<Offset>
+								<AbsDimension x="0" y="-3"/>
 							</Offset>
 						</Anchor>
 					</Anchors>
@@ -58,38 +263,17 @@
 		</Layers>
 		<Scripts>
 			<OnClick>
-				BonkHero_SelectClass(this:GetID());
+				BonkHero_SelectSpec(this:GetID());
 			</OnClick>
 		</Scripts>
-		<HighlightTexture alphaMode="ADD" file="Interface\Buttons\ButtonHilight-Square">
-			<Size>
-				<AbsDimension x="52" y="52"/>
-			</Size>
-			<Anchors>
-				<Anchor point="TOP">
-					<Offset>
-						<AbsDimension x="0" y="-6"/>
-					</Offset>
-				</Anchor>
-			</Anchors>
-		</HighlightTexture>
-		<CheckedTexture alphaMode="ADD" file="Interface\Buttons\CheckButtonHilight">
-			<Size>
-				<AbsDimension x="52" y="52"/>
-			</Size>
-			<Anchors>
-				<Anchor point="TOP">
-					<Offset>
-						<AbsDimension x="0" y="-6"/>
-					</Offset>
-				</Anchor>
-			</Anchors>
-		</CheckedTexture>
+		<NormalTexture name="$parentIcon"/>
+		<HighlightTexture alphaMode="ADD" file="Interface\Buttons\ButtonHilight-Square"/>
+		<CheckedTexture alphaMode="ADD" file="Interface\Buttons\CheckButtonHilight"/>
 	</CheckButton>
 
 	<CheckButton name="BonkRaceButtonTemplate" virtual="true">
 		<Size>
-			<AbsDimension x="48" y="48"/>
+			<AbsDimension x="40" y="40"/>
 		</Size>
 		<Layers>
 			<Layer level="OVERLAY">
@@ -118,6 +302,19 @@
 		<Size>
 			<AbsDimension x="40" y="40"/>
 		</Size>
+		<Layers>
+			<Layer level="OVERLAY">
+				<FontString name="$parentLabel" inherits="GlueFontHighlightSmall">
+					<Anchors>
+						<Anchor point="TOP" relativePoint="BOTTOM">
+							<Offset>
+								<AbsDimension x="0" y="-3"/>
+							</Offset>
+						</Anchor>
+					</Anchors>
+				</FontString>
+			</Layer>
+		</Layers>
 		<Scripts>
 			<OnClick>
 				BonkHero_SelectSex(this:GetID());
@@ -130,7 +327,7 @@
 
 	<Frame name="BonkStatRowTemplate" virtual="true">
 		<Size>
-			<AbsDimension x="280" y="22"/>
+			<AbsDimension x="296" y="22"/>
 		</Size>
 		<Layers>
 			<Layer level="ARTWORK">
@@ -148,18 +345,15 @@
 		</Layers>
 	</Frame>
 
-	<Frame name="BonkPanelTemplate" virtual="true">
-		<Backdrop bgFile="Interface\DialogFrame\UI-DialogBox-Background" edgeFile="Interface\DialogFrame\UI-DialogBox-Border" tile="true">
-			<BackgroundInsets>
-				<AbsInset left="11" right="12" top="12" bottom="11"/>
-			</BackgroundInsets>
-			<TileSize>
-				<AbsValue val="32"/>
-			</TileSize>
-			<EdgeSize>
-				<AbsValue val="32"/>
-			</EdgeSize>
-		</Backdrop>
+	<Frame name="BonkCustomizeRowTemplate" inherits="CharacterCustomizationFrameTemplate" virtual="true">
+		<Size>
+			<AbsDimension x="280" y="32"/>
+		</Size>
+		<Scripts>
+			<OnLoad>
+				getglobal(this:GetName().."Text"):SetText(getglobal("CHAR_CUSTOMIZATION"..this:GetID().."_DESC"));
+			</OnLoad>
+		</Scripts>
 	</Frame>
 
 	<Frame name="BonkLoginFrame" inherits="BonkPanelTemplate" parent="AccountLogin" hidden="true">
@@ -239,7 +433,7 @@
 						</Anchor>
 					</Anchors>
 				</FontString>
-				<FontString name="BonkHeroSubtitle" inherits="GlueFontHighlightLarge" text="Choose your hero">
+				<FontString name="BonkHeroSubtitle" inherits="GlueFontHighlightLarge" text="Choose your character">
 					<Anchors>
 						<Anchor point="TOP" relativeTo="BonkHeroTitle" relativePoint="BOTTOM">
 							<Offset>
@@ -252,7 +446,16 @@
 					<Anchors>
 						<Anchor point="BOTTOM">
 							<Offset>
-								<AbsDimension x="0" y="112"/>
+								<AbsDimension x="0" y="170"/>
+							</Offset>
+						</Anchor>
+					</Anchors>
+				</FontString>
+				<FontString name="BonkHeroPreview" inherits="BonkFontSoft">
+					<Anchors>
+						<Anchor point="BOTTOM">
+							<Offset>
+								<AbsDimension x="0" y="106"/>
 							</Offset>
 						</Anchor>
 					</Anchors>
@@ -260,68 +463,21 @@
 			</Layer>
 		</Layers>
 		<Frames>
-			<Frame name="BonkHeroGoldFrame" inherits="BonkPanelTemplate" hidden="true">
-				<Size>
-					<AbsDimension x="220" y="78"/>
-				</Size>
+			<Frame name="BonkListPanel" inherits="BonkSidePanelTemplate">
 				<Anchors>
 					<Anchor point="TOPRIGHT">
 						<Offset>
-							<AbsDimension x="-28" y="-20"/>
+							<AbsDimension x="-16" y="-92"/>
 						</Offset>
 					</Anchor>
 				</Anchors>
 				<Layers>
 					<Layer level="ARTWORK">
-						<FontString name="BonkHeroGoldLabel" inherits="GlueFontNormalSmall" text="Gold (shared by all heroes)">
+						<FontString name="BonkListCount" inherits="GlueFontDisableSmall" justifyH="LEFT">
 							<Anchors>
-								<Anchor point="TOP">
+								<Anchor point="TOPLEFT">
 									<Offset>
-										<AbsDimension x="0" y="-18"/>
-									</Offset>
-								</Anchor>
-							</Anchors>
-						</FontString>
-						<FontString name="BonkHeroGold" inherits="GlueFontHighlightLarge">
-							<Anchors>
-								<Anchor point="BOTTOM">
-									<Offset>
-										<AbsDimension x="0" y="18"/>
-									</Offset>
-								</Anchor>
-							</Anchors>
-						</FontString>
-					</Layer>
-				</Layers>
-			</Frame>
-
-			<Frame name="BonkHeroClassPanel" inherits="BonkPanelTemplate">
-				<Size>
-					<AbsDimension x="316" y="420"/>
-				</Size>
-				<Anchors>
-					<Anchor point="LEFT">
-						<Offset>
-							<AbsDimension x="28" y="10"/>
-						</Offset>
-					</Anchor>
-				</Anchors>
-				<Layers>
-					<Layer level="ARTWORK">
-						<FontString inherits="GlueFontNormalLarge" text="Your heroes">
-							<Anchors>
-								<Anchor point="TOP">
-									<Offset>
-										<AbsDimension x="0" y="-20"/>
-									</Offset>
-								</Anchor>
-							</Anchors>
-						</FontString>
-						<FontString name="BonkHeroCount" inherits="GlueFontDisableSmall">
-							<Anchors>
-								<Anchor point="BOTTOM">
-									<Offset>
-										<AbsDimension x="0" y="20"/>
+										<AbsDimension x="24" y="-32"/>
 									</Offset>
 								</Anchor>
 							</Anchors>
@@ -329,139 +485,45 @@
 					</Layer>
 				</Layers>
 				<Frames>
-					<CheckButton name="BonkHeroClassButton1" inherits="BonkClassTileTemplate" id="1"/>
-					<CheckButton name="BonkHeroClassButton2" inherits="BonkClassTileTemplate" id="2"/>
-					<CheckButton name="BonkHeroClassButton3" inherits="BonkClassTileTemplate" id="3"/>
-					<CheckButton name="BonkHeroClassButton4" inherits="BonkClassTileTemplate" id="4"/>
-					<CheckButton name="BonkHeroClassButton5" inherits="BonkClassTileTemplate" id="5"/>
-					<CheckButton name="BonkHeroClassButton6" inherits="BonkClassTileTemplate" id="6"/>
-					<CheckButton name="BonkHeroClassButton7" inherits="BonkClassTileTemplate" id="7"/>
-					<CheckButton name="BonkHeroClassButton8" inherits="BonkClassTileTemplate" id="8"/>
-					<CheckButton name="BonkHeroClassButton9" inherits="BonkClassTileTemplate" id="9"/>
+					<Button name="BonkCharRow1" inherits="BonkCharRowTemplate" id="1"/>
+					<Button name="BonkCharRow2" inherits="BonkCharRowTemplate" id="2"/>
+					<Button name="BonkCharRow3" inherits="BonkCharRowTemplate" id="3"/>
+					<Button name="BonkCharRow4" inherits="BonkCharRowTemplate" id="4"/>
+					<Button name="BonkCharRow5" inherits="BonkCharRowTemplate" id="5"/>
+					<Button name="BonkCharRow6" inherits="BonkCharRowTemplate" id="6"/>
+					<Button name="BonkCharRow7" inherits="BonkCharRowTemplate" id="7"/>
+					<Button name="BonkCharRow8" inherits="BonkCharRowTemplate" id="8"/>
+					<Button name="BonkCharRow9" inherits="BonkCharRowTemplate" id="9"/>
 				</Frames>
 			</Frame>
 
-			<Frame name="BonkHeroInfoPanel" inherits="BonkPanelTemplate">
-				<Size>
-					<AbsDimension x="340" y="520"/>
-				</Size>
+			<Frame name="BonkAppearPanel" inherits="BonkSidePanelTemplate" hidden="true">
 				<Anchors>
-					<Anchor point="RIGHT">
+					<Anchor point="TOPRIGHT">
 						<Offset>
-							<AbsDimension x="-28" y="-20"/>
+							<AbsDimension x="-16" y="-92"/>
 						</Offset>
 					</Anchor>
 				</Anchors>
-				<Layers>
-					<Layer level="ARTWORK">
-						<FontString name="BonkHeroName" inherits="GlueFontNormalHuge">
-							<Anchors>
-								<Anchor point="TOP">
-									<Offset>
-										<AbsDimension x="0" y="-22"/>
-									</Offset>
-								</Anchor>
-							</Anchors>
-						</FontString>
-						<FontString name="BonkHeroDetail" inherits="GlueFontHighlight">
-							<Anchors>
-								<Anchor point="TOP" relativeTo="BonkHeroName" relativePoint="BOTTOM">
-									<Offset>
-										<AbsDimension x="0" y="-6"/>
-									</Offset>
-								</Anchor>
-							</Anchors>
-						</FontString>
-					</Layer>
-				</Layers>
 				<Frames>
-					<Frame name="BonkHeroRecordFrame" setAllPoints="true" hidden="true">
+					<Frame name="BonkRaceBox" inherits="BonkInsetTemplate">
+						<Size>
+							<AbsDimension x="300" y="134"/>
+						</Size>
+						<Anchors>
+							<Anchor point="TOP">
+								<Offset>
+									<AbsDimension x="0" y="-52"/>
+								</Offset>
+							</Anchor>
+						</Anchors>
 						<Layers>
 							<Layer level="ARTWORK">
-								<FontString inherits="GlueFontNormalLarge" text="Record">
+								<FontString name="BonkRaceNote" inherits="BonkFontTiny" text="Cosmetic only, no racial bonuses" justifyH="RIGHT">
 									<Anchors>
-										<Anchor point="TOPLEFT">
+										<Anchor point="BOTTOMRIGHT" relativePoint="TOPRIGHT">
 											<Offset>
-												<AbsDimension x="30" y="-96"/>
-											</Offset>
-										</Anchor>
-									</Anchors>
-								</FontString>
-								<FontString name="BonkHeroRecordNote" inherits="GlueFontDisableSmall" justifyH="LEFT" justifyV="TOP">
-									<Size>
-										<AbsDimension x="280" y="60"/>
-									</Size>
-									<Anchors>
-										<Anchor point="TOPLEFT">
-											<Offset>
-												<AbsDimension x="30" y="-324"/>
-											</Offset>
-										</Anchor>
-									</Anchors>
-								</FontString>
-							</Layer>
-						</Layers>
-						<Frames>
-							<Frame name="BonkHeroStat1" inherits="BonkStatRowTemplate"/>
-							<Frame name="BonkHeroStat2" inherits="BonkStatRowTemplate"/>
-							<Frame name="BonkHeroStat3" inherits="BonkStatRowTemplate"/>
-							<Frame name="BonkHeroStat4" inherits="BonkStatRowTemplate"/>
-							<Frame name="BonkHeroStat5" inherits="BonkStatRowTemplate"/>
-							<Frame name="BonkHeroStat6" inherits="BonkStatRowTemplate"/>
-							<Frame name="BonkHeroStat7" inherits="BonkStatRowTemplate"/>
-							<Frame name="BonkHeroStat8" inherits="BonkStatRowTemplate"/>
-							<Button name="BonkHeroRetireButton" inherits="GlueButtonSmallTemplate" text="Retire hero">
-								<Anchors>
-									<Anchor point="BOTTOM">
-										<Offset>
-											<AbsDimension x="0" y="16"/>
-										</Offset>
-									</Anchor>
-								</Anchors>
-								<Scripts>
-									<OnClick>
-										BonkHero_Retire();
-									</OnClick>
-								</Scripts>
-							</Button>
-						</Frames>
-					</Frame>
-
-					<Frame name="BonkHeroCreateFrame" setAllPoints="true" hidden="true">
-						<Layers>
-							<Layer level="ARTWORK">
-								<FontString name="BonkHeroRaceLabel" inherits="GlueFontNormal" text="Race">
-									<Anchors>
-										<Anchor point="TOPLEFT">
-											<Offset>
-												<AbsDimension x="26" y="-92"/>
-											</Offset>
-										</Anchor>
-									</Anchors>
-								</FontString>
-								<FontString name="BonkHeroRaceNote" inherits="GlueFontDisableSmall" text="Cosmetic only, no racial bonuses">
-									<Anchors>
-										<Anchor point="BOTTOMLEFT" relativeTo="BonkHeroRaceLabel" relativePoint="BOTTOMRIGHT">
-											<Offset>
-												<AbsDimension x="8" y="0"/>
-											</Offset>
-										</Anchor>
-									</Anchors>
-								</FontString>
-								<FontString name="BonkHeroLookLabel" inherits="GlueFontNormal" text="Look">
-									<Anchors>
-										<Anchor point="TOPLEFT">
-											<Offset>
-												<AbsDimension x="26" y="-262"/>
-											</Offset>
-										</Anchor>
-									</Anchors>
-								</FontString>
-								<FontString name="BonkHeroNameLabel" inherits="GlueFontNormal" text="Name">
-									<Anchors>
-										<Anchor point="TOPLEFT">
-											<Offset>
-												<AbsDimension x="26" y="-506"/>
+												<AbsDimension x="-2" y="3"/>
 											</Offset>
 										</Anchor>
 									</Anchors>
@@ -477,207 +539,551 @@
 							<CheckButton name="BonkHeroRaceButton6" inherits="BonkRaceButtonTemplate" id="6"/>
 							<CheckButton name="BonkHeroRaceButton7" inherits="BonkRaceButtonTemplate" id="7"/>
 							<CheckButton name="BonkHeroRaceButton8" inherits="BonkRaceButtonTemplate" id="8"/>
+						</Frames>
+					</Frame>
+					<Frame name="BonkGenderBox" inherits="BonkInsetTemplate">
+						<Size>
+							<AbsDimension x="300" y="74"/>
+						</Size>
+						<Anchors>
+							<Anchor point="TOP" relativeTo="BonkRaceBox" relativePoint="BOTTOM">
+								<Offset>
+									<AbsDimension x="0" y="-24"/>
+								</Offset>
+							</Anchor>
+						</Anchors>
+						<Frames>
 							<CheckButton name="BonkHeroGenderButton1" inherits="BonkGenderButtonTemplate" id="1">
 								<Anchors>
-									<Anchor point="TOPLEFT">
+									<Anchor point="TOP">
 										<Offset>
-											<AbsDimension x="26" y="-284"/>
+											<AbsDimension x="-50" y="-10"/>
 										</Offset>
 									</Anchor>
 								</Anchors>
 							</CheckButton>
 							<CheckButton name="BonkHeroGenderButton2" inherits="BonkGenderButtonTemplate" id="2">
 								<Anchors>
-									<Anchor point="LEFT" relativeTo="BonkHeroGenderButton1" relativePoint="RIGHT">
+									<Anchor point="TOP">
 										<Offset>
-											<AbsDimension x="8" y="0"/>
+											<AbsDimension x="50" y="-10"/>
 										</Offset>
 									</Anchor>
 								</Anchors>
 							</CheckButton>
-							<Frame name="BonkHeroLook1" inherits="CharacterCustomizationFrameTemplate" id="1">
-								<Size>
-									<AbsDimension x="296" y="32"/>
-								</Size>
+						</Frames>
+					</Frame>
+					<Frame name="BonkFeatureBox" inherits="BonkInsetTemplate">
+						<Size>
+							<AbsDimension x="300" y="176"/>
+						</Size>
+						<Anchors>
+							<Anchor point="TOP" relativeTo="BonkGenderBox" relativePoint="BOTTOM">
+								<Offset>
+									<AbsDimension x="0" y="-24"/>
+								</Offset>
+							</Anchor>
+						</Anchors>
+						<Frames>
+							<Frame name="BonkHeroLook1" inherits="BonkCustomizeRowTemplate" id="1">
 								<Anchors>
 									<Anchor point="TOPLEFT">
 										<Offset>
-											<AbsDimension x="22" y="-342"/>
+											<AbsDimension x="14" y="-8"/>
 										</Offset>
 									</Anchor>
 								</Anchors>
-								<Scripts>
-									<OnLoad>
-										getglobal(this:GetName().."Text"):SetText(getglobal("CHAR_CUSTOMIZATION"..this:GetID().."_DESC"));
-									</OnLoad>
-								</Scripts>
 							</Frame>
-							<Frame name="BonkHeroLook2" inherits="CharacterCustomizationFrameTemplate" id="2">
-								<Size>
-									<AbsDimension x="296" y="32"/>
-								</Size>
+							<Frame name="BonkHeroLook2" inherits="BonkCustomizeRowTemplate" id="2">
 								<Anchors>
-									<Anchor point="TOPLEFT">
-										<Offset>
-											<AbsDimension x="22" y="-372"/>
-										</Offset>
-									</Anchor>
+									<Anchor point="TOPLEFT" relativeTo="BonkHeroLook1" relativePoint="BOTTOMLEFT"/>
 								</Anchors>
-								<Scripts>
-									<OnLoad>
-										getglobal(this:GetName().."Text"):SetText(getglobal("CHAR_CUSTOMIZATION"..this:GetID().."_DESC"));
-									</OnLoad>
-								</Scripts>
 							</Frame>
-							<Frame name="BonkHeroLook3" inherits="CharacterCustomizationFrameTemplate" id="3">
-								<Size>
-									<AbsDimension x="296" y="32"/>
-								</Size>
+							<Frame name="BonkHeroLook3" inherits="BonkCustomizeRowTemplate" id="3">
 								<Anchors>
-									<Anchor point="TOPLEFT">
-										<Offset>
-											<AbsDimension x="22" y="-402"/>
-										</Offset>
-									</Anchor>
+									<Anchor point="TOPLEFT" relativeTo="BonkHeroLook2" relativePoint="BOTTOMLEFT"/>
 								</Anchors>
-								<Scripts>
-									<OnLoad>
-										getglobal(this:GetName().."Text"):SetText(getglobal("CHAR_CUSTOMIZATION"..this:GetID().."_DESC"));
-									</OnLoad>
-								</Scripts>
 							</Frame>
-							<Frame name="BonkHeroLook4" inherits="CharacterCustomizationFrameTemplate" id="4">
-								<Size>
-									<AbsDimension x="296" y="32"/>
-								</Size>
+							<Frame name="BonkHeroLook4" inherits="BonkCustomizeRowTemplate" id="4">
 								<Anchors>
-									<Anchor point="TOPLEFT">
-										<Offset>
-											<AbsDimension x="22" y="-432"/>
-										</Offset>
-									</Anchor>
+									<Anchor point="TOPLEFT" relativeTo="BonkHeroLook3" relativePoint="BOTTOMLEFT"/>
 								</Anchors>
-								<Scripts>
-									<OnLoad>
-										getglobal(this:GetName().."Text"):SetText(getglobal("CHAR_CUSTOMIZATION"..this:GetID().."_DESC"));
-									</OnLoad>
-								</Scripts>
 							</Frame>
-							<Frame name="BonkHeroLook5" inherits="CharacterCustomizationFrameTemplate" id="5">
-								<Size>
-									<AbsDimension x="296" y="32"/>
-								</Size>
+							<Frame name="BonkHeroLook5" inherits="BonkCustomizeRowTemplate" id="5">
 								<Anchors>
-									<Anchor point="TOPLEFT">
-										<Offset>
-											<AbsDimension x="22" y="-462"/>
-										</Offset>
-									</Anchor>
+									<Anchor point="TOPLEFT" relativeTo="BonkHeroLook4" relativePoint="BOTTOMLEFT"/>
 								</Anchors>
-								<Scripts>
-									<OnLoad>
-										getglobal(this:GetName().."Text"):SetText(getglobal("CHAR_CUSTOMIZATION"..this:GetID().."_DESC"));
-									</OnLoad>
-								</Scripts>
 							</Frame>
-							<Button name="BonkHeroRandomizeButton" inherits="GlueButtonSmallTemplate" text="Random look">
+						</Frames>
+					</Frame>
+					<Button name="BonkHeroRandomizeButton" inherits="GlueButtonSmallTemplate" text="Random look">
+						<Anchors>
+							<Anchor point="TOP" relativeTo="BonkFeatureBox" relativePoint="BOTTOM">
+								<Offset>
+									<AbsDimension x="0" y="-12"/>
+								</Offset>
+							</Anchor>
+						</Anchors>
+						<Scripts>
+							<OnClick>
+								BonkHero_Randomize();
+							</OnClick>
+						</Scripts>
+					</Button>
+					<CheckButton name="BonkHeroIronman">
+						<Size>
+							<AbsDimension x="26" y="26"/>
+						</Size>
+						<Anchors>
+							<Anchor point="TOPLEFT" relativeTo="BonkFeatureBox" relativePoint="BOTTOMLEFT">
+								<Offset>
+									<AbsDimension x="4" y="-56"/>
+								</Offset>
+							</Anchor>
+						</Anchors>
+						<HitRectInsets>
+							<AbsInset left="0" right="-110" top="0" bottom="0"/>
+						</HitRectInsets>
+						<Layers>
+							<Layer level="ARTWORK">
+								<FontString name="BonkHeroIronmanText" inherits="GlueFontNormalSmall" text="Ironman mode">
+									<Anchors>
+										<Anchor point="LEFT" relativePoint="RIGHT">
+											<Offset>
+												<AbsDimension x="2" y="1"/>
+											</Offset>
+										</Anchor>
+									</Anchors>
+								</FontString>
+							</Layer>
+						</Layers>
+						<Scripts>
+							<OnClick>
+								BonkHero_ToggleIronman();
+							</OnClick>
+							<OnEnter>
+								BonkHero_ShowTip(this, "Ironman mode", BONK_IRONMAN_TIP);
+							</OnEnter>
+							<OnLeave>
+								BonkTip:Hide();
+							</OnLeave>
+						</Scripts>
+						<NormalTexture file="Interface\Buttons\UI-CheckBox-Up"/>
+						<PushedTexture file="Interface\Buttons\UI-CheckBox-Down"/>
+						<HighlightTexture file="Interface\Buttons\UI-CheckBox-Highlight" alphaMode="ADD"/>
+						<CheckedTexture file="Interface\Buttons\UI-CheckBox-Check"/>
+					</CheckButton>
+				</Frames>
+			</Frame>
+
+			<Frame name="BonkInfoPanel" inherits="BonkSidePanelTemplate">
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="16" y="-92"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Layers>
+					<Layer level="ARTWORK">
+						<Texture name="BonkInfoIcon" file="Interface\Glues\CharacterCreate\UI-CharacterCreate-Classes">
+							<Size>
+								<AbsDimension x="44" y="44"/>
+							</Size>
+							<Anchors>
+								<Anchor point="TOPLEFT">
+									<Offset>
+										<AbsDimension x="22" y="-30"/>
+									</Offset>
+								</Anchor>
+							</Anchors>
+						</Texture>
+						<FontString name="BonkHeroName" inherits="GlueFontNormalHuge" justifyH="LEFT">
+							<Anchors>
+								<Anchor point="TOPLEFT" relativeTo="BonkInfoIcon" relativePoint="TOPRIGHT">
+									<Offset>
+										<AbsDimension x="10" y="-1"/>
+									</Offset>
+								</Anchor>
+							</Anchors>
+						</FontString>
+						<FontString name="BonkHeroDetail" inherits="GlueFontHighlightSmall" justifyH="LEFT">
+							<Anchors>
+								<Anchor point="TOPLEFT" relativeTo="BonkHeroName" relativePoint="BOTTOMLEFT">
+									<Offset>
+										<AbsDimension x="0" y="-4"/>
+									</Offset>
+								</Anchor>
+							</Anchors>
+						</FontString>
+					</Layer>
+				</Layers>
+				<Frames>
+					<Frame name="BonkHeroRecordFrame" hidden="true">
+						<Size>
+							<AbsDimension x="296" y="400"/>
+						</Size>
+						<Anchors>
+							<Anchor point="TOPLEFT">
+								<Offset>
+									<AbsDimension x="22" y="-96"/>
+								</Offset>
+							</Anchor>
+						</Anchors>
+						<Layers>
+							<Layer level="ARTWORK">
+								<FontString name="BonkHeroRecordNote" inherits="GlueFontDisableSmall" justifyH="LEFT" justifyV="TOP">
+									<Size>
+										<AbsDimension x="296" y="40"/>
+									</Size>
+									<Anchors>
+										<Anchor point="TOPLEFT">
+											<Offset>
+												<AbsDimension x="0" y="-208"/>
+											</Offset>
+										</Anchor>
+									</Anchors>
+								</FontString>
+							</Layer>
+						</Layers>
+						<Frames>
+							<Frame name="BonkHeroStat1" inherits="BonkStatRowTemplate"/>
+							<Frame name="BonkHeroStat2" inherits="BonkStatRowTemplate"/>
+							<Frame name="BonkHeroStat3" inherits="BonkStatRowTemplate"/>
+							<Frame name="BonkHeroStat4" inherits="BonkStatRowTemplate"/>
+							<Frame name="BonkHeroStat5" inherits="BonkStatRowTemplate"/>
+							<Frame name="BonkHeroStat6" inherits="BonkStatRowTemplate"/>
+							<Frame name="BonkHeroStat7" inherits="BonkStatRowTemplate"/>
+							<Frame name="BonkHeroStat8" inherits="BonkStatRowTemplate"/>
+							<Frame name="BonkHeroStat9" inherits="BonkStatRowTemplate"/>
+						</Frames>
+					</Frame>
+
+					<Frame name="BonkClassFrame" hidden="true">
+						<Size>
+							<AbsDimension x="296" y="460"/>
+						</Size>
+						<Anchors>
+							<Anchor point="TOPLEFT">
+								<Offset>
+									<AbsDimension x="22" y="-86"/>
+								</Offset>
+							</Anchor>
+						</Anchors>
+						<Layers>
+							<Layer level="ARTWORK">
+								<FontString name="BonkClassBlurb" inherits="GlueFontNormalSmall" justifyH="LEFT" justifyV="TOP">
+									<Size>
+										<AbsDimension x="296" y="0"/>
+									</Size>
+									<Anchors>
+										<Anchor point="TOPLEFT"/>
+									</Anchors>
+								</FontString>
+								<FontString name="BonkClassRacesLabel" inherits="GlueFontNormalSmall" text="Races" justifyH="LEFT">
+									<Anchors>
+										<Anchor point="TOPLEFT" relativeTo="BonkClassBlurb" relativePoint="BOTTOMLEFT">
+											<Offset>
+												<AbsDimension x="0" y="-14"/>
+											</Offset>
+										</Anchor>
+									</Anchors>
+								</FontString>
+								<FontString name="BonkClassStarterLabel" inherits="GlueFontNormalSmall" text="Starts with" justifyH="LEFT">
+									<Anchors>
+										<Anchor point="TOPLEFT" relativeTo="BonkClassRacesLabel" relativePoint="BOTTOMLEFT">
+											<Offset>
+												<AbsDimension x="0" y="-18"/>
+											</Offset>
+										</Anchor>
+									</Anchors>
+								</FontString>
+								<FontString name="BonkClassSpecText" inherits="BonkFontSoft" justifyH="LEFT" justifyV="TOP">
+									<Size>
+										<AbsDimension x="296" y="0"/>
+									</Size>
+									<Anchors>
+										<Anchor point="TOPLEFT" relativeTo="BonkClassStarterLabel" relativePoint="BOTTOMLEFT">
+											<Offset>
+												<AbsDimension x="0" y="-114"/>
+											</Offset>
+										</Anchor>
+									</Anchors>
+								</FontString>
+							</Layer>
+						</Layers>
+						<Frames>
+							<Frame name="BonkClassRace1" inherits="BonkRaceIconTemplate" id="1">
 								<Anchors>
-									<Anchor point="LEFT" relativeTo="BonkHeroGenderButton2" relativePoint="RIGHT">
+									<Anchor point="LEFT" relativeTo="BonkClassRacesLabel" relativePoint="LEFT">
 										<Offset>
-											<AbsDimension x="16" y="0"/>
+											<AbsDimension x="84" y="0"/>
 										</Offset>
 									</Anchor>
 								</Anchors>
-								<Scripts>
-									<OnClick>
-										BonkHero_Randomize();
-									</OnClick>
-								</Scripts>
-							</Button>
-							<EditBox name="BonkHeroNameEdit" letters="12" autoFocus="false">
+							</Frame>
+							<Frame name="BonkClassRace2" inherits="BonkRaceIconTemplate" id="2">
+								<Anchors>
+									<Anchor point="LEFT" relativeTo="BonkClassRace1" relativePoint="RIGHT">
+										<Offset>
+											<AbsDimension x="4" y="0"/>
+										</Offset>
+									</Anchor>
+								</Anchors>
+							</Frame>
+							<Frame name="BonkClassRace3" inherits="BonkRaceIconTemplate" id="3">
+								<Anchors>
+									<Anchor point="LEFT" relativeTo="BonkClassRace2" relativePoint="RIGHT">
+										<Offset>
+											<AbsDimension x="4" y="0"/>
+										</Offset>
+									</Anchor>
+								</Anchors>
+							</Frame>
+							<Frame name="BonkClassRace4" inherits="BonkRaceIconTemplate" id="4">
+								<Anchors>
+									<Anchor point="LEFT" relativeTo="BonkClassRace3" relativePoint="RIGHT">
+										<Offset>
+											<AbsDimension x="4" y="0"/>
+										</Offset>
+									</Anchor>
+								</Anchors>
+							</Frame>
+							<Frame name="BonkClassRace5" inherits="BonkRaceIconTemplate" id="5">
+								<Anchors>
+									<Anchor point="LEFT" relativeTo="BonkClassRace4" relativePoint="RIGHT">
+										<Offset>
+											<AbsDimension x="4" y="0"/>
+										</Offset>
+									</Anchor>
+								</Anchors>
+							</Frame>
+							<Frame name="BonkClassRace6" inherits="BonkRaceIconTemplate" id="6">
+								<Anchors>
+									<Anchor point="LEFT" relativeTo="BonkClassRace5" relativePoint="RIGHT">
+										<Offset>
+											<AbsDimension x="4" y="0"/>
+										</Offset>
+									</Anchor>
+								</Anchors>
+							</Frame>
+							<Frame name="BonkClassRace7" inherits="BonkRaceIconTemplate" id="7">
+								<Anchors>
+									<Anchor point="LEFT" relativeTo="BonkClassRace6" relativePoint="RIGHT">
+										<Offset>
+											<AbsDimension x="4" y="0"/>
+										</Offset>
+									</Anchor>
+								</Anchors>
+							</Frame>
+							<Frame name="BonkClassRace8" inherits="BonkRaceIconTemplate" id="8">
+								<Anchors>
+									<Anchor point="LEFT" relativeTo="BonkClassRace7" relativePoint="RIGHT">
+										<Offset>
+											<AbsDimension x="4" y="0"/>
+										</Offset>
+									</Anchor>
+								</Anchors>
+							</Frame>
+							<Frame name="BonkClassStarter" inherits="BonkSpellRowTemplate">
 								<Size>
-									<AbsDimension x="200" y="40"/>
+									<AbsDimension x="200" y="26"/>
 								</Size>
 								<Anchors>
-									<Anchor point="TOPLEFT">
+									<Anchor point="LEFT" relativeTo="BonkClassStarterLabel" relativePoint="LEFT">
 										<Offset>
-											<AbsDimension x="18" y="-520"/>
+											<AbsDimension x="84" y="0"/>
 										</Offset>
 									</Anchor>
 								</Anchors>
-								<Backdrop bgFile="Interface\Tooltips\UI-Tooltip-Background" edgeFile="Interface\Glues\Common\Glue-Tooltip-Border" tile="true">
-									<BackgroundInsets>
-										<AbsInset left="10" right="5" top="4" bottom="9"/>
-									</BackgroundInsets>
-									<TileSize>
-										<AbsValue val="16"/>
-									</TileSize>
-									<EdgeSize>
-										<AbsValue val="16"/>
-									</EdgeSize>
-									<Color r="0.09" g="0.09" b="0.19"/>
-									<BorderColor r="0.5" g="0.5" b="0.5"/>
-								</Backdrop>
-								<Scripts>
-									<OnEnterPressed>
-										BonkHero_Play();
-									</OnEnterPressed>
-									<OnEscapePressed>
-										this:ClearFocus();
-									</OnEscapePressed>
-								</Scripts>
-								<FontString inherits="GlueEditBoxFont"/>
-								<TextInsets>
-									<AbsInset left="15"/>
-								</TextInsets>
-							</EditBox>
-							<CheckButton name="BonkHeroIronman">
+							</Frame>
+							<Frame name="BonkSpecBox" inherits="BonkInsetTemplate">
 								<Size>
-									<AbsDimension x="26" y="26"/>
+									<AbsDimension x="296" y="92"/>
 								</Size>
-								<Anchors>
-									<Anchor point="TOPLEFT" relativeTo="BonkHeroNameEdit" relativePoint="BOTTOMLEFT">
-										<Offset>
-											<AbsDimension x="6" y="2"/>
-										</Offset>
-									</Anchor>
-								</Anchors>
-								<HitRectInsets>
-									<AbsInset left="0" right="-110" top="0" bottom="0"/>
-								</HitRectInsets>
 								<Layers>
 									<Layer level="ARTWORK">
-										<FontString name="BonkHeroIronmanText" inherits="GlueFontNormalSmall" text="Ironman mode">
+										<FontString name="BonkSpecNote" inherits="BonkFontTiny" text="Just a preview. You don't pick a spec here.">
 											<Anchors>
-												<Anchor point="LEFT" relativePoint="RIGHT">
+												<Anchor point="TOP">
 													<Offset>
-														<AbsDimension x="2" y="1"/>
+														<AbsDimension x="0" y="-9"/>
 													</Offset>
 												</Anchor>
 											</Anchors>
 										</FontString>
 									</Layer>
 								</Layers>
-								<Scripts>
-									<OnClick>
-										BonkHero_ToggleIronman();
-									</OnClick>
-									<OnEnter>
-										BonkHero_ShowIronmanTip();
-									</OnEnter>
-									<OnLeave>
-										BonkIronmanTip:Hide();
-									</OnLeave>
-								</Scripts>
-								<NormalTexture file="Interface\Buttons\UI-CheckBox-Up"/>
-								<PushedTexture file="Interface\Buttons\UI-CheckBox-Down"/>
-								<HighlightTexture file="Interface\Buttons\UI-CheckBox-Highlight" alphaMode="ADD"/>
-								<CheckedTexture file="Interface\Buttons\UI-CheckBox-Check"/>
-							</CheckButton>
+								<Anchors>
+									<Anchor point="TOPLEFT" relativeTo="BonkClassStarterLabel" relativePoint="BOTTOMLEFT">
+										<Offset>
+											<AbsDimension x="0" y="-14"/>
+										</Offset>
+									</Anchor>
+								</Anchors>
+								<Frames>
+									<CheckButton name="BonkSpecButton1" inherits="BonkSpecButtonTemplate" id="1">
+										<Anchors>
+											<Anchor point="TOP">
+												<Offset>
+													<AbsDimension x="-98" y="-26"/>
+												</Offset>
+											</Anchor>
+										</Anchors>
+									</CheckButton>
+									<CheckButton name="BonkSpecButton2" inherits="BonkSpecButtonTemplate" id="2">
+										<Anchors>
+											<Anchor point="TOP">
+												<Offset>
+													<AbsDimension x="0" y="-26"/>
+												</Offset>
+											</Anchor>
+										</Anchors>
+									</CheckButton>
+									<CheckButton name="BonkSpecButton3" inherits="BonkSpecButtonTemplate" id="3">
+										<Anchors>
+											<Anchor point="TOP">
+												<Offset>
+													<AbsDimension x="98" y="-26"/>
+												</Offset>
+											</Anchor>
+										</Anchors>
+									</CheckButton>
+								</Frames>
+							</Frame>
+							<Frame name="BonkSpellRow1" inherits="BonkSpellRowTemplate">
+								<Anchors>
+									<Anchor point="TOPLEFT" relativeTo="BonkClassSpecText" relativePoint="BOTTOMLEFT">
+										<Offset>
+											<AbsDimension x="0" y="-8"/>
+										</Offset>
+									</Anchor>
+								</Anchors>
+							</Frame>
+							<Frame name="BonkSpellRow2" inherits="BonkSpellRowTemplate">
+								<Anchors>
+									<Anchor point="TOPLEFT" relativeTo="BonkSpellRow1" relativePoint="BOTTOMLEFT">
+										<Offset>
+											<AbsDimension x="0" y="-2"/>
+										</Offset>
+									</Anchor>
+								</Anchors>
+							</Frame>
+							<Frame name="BonkSpellRow3" inherits="BonkSpellRowTemplate">
+								<Anchors>
+									<Anchor point="TOPLEFT" relativeTo="BonkSpellRow2" relativePoint="BOTTOMLEFT">
+										<Offset>
+											<AbsDimension x="0" y="-2"/>
+										</Offset>
+									</Anchor>
+								</Anchors>
+							</Frame>
+							<Frame name="BonkSpellRow4" inherits="BonkSpellRowTemplate">
+								<Anchors>
+									<Anchor point="TOPLEFT" relativeTo="BonkSpellRow3" relativePoint="BOTTOMLEFT">
+										<Offset>
+											<AbsDimension x="0" y="-2"/>
+										</Offset>
+									</Anchor>
+								</Anchors>
+							</Frame>
+							<Frame name="BonkSpellRow5" inherits="BonkSpellRowTemplate">
+								<Anchors>
+									<Anchor point="TOPLEFT" relativeTo="BonkSpellRow4" relativePoint="BOTTOMLEFT">
+										<Offset>
+											<AbsDimension x="0" y="-2"/>
+										</Offset>
+									</Anchor>
+								</Anchors>
+							</Frame>
+							<Frame name="BonkSpellRow6" inherits="BonkSpellRowTemplate">
+								<Anchors>
+									<Anchor point="TOPLEFT" relativeTo="BonkSpellRow5" relativePoint="BOTTOMLEFT">
+										<Offset>
+											<AbsDimension x="0" y="-2"/>
+										</Offset>
+									</Anchor>
+								</Anchors>
+							</Frame>
+							<Frame name="BonkSpellRow7" inherits="BonkSpellRowTemplate">
+								<Anchors>
+									<Anchor point="TOPLEFT" relativeTo="BonkSpellRow6" relativePoint="BOTTOMLEFT">
+										<Offset>
+											<AbsDimension x="0" y="-2"/>
+										</Offset>
+									</Anchor>
+								</Anchors>
+							</Frame>
 						</Frames>
 					</Frame>
+
+					<Button name="BonkHeroRetireButton" inherits="GlueButtonSmallTemplate" text="Delete character" hidden="true">
+						<Anchors>
+							<Anchor point="BOTTOM">
+								<Offset>
+									<AbsDimension x="0" y="18"/>
+								</Offset>
+							</Anchor>
+						</Anchors>
+						<Scripts>
+							<OnClick>
+								BonkHero_Retire();
+							</OnClick>
+						</Scripts>
+					</Button>
 				</Frames>
 			</Frame>
+
+			<EditBox name="BonkHeroNameEdit" letters="12" autoFocus="false" hidden="true">
+				<Size>
+					<AbsDimension x="220" y="40"/>
+				</Size>
+				<Anchors>
+					<Anchor point="BOTTOM">
+						<Offset>
+							<AbsDimension x="0" y="104"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Layers>
+					<Layer level="ARTWORK">
+						<FontString name="BonkHeroNameLabel" inherits="GlueFontNormalSmall" text="Name">
+							<Anchors>
+								<Anchor point="BOTTOM" relativePoint="TOP">
+									<Offset>
+										<AbsDimension x="0" y="0"/>
+									</Offset>
+								</Anchor>
+							</Anchors>
+						</FontString>
+					</Layer>
+				</Layers>
+				<Backdrop bgFile="Interface\Tooltips\UI-Tooltip-Background" edgeFile="Interface\Glues\Common\Glue-Tooltip-Border" tile="true">
+					<BackgroundInsets>
+						<AbsInset left="10" right="5" top="4" bottom="9"/>
+					</BackgroundInsets>
+					<TileSize>
+						<AbsValue val="16"/>
+					</TileSize>
+					<EdgeSize>
+						<AbsValue val="16"/>
+					</EdgeSize>
+					<Color r="0.09" g="0.09" b="0.19"/>
+					<BorderColor r="0.5" g="0.5" b="0.5"/>
+				</Backdrop>
+				<Scripts>
+					<OnEnterPressed>
+						BonkHero_Play();
+					</OnEnterPressed>
+					<OnEscapePressed>
+						this:ClearFocus();
+					</OnEscapePressed>
+				</Scripts>
+				<FontString inherits="GlueEditBoxFont"/>
+				<TextInsets>
+					<AbsInset left="15"/>
+				</TextInsets>
+			</EditBox>
 
 			<Button name="BonkHeroPlayButton" inherits="GlueButtonTemplate">
 				<Size>
@@ -686,7 +1092,7 @@
 				<Anchors>
 					<Anchor point="BOTTOM">
 						<Offset>
-							<AbsDimension x="0" y="40"/>
+							<AbsDimension x="0" y="34"/>
 						</Offset>
 					</Anchor>
 				</Anchors>
@@ -701,7 +1107,7 @@
 				<Anchors>
 					<Anchor point="BOTTOMLEFT">
 						<Offset>
-							<AbsDimension x="20" y="20"/>
+							<AbsDimension x="16" y="14"/>
 						</Offset>
 					</Anchor>
 				</Anchors>
@@ -716,13 +1122,28 @@
 				<Anchors>
 					<Anchor point="BOTTOMRIGHT">
 						<Offset>
-							<AbsDimension x="-20" y="20"/>
+							<AbsDimension x="-16" y="14"/>
 						</Offset>
 					</Anchor>
 				</Anchors>
 				<Scripts>
 					<OnClick>
 						BonkHero_Wipe();
+					</OnClick>
+				</Scripts>
+			</Button>
+
+			<Button name="BonkHeroBackButton" inherits="GlueButtonSmallTemplate" text="Back" hidden="true">
+				<Anchors>
+					<Anchor point="BOTTOMLEFT">
+						<Offset>
+							<AbsDimension x="16" y="14"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						BonkHero_Back();
 					</OnClick>
 				</Scripts>
 			</Button>
@@ -742,9 +1163,10 @@
 			</OnUpdate>
 		</Scripts>
 	</Frame>
-	<Frame name="BonkIronmanTip" frameStrata="TOOLTIP" hidden="true">
+
+	<Frame name="BonkTip" frameStrata="TOOLTIP" hidden="true">
 		<Size>
-			<AbsDimension x="250" y="40"/>
+			<AbsDimension x="270" y="40"/>
 		</Size>
 		<Backdrop bgFile="Interface\Tooltips\UI-Tooltip-Background" edgeFile="Interface\Tooltips\UI-Tooltip-Border" tile="true">
 			<BackgroundInsets>
@@ -761,14 +1183,23 @@
 		</Backdrop>
 		<Layers>
 			<Layer level="ARTWORK">
-				<FontString name="BonkIronmanTipText" inherits="GlueFontHighlightSmall" justifyH="LEFT">
-					<Size>
-						<AbsDimension x="226" y="0"/>
-					</Size>
+				<FontString name="BonkTipTitle" inherits="GlueFontHighlight" justifyH="LEFT">
 					<Anchors>
 						<Anchor point="TOPLEFT">
 							<Offset>
 								<AbsDimension x="12" y="-10"/>
+							</Offset>
+						</Anchor>
+					</Anchors>
+				</FontString>
+				<FontString name="BonkTipText" inherits="GlueFontNormalSmall" justifyH="LEFT" justifyV="TOP">
+					<Size>
+						<AbsDimension x="246" y="0"/>
+					</Size>
+					<Anchors>
+						<Anchor point="TOPLEFT" relativeTo="BonkTipTitle" relativePoint="BOTTOMLEFT">
+							<Offset>
+								<AbsDimension x="0" y="-4"/>
 							</Offset>
 						</Anchor>
 					</Anchors>

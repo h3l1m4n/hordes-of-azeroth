@@ -2,11 +2,30 @@ local UI = VanillaBonkUI
 
 local SPELL_SLOTS = 5
 local PASSIVE_SLOTS = 6
-local SCALE = 10 / 9
 local BAR_ART = "Interface\\MainMenuBar\\UI-MainMenuBar-Dwarf"
-local PET_ART = "Interface\\PetActionBar\\UI-PetBar"
-local END_CAP = "Interface\\MainMenuBar\\UI-MainMenuBar-EndCap-Human"
-local XP_WIDTH = 500
+local GRYPHON_ART = "Interface\\MainMenuBar\\UI-MainMenuBar-EndCap-Dwarf"
+local LEVEL_PLATE_ART = "Interface\\AddOns\\HordesOfAzeroth\\Textures\\LevelPlate"
+local RECESS_ART = "Interface\\AddOns\\HordesOfAzeroth\\Textures\\SlotRecess"
+local SPELL_SIZE = 44
+local PASSIVE_SIZE = 32
+local SPELL_GAP = 6
+local PASSIVE_GAP = 5
+local GROUP_GAP = 14
+local RECESS_INSET = 6
+local RAIL_HEIGHT = 12
+local RUN_PLATE_HEIGHT = 64
+local CAMP_PLATE_HEIGHT = 52
+local CAMP_WIDTH = 520
+local GRYPHON_VISIBLE = 58
+local GRYPHON_SCALE = 0.85
+local GRYPHON_ANCHOR = 62
+local GRYPHON_BODY_EDGE = 100
+local GRYPHON_HEAD_EDGE = 120
+local LEVEL_PLATE_WIDTH = 50
+local LEVEL_PLATE_HEIGHT = 34
+local LEVEL_PLATE_RAISE = 1
+local DASH_SIZE = 32
+local BAR_SCALE = 0.85
 
 local run = { spells = {}, passives = {}, info = {}, stats = {} }
 local inRun = false
@@ -15,96 +34,205 @@ local root = CreateFrame("Frame", "VanillaBonkHeroBar", UIParent)
 root:SetWidth(1)
 root:SetHeight(1)
 root:SetPoint("BOTTOM", UIParent, "BOTTOM", 0, 0)
+root:SetScale(BAR_SCALE)
 
 local runFrame = CreateFrame("Frame", nil, root)
 runFrame:SetAllPoints(root)
 local campFrame = CreateFrame("Frame", nil, root)
 campFrame:SetAllPoints(root)
 
-local function EndCap(parent, size, x, mirrored)
-    if not parent.endCaps then
-        parent.endCaps = CreateFrame("Frame", nil, parent)
-        parent.endCaps:SetAllPoints(parent)
-        parent.endCaps:SetFrameLevel(parent:GetFrameLevel() + 8)
-    end
-    local texture = parent.endCaps:CreateTexture(nil, "OVERLAY")
-    texture:SetTexture(END_CAP)
-    texture:SetWidth(size)
-    texture:SetHeight(size)
-    texture:SetPoint("BOTTOMLEFT", root, "BOTTOM", x, 0)
-    if mirrored then
-        texture:SetTexCoord(1, 0, 0, 1)
-    end
+local function BarTexture(parent, layer, left, right, top, bottom)
+    local texture = parent:CreateTexture(nil, layer)
+    texture:SetTexture(BAR_ART)
+    texture:SetTexCoord(left / 256, right / 256, top / 256, bottom / 256)
     return texture
 end
 
-local spellBar = CreateFrame("Frame", nil, runFrame)
-spellBar:SetWidth(220 * SCALE)
-spellBar:SetHeight(43 * SCALE)
-spellBar:SetPoint("BOTTOM", root, "BOTTOM", 0, 0)
-do
-    local main = spellBar:CreateTexture(nil, "BACKGROUND")
-    main:SetTexture(BAR_ART)
-    main:SetTexCoord(0, 212 / 256, 213 / 256, 1)
-    main:SetWidth(212 * SCALE)
-    main:SetHeight(43 * SCALE)
-    main:SetPoint("BOTTOMLEFT", spellBar, "BOTTOMLEFT", 0, 0)
-    local cap = spellBar:CreateTexture(nil, "BACKGROUND")
-    cap:SetTexture(BAR_ART)
-    cap:SetTexCoord(8 / 256, 0, 213 / 256, 1)
-    cap:SetWidth(8 * SCALE)
-    cap:SetHeight(43 * SCALE)
-    cap:SetPoint("BOTTOMLEFT", main, "BOTTOMRIGHT", 0, 0)
+local function GryphonSize(plateHeight)
+    return (plateHeight + RAIL_HEIGHT) * 128 / GRYPHON_VISIBLE * GRYPHON_SCALE
 end
 
-local wings = {}
-for side = 1, 2 do
-    local wing = spellBar:CreateTexture(nil, "BACKGROUND")
-    wing:SetTexture(PET_ART)
-    if side == 1 then
-        wing:SetTexCoord(0, 146 / 256, 2 / 128, 46 / 128)
-        wing:SetPoint("BOTTOMRIGHT", spellBar, "BOTTOMLEFT", 0, 0)
-    else
-        wing:SetTexCoord(146 / 256, 0, 2 / 128, 46 / 128)
-        wing:SetPoint("BOTTOMLEFT", spellBar, "BOTTOMRIGHT", 0, 0)
+local function GryphonInset(plateHeight, edge)
+    return GryphonSize(plateHeight) * (edge - GRYPHON_ANCHOR) / 128
+end
+
+local function AddRail(plate, width)
+    local art = CreateFrame("Frame", nil, plate)
+    art:SetAllPoints(plate)
+    art:SetFrameLevel(plate:GetFrameLevel() + 2)
+    local function Piece(left, right, x, pieceWidth, flip)
+        local texture = BarTexture(art, "ARTWORK", flip and right or left, flip and left or right, 203, 213)
+        texture:SetWidth(pieceWidth)
+        texture:SetHeight(RAIL_HEIGHT)
+        texture:SetPoint("TOPLEFT", plate, "TOPLEFT", x, 0)
     end
-    wing:SetWidth(146)
-    wing:SetHeight(44)
-    wings[side] = wing
+    Piece(0, 53, 0, 53)
+    Piece(0, 53, width - 53, 53, true)
+    local half = width / 2
+    local x = 53
+    while x < half do
+        local pieceWidth = min(52, half - x)
+        Piece(53, 53 + pieceWidth, x, pieceWidth)
+        Piece(53, 53 + pieceWidth, width - x - pieceWidth, pieceWidth, true)
+        x = x + 52
+    end
+    return art
 end
 
-local halfBar = 110 * SCALE
-EndCap(runFrame, 128, -halfBar - 146 - 88)
-EndCap(runFrame, 128, halfBar + 146 - 40, true)
-
-local xpRim = UI.CastRim(runFrame, XP_WIDTH)
-xpRim:SetPoint("BOTTOM", root, "BOTTOM", 0, 48)
-local xpBar = CreateFrame("StatusBar", nil, xpRim.opening)
-xpBar:SetAllPoints(xpRim.opening)
-xpBar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
-xpBar:SetStatusBarColor(0.58, 0.0, 0.55)
-xpBar:SetMinMaxValues(0, 1)
-xpBar:SetFrameLevel(xpRim.opening:GetFrameLevel() + 1)
-xpRim.text = UI.Text(xpRim.art, 10, UI.NUMBER_FONT, "OUTLINE")
-xpRim.text:SetPoint("CENTER", xpRim.opening, "CENTER", 0, 1)
-for tick = 1, 19 do
-    local line = xpBar:CreateTexture(nil, "OVERLAY")
-    line:SetTexture(UI.FLAT)
-    line:SetVertexColor(0, 0, 0, 0.55)
-    line:SetWidth(1)
-    line:SetPoint("TOP", xpBar, "TOPLEFT", (XP_WIDTH - 70) * tick / 20, 0)
-    line:SetPoint("BOTTOM", xpBar, "BOTTOMLEFT", (XP_WIDTH - 70) * tick / 20, 0)
+local function AddRailBar(plate, plateHeight, r, g, b)
+    local inset = GryphonInset(plateHeight, GRYPHON_HEAD_EDGE)
+    local scale = RAIL_HEIGHT / 10
+    local bar = CreateFrame("StatusBar", nil, plate)
+    bar:SetPoint("TOPLEFT", plate, "TOPLEFT", inset, -3 * scale)
+    bar:SetPoint("BOTTOMRIGHT", plate, "TOPRIGHT", -inset, -9 * scale)
+    bar:SetFrameLevel(plate:GetFrameLevel() + 1)
+    bar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
+    bar:SetStatusBarColor(r, g, b)
+    bar:SetMinMaxValues(0, 1)
+    bar.back = bar:CreateTexture(nil, "BACKGROUND")
+    bar.back:SetTexture(UI.FLAT)
+    bar.back:SetVertexColor(0.03, 0.02, 0.02, 1)
+    bar.back:SetAllPoints(bar)
+    return bar
 end
 
-local levelRing = UI.Ring(runFrame, 52)
-levelRing:SetPoint("BOTTOM", root, "BOTTOM", 0, 66)
+local function AddGryphons(plate, plateHeight)
+    local size = GryphonSize(plateHeight)
+    local holder = CreateFrame("Frame", nil, plate)
+    holder:SetAllPoints(plate)
+    holder:SetFrameLevel(plate:GetFrameLevel() + 6)
+    for side = 1, 2 do
+        local texture = holder:CreateTexture(nil, "OVERLAY")
+        texture:SetTexture(GRYPHON_ART)
+        texture:SetWidth(size)
+        texture:SetHeight(size)
+        if side == 1 then
+            texture:SetPoint("BOTTOMLEFT", plate, "BOTTOMLEFT", -size * GRYPHON_ANCHOR / 128, 0)
+        else
+            texture:SetTexCoord(1, 0, 0, 1)
+            texture:SetPoint("BOTTOMRIGHT", plate, "BOTTOMRIGHT", size * GRYPHON_ANCHOR / 128, 0)
+        end
+    end
+end
+
+local function CreatePlate(parent, width, plateHeight)
+    local plate = CreateFrame("Frame", nil, parent)
+    plate:SetWidth(width)
+    plate:SetHeight(plateHeight + RAIL_HEIGHT)
+    plate:SetPoint("BOTTOM", root, "BOTTOM", 0, 0)
+    local fill = BarTexture(plate, "BACKGROUND", 60, 230, 88, 124)
+    fill:SetPoint("BOTTOMLEFT", plate, "BOTTOMLEFT", 0, 4)
+    fill:SetPoint("TOPRIGHT", plate, "BOTTOMRIGHT", 0, plateHeight - 4)
+    local top = BarTexture(plate, "BORDER", 60, 230, 84, 88)
+    top:SetHeight(4)
+    top:SetPoint("TOPLEFT", plate, "BOTTOMLEFT", 0, plateHeight)
+    top:SetPoint("TOPRIGHT", plate, "BOTTOMRIGHT", 0, plateHeight)
+    local bottom = BarTexture(plate, "BORDER", 60, 230, 124, 128)
+    bottom:SetHeight(4)
+    bottom:SetPoint("BOTTOMLEFT", plate, "BOTTOMLEFT", 0, 0)
+    bottom:SetPoint("BOTTOMRIGHT", plate, "BOTTOMRIGHT", 0, 0)
+    plate.rail = AddRail(plate, width)
+    AddGryphons(plate, plateHeight)
+    return plate
+end
+
+local function AddRecess(plate, x, centerY, width, height, inset)
+    inset = inset or RECESS_INSET
+    local outerWidth, outerHeight = width + 2 * inset, height + 2 * inset
+    local capWidth = min(outerHeight / 4, outerWidth / 2)
+    local function Piece(left, right)
+        local texture = plate:CreateTexture(nil, "BORDER")
+        texture:SetTexture(RECESS_ART)
+        texture:SetTexCoord(left, right, 0, 1)
+        texture:SetHeight(outerHeight)
+        return texture
+    end
+    local bottomY = centerY - outerHeight / 2
+    local leftCap = Piece(0, 0.25)
+    leftCap:SetWidth(capWidth)
+    leftCap:SetPoint("BOTTOMLEFT", plate, "BOTTOMLEFT", x - inset, bottomY)
+    local rightCap = Piece(0.75, 1)
+    rightCap:SetWidth(capWidth)
+    rightCap:SetPoint("BOTTOMRIGHT", plate, "BOTTOMLEFT", x + width + inset, bottomY)
+    local middle = Piece(0.25, 0.75)
+    middle:SetPoint("TOPLEFT", leftCap, "TOPRIGHT", 0, 0)
+    middle:SetPoint("BOTTOMRIGHT", rightCap, "BOTTOMLEFT", 0, 0)
+end
+
+local function AddDock(plate, x, centerY, size)
+    local dock = CreateFrame("Frame", nil, plate)
+    dock:SetWidth(size)
+    dock:SetHeight(size)
+    dock:SetPoint("CENTER", plate, "BOTTOMLEFT", x + size / 2, centerY)
+    return dock
+end
+
+local function AddLevelPlate(plate, plateHeight)
+    local level = CreateFrame("Frame", nil, plate)
+    level:SetWidth(LEVEL_PLATE_WIDTH)
+    level:SetHeight(LEVEL_PLATE_HEIGHT)
+    level:SetPoint("CENTER", plate, "BOTTOM", 0, plateHeight + RAIL_HEIGHT + LEVEL_PLATE_RAISE)
+    level:SetFrameLevel(plate:GetFrameLevel() + 5)
+    level.art = level:CreateTexture(nil, "ARTWORK")
+    level.art:SetTexture(LEVEL_PLATE_ART)
+    level.art:SetTexCoord(0, 1, 0, 87 / 128)
+    level.art:SetAllPoints(level)
+    level.text = UI.Text(level, 20, UI.TITLE_FONT)
+    level.text:SetPoint("CENTER", level, "CENTER", 0, 0)
+    level.text:SetTextColor(1, 0.82, 0)
+    level:EnableMouse(true)
+    return level
+end
+
+local function AddRailHover(plate)
+    local hover = CreateFrame("Frame", nil, plate)
+    hover:SetPoint("TOPLEFT", plate, "TOPLEFT", 0, 0)
+    hover:SetPoint("BOTTOMRIGHT", plate, "TOPRIGHT", 0, -RAIL_HEIGHT)
+    hover:SetFrameLevel(plate:GetFrameLevel() + 4)
+    hover:EnableMouse(true)
+    return hover
+end
+
+local spellRowWidth = SPELL_SLOTS * SPELL_SIZE + (SPELL_SLOTS - 1) * SPELL_GAP
+local wingWidth = 3 * PASSIVE_SIZE + 2 * PASSIVE_GAP
+local runMargin = ceil(GryphonInset(RUN_PLATE_HEIGHT, GRYPHON_BODY_EDGE)) + 4
+local runWidth = 2 * runMargin + 2 * PASSIVE_SIZE + 2 * wingWidth + spellRowWidth + 4 * GROUP_GAP
+local runCenterY = RUN_PLATE_HEIGHT / 2
+
+local runPlate = CreatePlate(runFrame, runWidth, RUN_PLATE_HEIGHT)
+local spellBar = runPlate
+
+local runLayout = {}
+do
+    local x = runMargin
+    local function Group(name, count, size, gap)
+        local width = count * size + (count - 1) * gap
+        AddRecess(runPlate, x, runCenterY, width, size)
+        runLayout[name] = { x = x, size = size, gap = gap }
+        x = x + width + GROUP_GAP
+    end
+    Group("dash", 1, PASSIVE_SIZE, 0)
+    Group("left", 3, PASSIVE_SIZE, PASSIVE_GAP)
+    Group("spells", SPELL_SLOTS, SPELL_SIZE, SPELL_GAP)
+    Group("right", 3, PASSIVE_SIZE, PASSIVE_GAP)
+    Group("hearth", 1, PASSIVE_SIZE, 0)
+end
+
+local runDashDock = AddDock(runPlate, runLayout.dash.x, runCenterY, PASSIVE_SIZE)
+UI.HearthDock = AddDock(runPlate, runLayout.hearth.x, runCenterY, PASSIVE_SIZE)
+
+local xpBar = AddRailBar(runPlate, RUN_PLATE_HEIGHT, 0.58, 0.0, 0.55)
+local xpText = UI.Text(runPlate.rail, 10, UI.NUMBER_FONT, "OUTLINE")
+xpText:SetPoint("CENTER", runPlate, "TOP", runWidth / 4, -RAIL_HEIGHT / 2)
+local xpHover = AddRailHover(runPlate)
+
+local levelRing = AddLevelPlate(runPlate, RUN_PLATE_HEIGHT)
 VanillaBonkLevelRing = levelRing
-levelRing:SetFrameLevel(xpRim:GetFrameLevel() + 6)
-levelRing.art = UI.RingArt(levelRing, UI.ICON_PATH .. "Spell_Shadow_Teleport")
-levelRing.art:SetVertexColor(0.45, 0.45, 0.5)
-levelRing.text = UI.Text(levelRing, 18)
-levelRing.text:SetPoint("CENTER", levelRing, "CENTER", 0, 1)
-levelRing.text:SetTextColor(1, 0.82, 0)
+
+UI.GlyphAnchor = CreateFrame("Frame", nil, runPlate)
+UI.GlyphAnchor:SetWidth(1)
+UI.GlyphAnchor:SetHeight(1)
+UI.GlyphAnchor:SetPoint("BOTTOMLEFT", runPlate, "TOPLEFT", ceil(GryphonInset(RUN_PLATE_HEIGHT, GRYPHON_HEAD_EDGE)) + 8, 3)
 
 local spellSlots, passiveSlots = {}, {}
 
@@ -117,59 +245,69 @@ local LOCKED_SLOTS = {
     } },
 }
 
-local function AddEntryLines(entry, stat)
+local function AddPassiveLines(entry)
     local info = run.info[entry.index] or {}
-    local name = info.name or "?"
-    if entry.kind == "p" then
-        GameTooltip:AddDoubleLine(name, "Rank " .. entry.rank .. " / " .. entry.max, 1, 1, 1, 0.6, 0.6, 0.6)
-        GameTooltip:AddLine("Passive", 0.6, 0.6, 0.6)
-        if info.description and info.description ~= "" then
-            GameTooltip:AddLine(info.description, 1, 0.82, 0, 1)
-        end
-        return
-    end
-
-    local r, g, b = 1, 1, 1
-    if entry.kind == "e" then
-        r, g, b = 1, 0.5, 0
-    end
-    GameTooltip:AddDoubleLine(name, "Rank " .. entry.rank, r, g, b, 0.6, 0.6, 0.6)
-    if info.evolvedFrom and info.evolvedFrom ~= "" then
-        GameTooltip:AddLine("Legendary, evolved from " .. info.evolvedFrom, 1, 0.5, 0)
-    end
-    if info.line and info.line ~= "" then
-        GameTooltip:AddLine(info.line, 1, 1, 1, 1)
-    end
-    if info.damage and info.damage ~= "" then
-        GameTooltip:AddLine(info.damage, 1, 1, 1, 1)
-    end
+    GameTooltip:AddDoubleLine(info.name or "?", "Rank " .. entry.rank .. " / " .. entry.max, 1, 1, 1, 0.6, 0.6, 0.6)
+    GameTooltip:AddLine("Passive", 0.6, 0.6, 0.6)
     if info.description and info.description ~= "" then
         GameTooltip:AddLine(info.description, 1, 0.82, 0, 1)
     end
+end
 
-    if info.ranks and info.ranks ~= "" then
-        local counts = {}
-        for index = 1, strlen(info.ranks) do
-            local rarity = tonumber(strsub(info.ranks, index, index)) or 0
-            counts[rarity] = (counts[rarity] or 0) + 1
-        end
-        local text = ""
-        for rarity = 0, 4 do
-            if counts[rarity] then
-                text = text .. (text ~= "" and ", " or "") .. UI.RarityText(rarity, counts[rarity] .. " " .. UI.RARITY[rarity].name)
-            end
-        end
-        GameTooltip:AddLine("Ranks: " .. text, 0.6, 0.6, 0.6, 1)
+local function BestRarity(ranks)
+    local best = 0
+    for index = 1, strlen(ranks or "") do
+        best = max(best, tonumber(strsub(ranks, index, index)) or 0)
     end
+    return best
+end
 
-    if stat and stat.damage > 0 then
+local function ShowSpellTip(owner, anchor, entry, stat)
+    local Tip = VanillaBonkSpellTip
+    local info = run.info[entry.index] or {}
+    local evolved = entry.kind == "e"
+    local rarity = UI.RARITY[evolved and 4 or BestRarity(info.ranks)]
+    Tip:SetOwner(owner, anchor)
+    Tip:SetLegendary(evolved)
+    Tip:Title(info.name or "?", { rarity.r, rarity.g, rarity.b }, Tip:SpellTags(info.school, info.aoe))
+
+    local rank = "Rank " .. entry.rank
+    local spec = info.spec or ""
+    local headerColor = info.faster and Tip.GREEN or Tip.WHITE
+    if evolved and info.evolvedFrom and info.evolvedFrom ~= "" then
+        Tip:AddDoubleLine(spec, info.header, Tip.SPEC[1], Tip.SPEC[2], Tip.SPEC[3], headerColor[1], headerColor[2], headerColor[3])
+        Tip:AddDoubleLine("Evolved from " .. info.evolvedFrom, rank, 1, 0.5, 0, 0.62, 0.62, 0.62, 11)
+    else
+        local left = spec ~= "" and (spec .. " |cff9d9d9d· " .. rank .. "|r") or ("|cff9d9d9d" .. rank .. "|r")
+        Tip:AddDoubleLine(left, info.header, Tip.SPEC[1], Tip.SPEC[2], Tip.SPEC[3], headerColor[1], headerColor[2], headerColor[3])
+    end
+    if info.description and info.description ~= "" then
+        Tip:AddLine(info.description, 1, 0.82, 0)
+    end
+    if info.line and info.line ~= "" then
+        Tip:AddRule()
+        Tip:AddSmallLine(info.line, Tip.GREEN)
+    end
+    if stat and (stat.damage or 0) > 0 then
         local total = 0
         for _, other in pairs(run.stats) do
             total = total + other.damage
         end
         local share = total > 0 and floor(stat.damage / total * 100 + 0.5) or 0
-        GameTooltip:AddLine(" ")
-        GameTooltip:AddDoubleLine(VanillaBonkUI.Short(stat.damage) .. " damage", share .. "% of total, " .. stat.kills .. " kills", 1, 1, 1, 0.6, 0.6, 0.6)
+        Tip:AddRule()
+        Tip:AddDoubleLine(VanillaBonkUI.Short(stat.damage) .. " damage · " .. share .. "% of total", (stat.kills or 0) .. " kills",
+            0.62, 0.62, 0.62, 0.62, 0.62, 0.62, 11)
+    end
+    Tip:Show()
+end
+
+local function ShowEntry(owner, anchor, entry, stat)
+    if entry.kind == "p" then
+        GameTooltip:SetOwner(owner, anchor)
+        AddPassiveLines(entry)
+        GameTooltip:Show()
+    else
+        ShowSpellTip(owner, anchor, entry, stat)
     end
 end
 
@@ -207,21 +345,18 @@ local function ShowSlotTooltip()
         return
     end
 
-    AddEntryLines(entry, run.stats[slot.spellIndex])
-    GameTooltip:Show()
+    ShowEntry(slot, "ANCHOR_TOP", entry, run.stats[slot.spellIndex])
 end
 
-local function ShowEntryTooltip(owner, entry)
-    GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
-    AddEntryLines(entry)
-    GameTooltip:Show()
+local function ShowEntryTooltip(owner, entry, stat)
+    ShowEntry(owner, "ANCHOR_RIGHT", entry, stat)
 end
 
-function VanillaBonk_LoadoutTooltip(owner, name)
+function VanillaBonk_LoadoutTooltip(owner, name, stat)
     for _, entry in ipairs(run.spells) do
         local info = run.info[entry.index]
         if info and info.name == name then
-            ShowEntryTooltip(owner, entry)
+            ShowEntryTooltip(owner, entry, stat)
             return true
         end
     end
@@ -233,9 +368,7 @@ function VanillaBonk_SpellTooltip(owner, index)
     if not entry then
         return false
     end
-    GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
-    AddEntryLines(entry, run.stats[index])
-    GameTooltip:Show()
+    ShowEntryTooltip(owner, entry, run.stats[index])
     return true
 end
 
@@ -298,8 +431,16 @@ local function CreateSlot(parent, size, isSpell)
     slot:SetWidth(size)
     slot:SetHeight(size)
     slot.isSpell = isSpell
+    slot.back = BarTexture(slot, "BACKGROUND", 52, 84, 217, 249)
+    slot.back:SetAllPoints(slot)
     slot.icon = slot:CreateTexture(nil, "ARTWORK")
     slot.icon:SetAllPoints(slot)
+    UI.CropIcon(slot.icon)
+    slot.frame = slot:CreateTexture(nil, "OVERLAY")
+    slot.frame:SetTexture("Interface\\Buttons\\UI-Quickslot2")
+    slot.frame:SetWidth(size * 66 / 36)
+    slot.frame:SetHeight(size * 66 / 36)
+    UI.CenterSlotFrame(slot.frame, slot, size)
 
     local top = CreateFrame("Frame", nil, slot)
     top:SetAllPoints(slot)
@@ -320,9 +461,8 @@ local function CreateSlot(parent, size, isSpell)
     if isSpell then
         slot.cooldown = CreateFrame("Model", nil, slot, "CooldownFrameTemplate")
         slot.cooldown:ClearAllPoints()
-        slot.cooldown:SetWidth(size)
-        slot.cooldown:SetHeight(size)
-        slot.cooldown:SetPoint("CENTER", slot, "CENTER", 0, -1)
+        slot.cooldown:SetAllPoints(slot)
+        slot.cooldown:SetScale(size / 36)
         slot.glow = top:CreateTexture(nil, "OVERLAY")
         slot.glow:SetTexture("Interface\\Buttons\\UI-ActionButton-Border")
         slot.glow:SetBlendMode("ADD")
@@ -360,17 +500,22 @@ local function CreateSlot(parent, size, isSpell)
     return slot
 end
 
+local function PlaceInGroup(slot, group, position)
+    local x = group.x + (position - 1) * (group.size + group.gap)
+    slot:SetPoint("CENTER", runPlate, "BOTTOMLEFT", x + group.size / 2, runCenterY)
+end
+
 for index = 1, SPELL_SLOTS do
-    local slot = CreateSlot(spellBar, 40, true)
-    slot:SetPoint("TOPLEFT", spellBar, "TOPLEFT", (8 + (index - 1) * 42) * SCALE, -3 * SCALE)
+    local slot = CreateSlot(runPlate, SPELL_SIZE, true)
+    PlaceInGroup(slot, runLayout.spells, index)
     spellSlots[index] = slot
 end
 for index = 1, PASSIVE_SLOTS do
-    local slot = CreateSlot(spellBar, 30, false)
+    local slot = CreateSlot(runPlate, PASSIVE_SIZE, false)
     if index <= 3 then
-        slot:SetPoint("TOPLEFT", wings[1], "TOPLEFT", 36 + (index - 1) * 38, -12)
+        PlaceInGroup(slot, runLayout.left, index)
     else
-        slot:SetPoint("TOPLEFT", wings[2], "TOPLEFT", 80 - (6 - index) * 38, -12)
+        PlaceInGroup(slot, runLayout.right, index - 3)
     end
     passiveSlots[index] = slot
 end
@@ -421,6 +566,7 @@ local function UpdateSlot(slot, entry)
         return
     end
     slot.icon:SetTexture(UI.ICON_PATH .. entry.icon)
+    UI.CropIcon(slot.icon)
     slot.icon:Show()
     slot.badge:Show()
     slot.rank:SetText(entry.rank)
@@ -519,32 +665,23 @@ spellBar:SetScript("OnUpdate", function()
     end
 end)
 
-EndCap(campFrame, 96, -316)
-EndCap(campFrame, 96, 220, true)
+local campPlate = CreatePlate(campFrame, CAMP_WIDTH, CAMP_PLATE_HEIGHT)
+local campCenterY = CAMP_PLATE_HEIGHT / 2
+local campMargin = ceil(GryphonInset(CAMP_PLATE_HEIGHT, GRYPHON_BODY_EDGE)) + 4
+AddRecess(campPlate, campMargin, campCenterY, DASH_SIZE, DASH_SIZE)
+local campDashDock = AddDock(campPlate, campMargin, campCenterY, DASH_SIZE)
 
-local masteryRim = UI.CastRim(campFrame, XP_WIDTH)
-masteryRim:SetPoint("BOTTOM", root, "BOTTOM", 0, 1)
-local masteryBar = CreateFrame("StatusBar", nil, masteryRim.opening)
-masteryBar:SetAllPoints(masteryRim.opening)
-masteryBar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
-masteryBar:SetStatusBarColor(0.95, 0.65, 0.15)
-masteryBar:SetMinMaxValues(0, 1)
-masteryBar:SetFrameLevel(masteryRim.opening:GetFrameLevel() + 1)
-masteryRim.text = UI.Text(masteryRim.art, 10, UI.NUMBER_FONT, "OUTLINE")
-masteryRim.text:SetPoint("CENTER", masteryRim.opening, "CENTER", 0, 1)
+local masteryBar = AddRailBar(campPlate, CAMP_PLATE_HEIGHT, 0.95, 0.65, 0.15)
+local masteryText = UI.Text(campPlate.rail, 10, UI.NUMBER_FONT, "OUTLINE")
+masteryText:SetPoint("CENTER", campPlate, "TOP", CAMP_WIDTH / 4, -RAIL_HEIGHT / 2)
+local masteryHover = AddRailHover(campPlate)
+local masteryLevel = AddLevelPlate(campPlate, CAMP_PLATE_HEIGHT)
 
-local crestRing = UI.Ring(campFrame, 32)
-crestRing:SetPoint("CENTER", root, "BOTTOM", 0, 48)
-crestRing:SetFrameLevel(masteryRim:GetFrameLevel() + 6)
-crestRing.crest = crestRing:CreateTexture(nil, "ARTWORK")
-crestRing.crest:SetPoint("TOPLEFT", crestRing, "TOPLEFT", 2, -2)
-crestRing.crest:SetPoint("BOTTOMRIGHT", crestRing, "BOTTOMRIGHT", -2, 2)
-
-local masteryName = UI.Text(campFrame, 14)
-masteryName:SetPoint("RIGHT", root, "BOTTOM", -26, 48)
+local masteryName = UI.Text(campPlate, 14)
+masteryName:SetPoint("RIGHT", campPlate, "BOTTOM", -LEVEL_PLATE_WIDTH / 2 - 10, campCenterY)
 masteryName:SetJustifyH("RIGHT")
-local masteryPoints = UI.Text(campFrame, 13)
-masteryPoints:SetPoint("LEFT", root, "BOTTOM", 26, 48)
+local masteryPoints = UI.Text(campPlate, 13)
+masteryPoints:SetPoint("LEFT", campPlate, "BOTTOM", LEVEL_PLATE_WIDTH / 2 + 10, campCenterY)
 masteryPoints:SetTextColor(0.25, 1, 0.25)
 
 local mastery
@@ -570,18 +707,17 @@ local function ShowMasteryTooltip()
     GameTooltip:Show()
 end
 
-for _, frame in ipairs({ masteryRim, crestRing }) do
+for _, frame in ipairs({ masteryHover, masteryLevel }) do
     frame:EnableMouse(true)
     frame:SetScript("OnEnter", ShowMasteryTooltip)
     frame:SetScript("OnLeave", function() GameTooltip:Hide() end)
 end
 
 local function RefreshMastery()
-    local _, classToken = UnitClass("player")
-    UI.SetRoundClassCrest(crestRing.crest, classToken)
     if not mastery then
         masteryBar:SetValue(0)
-        masteryRim.text:SetText("")
+        masteryText:SetText("")
+        masteryLevel.text:SetText("")
         masteryName:SetText("|cffffd100Class Mastery|r")
         masteryPoints:SetText("")
         return
@@ -589,13 +725,14 @@ local function RefreshMastery()
     if mastery.next > 0 then
         masteryBar:SetMinMaxValues(0, mastery.next)
         masteryBar:SetValue(min(mastery.xp, mastery.next))
-        masteryRim.text:SetText(mastery.xp .. " / " .. mastery.next)
+        masteryText:SetText(mastery.xp .. " / " .. mastery.next)
     else
         masteryBar:SetMinMaxValues(0, 1)
         masteryBar:SetValue(1)
-        masteryRim.text:SetText("Max level")
+        masteryText:SetText("Max level")
     end
-    masteryName:SetText("|cffffd100" .. mastery.class .. " Mastery|r " .. mastery.level)
+    masteryName:SetText("|cffffd100" .. mastery.class .. " Mastery|r")
+    masteryLevel.text:SetText(mastery.level)
     if not mastery.trees then
         masteryPoints:SetText("|cffaaaaaaTrees coming soon|r")
     elseif mastery.unspent > 0 then
@@ -609,6 +746,7 @@ local wallet = CreateFrame("Frame", nil, campFrame)
 wallet:SetWidth(240)
 wallet:SetHeight(18)
 wallet:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", -10, 66)
+wallet:SetScale(1 / BAR_SCALE)
 wallet.text = UI.Text(wallet, 13)
 wallet.text:SetPoint("RIGHT", wallet, "RIGHT", 0, 0)
 wallet.text:SetJustifyH("RIGHT")
@@ -634,91 +772,47 @@ local function RefreshWallet()
     wallet:SetWidth(wallet.text:GetStringWidth() + 4)
 end
 
-local DASH_SIZE = 26
 local DASH_ICON = "Ability_Rogue_Sprint"
 local BLINK_ICON = "Spell_Arcane_Blink"
-local HALF_MASK = "Interface\\AddOns\\HordesOfAzeroth\\Textures\\HalfMask"
 local DASH_ARC = "Interface\\AddOns\\HordesOfAzeroth\\Textures\\DashArc"
 local DASH_ARC_FRAMES = 32
 local DASH_ARC_COLUMNS = 8
 local DASH_ARC_ROWS = 4
-local DASH_ARC_SCALE = 1.1
-local RIM_SHADOW = 5
+local DASH_ARC_SCALE = 1.3
 local dash = { charges = 0, max = 0, cooldown = 0, key = "Shift" }
 
-local dashRing = UI.Ring(root, DASH_SIZE, true)
-dashRing:SetFrameLevel(xpRim:GetFrameLevel() + 6)
-dashRing:Hide()
-dashRing.dashIcon = UI.RingArt(dashRing, UI.ICON_PATH .. DASH_ICON)
-dashRing.blinkIcon = UI.RingArt(dashRing, UI.ICON_PATH .. BLINK_ICON)
-dashRing.blinkIcon:Hide()
-dashRing.icon = dashRing.dashIcon
-
-local function SweepHalf(rightSide)
-    local half = dashRing:CreateTexture(nil, "ARTWORK")
-    half:SetTexture(UI.FLAT)
-    half:SetVertexColor(0, 0, 0, 0.75)
-    half:SetAllPoints(dashRing.icon)
-    half:SetMask("Textures\\MinimapMask")
-    local fixed = dashRing:CreateMaskTexture()
-    fixed:SetTexture(HALF_MASK)
-    fixed:SetAllPoints(dashRing.icon)
-    if rightSide then
-        fixed:SetRotation(math.pi)
-    end
-    half:AddMaskTexture(fixed)
-    half.turn = dashRing:CreateMaskTexture()
-    half.turn:SetTexture(HALF_MASK)
-    half.turn:SetAllPoints(dashRing.icon)
-    half:AddMaskTexture(half.turn)
-    half:Hide()
-    return half
-end
-local sweepLeft, sweepRight
-if dashRing.icon.SetMask and dashRing.CreateMaskTexture then
-    sweepLeft = SweepHalf(false)
-    sweepRight = SweepHalf(true)
-end
-
-local function SetSweep(done)
-    if not sweepLeft then
-        return
-    end
-    if not done then
-        sweepLeft:Hide()
-        sweepRight:Hide()
-        return
-    end
-    local angle = done * 360
-    sweepLeft.turn:SetRotation(-math.rad(max(angle, 180) - 180))
-    sweepLeft:Show()
-    if angle < 180 then
-        sweepRight.turn:SetRotation(-math.rad(angle - 180))
-        sweepRight:Show()
-    else
-        sweepRight:Hide()
-    end
-end
-
-local dashText = CreateFrame("Frame", nil, dashRing)
-dashText:SetAllPoints(dashRing)
-dashText:SetFrameLevel(dashRing:GetFrameLevel() + 2)
-dashRing.arc = dashText:CreateTexture(nil, "OVERLAY")
-dashRing.arc:SetTexture(DASH_ARC)
-dashRing.arc:SetWidth(DASH_SIZE * DASH_ARC_SCALE)
-dashRing.arc:SetHeight(DASH_SIZE * DASH_ARC_SCALE)
-dashRing.arc:SetPoint("CENTER", dashRing, "CENTER", 0, 0)
-dashRing.arc:Hide()
-dashRing.count = UI.Text(dashText, 9, UI.NUMBER_FONT, "OUTLINE")
-dashRing.count:SetPoint("BOTTOMRIGHT", dashRing, "BOTTOMRIGHT", 1, 0)
-UI.DashRing = dashRing
+local dashButton = UI.Slot(root, DASH_SIZE)
+dashButton:Hide()
+dashButton.dashIcon = dashButton.icon
+dashButton.dashIcon:SetTexture(UI.ICON_PATH .. DASH_ICON)
+UI.CropIcon(dashButton.dashIcon)
+dashButton.blinkIcon = dashButton:CreateTexture(nil, "ARTWORK")
+dashButton.blinkIcon:SetTexture(UI.ICON_PATH .. BLINK_ICON)
+UI.CropIcon(dashButton.blinkIcon)
+dashButton.blinkIcon:SetAllPoints(dashButton)
+dashButton.blinkIcon:Hide()
+dashButton.cooldown = CreateFrame("Model", nil, dashButton, "CooldownFrameTemplate")
+dashButton.cooldown:ClearAllPoints()
+dashButton.cooldown:SetAllPoints(dashButton)
+dashButton.cooldown:SetScale(DASH_SIZE / 36)
+local dashText = CreateFrame("Frame", nil, dashButton)
+dashText:SetAllPoints(dashButton)
+dashText:SetFrameLevel(dashButton:GetFrameLevel() + 3)
+dashButton.arc = dashText:CreateTexture(nil, "OVERLAY")
+dashButton.arc:SetTexture(DASH_ARC)
+dashButton.arc:SetWidth(DASH_SIZE * DASH_ARC_SCALE)
+dashButton.arc:SetHeight(DASH_SIZE * DASH_ARC_SCALE)
+dashButton.arc:SetPoint("CENTER", dashButton, "CENTER", 0, 0)
+dashButton.arc:Hide()
+dashButton.count = UI.Text(dashText, 14, UI.NUMBER_FONT, "THICKOUTLINE")
+dashButton.count:SetPoint("BOTTOMRIGHT", dashButton, "BOTTOMRIGHT", -1, 1)
+UI.DashButton = dashButton
 
 function UI.SetDashKey(text)
     dash.key = text
 end
 
-dashRing:EnableMouse(true)
-dashRing:SetScript("OnEnter", function()
+dashButton:SetScript("OnEnter", function()
     GameTooltip:SetOwner(this, "ANCHOR_TOP")
     GameTooltip:AddDoubleLine(dash.blink and "Blink" or "Dash", dash.key ~= "" and dash.key or NOT_BOUND, 1, 1, 1, 0.6, 0.6, 0.6)
     GameTooltip:AddDoubleLine(dash.charges .. "/" .. dash.max .. " charges",
@@ -730,49 +824,68 @@ dashRing:SetScript("OnEnter", function()
     end
     GameTooltip:Show()
 end)
-dashRing:SetScript("OnLeave", function() GameTooltip:Hide() end)
+dashButton:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
 local function SetDashArc(done)
     if not done then
-        dashRing.arc:Hide()
+        dashButton.arc:Hide()
         return
     end
     local frame = max(0, min(DASH_ARC_FRAMES - 1, floor(DASH_ARC_FRAMES * done)))
     local column, row = mod(frame, DASH_ARC_COLUMNS), floor(frame / DASH_ARC_COLUMNS)
-    dashRing.arc:SetTexCoord(column / DASH_ARC_COLUMNS, (column + 1) / DASH_ARC_COLUMNS, row / DASH_ARC_ROWS, (row + 1) / DASH_ARC_ROWS)
-    dashRing.arc:Show()
+    dashButton.arc:SetTexCoord(column / DASH_ARC_COLUMNS, (column + 1) / DASH_ARC_COLUMNS, row / DASH_ARC_ROWS, (row + 1) / DASH_ARC_ROWS)
+    dashButton.arc:Show()
+end
+
+local DASH_TIMER_DRIFT = 0.05
+
+local function SetDashTimer(duration)
+    if not duration then
+        dashButton.cooldown:Hide()
+        dash.timerStart = nil
+        return
+    end
+    local start = GetTime() - (duration - dash.left)
+    if not dash.timerStart or abs(start - dash.timerStart) > DASH_TIMER_DRIFT then
+        dash.timerStart = start
+        CooldownFrame_SetTimer(dashButton.cooldown, start, duration, 1)
+    end
 end
 
 local function RefreshDash()
     if dash.max <= 0 then
-        dashRing:Hide()
+        dashButton:Hide()
         return
     end
-    local icon = dash.blink and dashRing.blinkIcon or dashRing.dashIcon
-    if icon ~= dashRing.icon then
-        dashRing.icon:Hide()
+    local icon = dash.blink and dashButton.blinkIcon or dashButton.dashIcon
+    if icon ~= dashButton.icon then
+        dashButton.icon:Hide()
         icon:Show()
-        dashRing.icon = icon
+        dashButton.icon = icon
     end
     if dash.charges > 0 then
-        dashRing.icon:SetVertexColor(1, 1, 1)
+        dashButton.icon:SetVertexColor(1, 1, 1)
     else
-        dashRing.icon:SetVertexColor(0.45, 0.45, 0.45)
+        dashButton.icon:SetVertexColor(0.45, 0.45, 0.45)
     end
     if dash.left and dash.cooldown > 0 then
-        local done = 1 - dash.left * 1000 / dash.cooldown
-        SetSweep(done)
-        SetDashArc(done)
+        local duration = dash.cooldown / 1000
+        SetDashTimer(duration)
+        SetDashArc(1 - dash.left / duration)
     else
-        SetSweep(nil)
+        SetDashTimer(nil)
         SetDashArc(nil)
     end
-    dashRing.count:SetText(dash.max > 1 and dash.charges or "")
-    dashRing:Show()
+    dashButton.count:SetText(dash.max > 1 and dash.charges or "")
+    dashButton:Show()
 end
 
-dashRing:SetScript("OnUpdate", function()
-    if not dash.left or RunHeld() then
+dashButton:SetScript("OnUpdate", function()
+    if not dash.left then
+        return
+    end
+    if RunHeld() then
+        RefreshDash()
         return
     end
     dash.left = dash.left - arg1
@@ -784,12 +897,11 @@ dashRing:SetScript("OnUpdate", function()
 end)
 
 local function PlaceDash(running)
-    dashRing:ClearAllPoints()
-    if running then
-        dashRing:SetPoint("BOTTOM", root, "BOTTOM", 26 + 4 + DASH_SIZE / 2, 48 + 30 - RIM_SHADOW)
-    else
-        dashRing:SetPoint("BOTTOM", root, "BOTTOM", 190, 1 + 30 - RIM_SHADOW)
-    end
+    dashButton:ClearAllPoints()
+    dashButton:SetPoint("CENTER", running and runDashDock or campDashDock, "CENTER", 0, 0)
+    dashButton:SetFrameLevel((running and runPlate or campPlate):GetFrameLevel() + 5)
+    dashButton.cooldown:SetFrameLevel(dashButton:GetFrameLevel() + 1)
+    dashText:SetFrameLevel(dashButton:GetFrameLevel() + 3)
 end
 
 if UIPARENT_MANAGED_FRAME_POSITIONS and UIPARENT_MANAGED_FRAME_POSITIONS["CastingBarFrame"] then
@@ -809,11 +921,11 @@ local function RefreshXp(level)
     if maximum and maximum > 0 then
         xpBar:SetMinMaxValues(0, maximum)
         xpBar:SetValue(min(current, maximum))
-        xpRim.text:SetText(current .. " / " .. maximum)
+        xpText:SetText(current .. " / " .. maximum)
     else
         xpBar:SetMinMaxValues(0, 1)
         xpBar:SetValue(1)
-        xpRim.text:SetText("")
+        xpText:SetText("")
     end
     levelRing.text:SetText(level)
 end
@@ -827,7 +939,7 @@ local function ShowXpTooltip()
     GameTooltip:AddLine("Each run starts again at level 1.", 0.6, 0.6, 0.6)
     GameTooltip:Show()
 end
-for _, frame in ipairs({ xpRim, levelRing }) do
+for _, frame in ipairs({ xpHover, levelRing }) do
     frame:EnableMouse(true)
     frame:SetScript("OnEnter", ShowXpTooltip)
     frame:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -974,8 +1086,20 @@ handlers["pw"] = function(f)
     info.line = f[7] or ""
     info.description = gsub(f[8] or "", "|n", "\n")
     info.damage = f[9] or ""
+    info.header = f[10] or ""
+    info.faster = f[11] == "1"
+    info.school = f[12] or ""
+    info.spec = f[13] or ""
+    info.aoe = f[14] == "1"
     run.info[index] = info
     RefreshSlots()
+    local slot = spellSlots[index]
+    if slot and VanillaBonkSpellTip:IsOwned(slot) then
+        local previous = this
+        this = slot
+        ShowSlotTooltip()
+        this = previous
+    end
 end
 
 handlers["pcd"] = function(f)
@@ -1074,3 +1198,16 @@ events:SetScript("OnEvent", function()
 end)
 
 SetMode(false)
+
+function UI.HeroSpellSlot(name)
+    for index, slot in ipairs(spellSlots) do
+        local info = run.info[index]
+        if info and info.name == name and run.spells[index] then
+            return slot
+        end
+    end
+end
+
+function UI.HeroSpellSlotAt(index)
+    return run.spells[index] and spellSlots[index]
+end

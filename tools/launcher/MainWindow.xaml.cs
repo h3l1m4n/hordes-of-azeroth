@@ -19,6 +19,7 @@ namespace HordesOfAzeroth.Launcher
     {
         const string NewIssueUrl = "https://github.com/jonhaldors/hordes-of-azeroth/issues/new";
         const string DiscordUrl = "https://discord.gg/zpYfsqh6Dn";
+        const string CoffeeUrl = "https://buymeacoffee.com/jonhaldors";
         static readonly TimeSpan UpdateInterval = TimeSpan.FromMinutes(15);
         static readonly TimeSpan MenuReopenGuard = TimeSpan.FromMilliseconds(300);
         const string FullRepairText = "The launcher checks every game file, puts back the ones that are missing or damaged and reloads the world. Your characters and unlocks are backed up first and stay as they are.";
@@ -1019,6 +1020,8 @@ namespace HordesOfAzeroth.Launcher
                 MessageBox.Show(this, SmartAppControl.BlockedText, "Hordes of Azeroth");
             else if (DxvkMod.TurnOffAfterCrash(m_folder))
                 MessageBox.Show(this, VulkanTurnedOffText, "Hordes of Azeroth");
+            else if (DamagedGameFile.CrashTextSince(m_folder, m_game.LaunchedAt) is string damaged)
+                MessageBox.Show(this, damaged, "Hordes of Azeroth");
         }
 
         async void CheckForUpdates_Click(object sender, RoutedEventArgs e)
@@ -1060,6 +1063,8 @@ namespace HordesOfAzeroth.Launcher
         }
 
         void Discord_Click(object sender, RoutedEventArgs e) => OpenUrl(DiscordUrl);
+
+        void Coffee_Click(object sender, RoutedEventArgs e) => OpenUrl(CoffeeUrl);
 
         void MoreButton_Click(object sender, RoutedEventArgs e)
         {

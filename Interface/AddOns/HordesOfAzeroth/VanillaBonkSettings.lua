@@ -40,6 +40,7 @@ UI.KEYS = {
     { command = "VANILLABONK_INTERACT", label = "Interact", default = "F" },
     { command = "VANILLABONK_HEARTH", label = "Use Hearthstone", default = "T" },
     { command = "VANILLABONK_DASH", label = "Dash", modifierAllowed = true },
+    { command = "VANILLABONK_SHAPESHIFT", label = "Shapeshift (Druid)" },
 }
 
 local settingsWatchers = {}

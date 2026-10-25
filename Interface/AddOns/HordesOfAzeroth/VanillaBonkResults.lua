@@ -227,14 +227,15 @@ local function AddRunLines(entry)
 end
 
 local function SpellLineTooltip(line, entry)
-    if not (VanillaBonk_LoadoutTooltip and VanillaBonk_LoadoutTooltip(line, entry.name)) then
-        GameTooltip:SetOwner(line, "ANCHOR_RIGHT")
-        local r, g, b = 1, 1, 1
-        if entry.evolved then
-            r, g, b = 1, 0.5, 0
-        end
-        GameTooltip:AddDoubleLine(entry.name, entry.level > 0 and ("Rank " .. entry.level) or "", r, g, b, 0.6, 0.6, 0.6)
+    if VanillaBonk_LoadoutTooltip and VanillaBonk_LoadoutTooltip(line, entry.name, { damage = entry.damage, kills = entry.kills }) then
+        return
     end
+    GameTooltip:SetOwner(line, "ANCHOR_RIGHT")
+    local r, g, b = 1, 1, 1
+    if entry.evolved then
+        r, g, b = 1, 0.5, 0
+    end
+    GameTooltip:AddDoubleLine(entry.name, entry.level > 0 and ("Rank " .. entry.level) or "", r, g, b, 0.6, 0.6, 0.6)
     AddRunLines(entry)
     GameTooltip:Show()
 end
@@ -413,10 +414,13 @@ local RECAP_LEGEND_GAP = 6
 local RECAP_LEGEND_LINE = 15
 local RECAP_COLUMN = 3
 local RECAP_LINE_TOP = 6
-local RECAP_LINE_BOTTOM = 14
 local RECAP_LINE_THICKNESS = 2
 local RECAP_TICK_MIN = 3
 local RECAP_TICK_MAX = 24
+local RECAP_TICK_WIDTH = 3
+local RECAP_TICK_HOVER_WIDTH = 5
+local RECAP_HOVER_REACH = 4
+local RECAP_TOOLTIP_GAP = 10
 local RECAP_SLOTS = 100
 local RECAP_SECONDS = 10
 local RECAP_SKULL = 18
@@ -510,7 +514,7 @@ local function RecapTick(index)
     if not tick then
         tick = graph:CreateTexture(nil, "OVERLAY")
         tick:SetTexture(UI.FLAT)
-        tick:SetWidth(3)
+        tick:SetWidth(RECAP_TICK_WIDTH)
         graph.ticks[index] = tick
     end
     return tick
@@ -547,8 +551,9 @@ local function RecapColor(source)
 end
 
 local function RecapLineY(permille)
-    local span = RECAP_GRAPH_HEIGHT - RECAP_LINE_TOP - RECAP_LINE_BOTTOM
-    return RECAP_LINE_BOTTOM + span * max(0, min(1000, permille)) / 1000
+    local floorY = 1 + RECAP_LINE_THICKNESS / 2
+    local span = RECAP_GRAPH_HEIGHT - RECAP_LINE_TOP - floorY
+    return floorY + span * max(0, min(1000, permille)) / 1000
 end
 
 local function RecapSlotX(slot)
@@ -576,6 +581,11 @@ local function DrawRecapLine()
         column.area:ClearAllPoints()
         column.area:SetPoint("BOTTOMLEFT", graph, "BOTTOMLEFT", x, 1)
         column.area:SetHeight(max(0.5, y - 1))
+        if y <= RecapLineY(0) then
+            column.area:Hide()
+        else
+            column.area:Show()
+        end
         local low = min(y, previous or y)
         local high = max(y, previous or y)
         column.top:ClearAllPoints()
@@ -604,16 +614,165 @@ local function DrawRecapTicks()
     for index = getn(recap.events) + 1, getn(graph.ticks) do
         graph.ticks[index]:Hide()
     end
+    local count = getn(recap.events)
+    local lastAlive = count > 1 and recap.events[count - 1].health or recap.startHealth
     graph.skull:ClearAllPoints()
-    graph.skull:SetPoint("CENTER", graph, "BOTTOMLEFT", RecapSlotX(RECAP_SLOTS) - RECAP_SKULL / 2, RecapLineY(0))
+    graph.skull:SetPoint("CENTER", graph, "BOTTOMLEFT", RecapSlotX(RECAP_SLOTS) - RECAP_SKULL / 2 - 3, RecapLineY(lastAlive) + RECAP_SKULL / 2 + 3)
 end
+
+local function BlowText(source)
+    if source.spell == "Melee" then
+        return source.name .. "'s melee hit"
+    end
+    return source.spell ~= "" and (source.name .. "'s " .. source.spell) or source.name
+end
+
+local function HealthPoints(permille)
+    return floor(recap.maxHealth * max(0, permille) / 1000 + 0.5)
+end
+
+local function SecondsBeforeDeath(slot)
+    if slot >= RECAP_SLOTS then
+        return "Moment of death"
+    end
+    return format("%.1fs before death", (RECAP_SLOTS - slot) * RECAP_SECONDS / RECAP_SLOTS)
+end
+
+local function HealthLine(permille)
+    return format("Health %s / %s (%d%%)", Thousands(HealthPoints(permille)), Thousands(recap.maxHealth), floor(max(0, permille) / 10 + 0.5))
+end
+
+local function EventsNearX(x)
+    local nearest, distance
+    for _, event in ipairs(recap.events) do
+        local gap = abs(RecapSlotX(event.slot) - x)
+        if gap <= RECAP_HOVER_REACH and (not distance or gap < distance) then
+            nearest, distance = event.slot, gap
+        end
+    end
+    local found = {}
+    if not nearest then
+        return found, nil
+    end
+    for index, event in ipairs(recap.events) do
+        if event.slot == nearest then
+            tinsert(found, index)
+        end
+    end
+    return found, nearest
+end
+
+local function AddEventLines(indexes)
+    local count = getn(recap.events)
+    for _, index in ipairs(indexes) do
+        local event = recap.events[index]
+        if event.source == 0 then
+            GameTooltip:AddDoubleLine("Healed", "+" .. Thousands(event.amount), 0.85, 0.85, 0.85, RECAP_GREEN[1], RECAP_GREEN[2], RECAP_GREEN[3])
+        else
+            local source = recap.sources[event.source]
+            local color = RecapColor(source)
+            GameTooltip:AddDoubleLine(source and BlowText(source) or "Unknown", "-" .. Thousands(event.amount), color[1] + 0.25, color[2] + 0.25, color[3] + 0.25, 1, 0.42, 0.31)
+        end
+        if index == count and recap.overkill > 0 then
+            GameTooltip:AddLine("Killing blow, " .. Thousands(recap.overkill) .. " overkill", 1, 0.42, 0.31)
+        end
+    end
+    GameTooltip:AddLine(HealthLine(recap.events[indexes[getn(indexes)]].health), 1, 1, 1)
+end
+
+local function HighlightTicks(indexes)
+    local lit = {}
+    for _, index in ipairs(indexes) do
+        lit[index] = true
+    end
+    for index, tick in ipairs(graph.ticks) do
+        tick:SetWidth(lit[index] and RECAP_TICK_HOVER_WIDTH or RECAP_TICK_WIDTH)
+    end
+end
+
+graph.hover = CreateFrame("Frame", nil, graph)
+graph.hover:SetAllPoints(graph)
+graph.hover:EnableMouse(true)
+
+graph.cursor = graph.hover:CreateTexture(nil, "OVERLAY")
+graph.cursor:SetTexture(UI.FLAT)
+graph.cursor:SetVertexColor(1, 1, 1, 0.3)
+graph.cursor:SetWidth(1)
+graph.cursor:Hide()
+
+graph.dot = graph.hover:CreateTexture(nil, "OVERLAY")
+graph.dot:SetTexture(UI.FLAT)
+graph.dot:SetVertexColor(1, 1, 1, 1)
+graph.dot:SetWidth(5)
+graph.dot:SetHeight(5)
+graph.dot:Hide()
+
+local function PlaceRecapTooltip(x, y)
+    local half = GameTooltip:GetHeight() / 2
+    y = max(half, min(RECAP_GRAPH_HEIGHT - half, y))
+    GameTooltip:ClearAllPoints()
+    if x < graph.inner / 2 then
+        GameTooltip:SetPoint("LEFT", graph, "BOTTOMLEFT", x + RECAP_TOOLTIP_GAP, y)
+    else
+        GameTooltip:SetPoint("RIGHT", graph, "BOTTOMLEFT", x - RECAP_TOOLTIP_GAP, y)
+    end
+end
+
+local function ShowRecapHover(x)
+    local indexes, eventSlot = EventsNearX(x)
+    local slot = eventSlot or max(0, min(RECAP_SLOTS, (x - 1) * RECAP_SLOTS / graph.inner))
+    local permille = eventSlot and recap.events[indexes[getn(indexes)]].health or HealthAtSlot(slot)
+    local key = eventSlot and ("e" .. eventSlot) or ("s" .. floor(slot))
+    local lineX = eventSlot and RecapSlotX(eventSlot) or x
+    graph.cursor:ClearAllPoints()
+    graph.cursor:SetPoint("TOP", graph, "TOPLEFT", lineX, -1)
+    graph.cursor:SetPoint("BOTTOM", graph, "BOTTOMLEFT", lineX, 1)
+    graph.cursor:Show()
+    graph.dot:ClearAllPoints()
+    graph.dot:SetPoint("CENTER", graph, "BOTTOMLEFT", lineX, RecapLineY(permille))
+    graph.dot:Show()
+    if graph.hover.key ~= key then
+        graph.hover.key = key
+        HighlightTicks(indexes)
+        GameTooltip:SetOwner(graph.hover, "ANCHOR_NONE")
+        GameTooltip:AddLine(SecondsBeforeDeath(slot), 1, 0.82, 0)
+        if eventSlot then
+            AddEventLines(indexes)
+        else
+            GameTooltip:AddLine(HealthLine(permille), 1, 1, 1)
+        end
+        GameTooltip:Show()
+    end
+    PlaceRecapTooltip(lineX, RecapLineY(permille))
+end
+
+local function HideRecapHover()
+    graph.hover.key = nil
+    graph.cursor:Hide()
+    graph.dot:Hide()
+    HighlightTicks({})
+    GameTooltip:Hide()
+end
+
+graph.hover:SetScript("OnUpdate", function()
+    if not MouseIsOver(this) then
+        if this.key then
+            HideRecapHover()
+        end
+        return
+    end
+    local cursorX = GetCursorPosition() / graph:GetEffectiveScale()
+    ShowRecapHover(cursorX - graph:GetLeft())
+end)
+
+graph.hover:SetScript("OnHide", HideRecapHover)
 
 local function KillerText()
     local killer = recap.sources[recap.killer]
     if not killer then
         return ""
     end
-    local blow = killer.spell == "Melee" and (killer.name .. "'s melee hit") or killer.spell ~= "" and (killer.name .. "'s " .. killer.spell) or killer.name
+    local blow = BlowText(killer)
     local numbers = Thousands(recap.killAmount)
     if recap.overkill > 0 then
         numbers = numbers .. ", " .. Thousands(recap.overkill) .. " overkill"

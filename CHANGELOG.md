@@ -1,5 +1,48 @@
 # Changelog
 
+## 0.4.0
+
+### Druid
+- Druid is now available. Still WIP like every class.
+- New starter spell Shapeshift with four form attacks (Moonkin, Cat, Bear, Tree of Life) and a bonus for fighting in the right form. Press 'R' to change form; you can rebind it in Tarn Oakhoof's Keys list next to Hearthstone and Dash.
+- Hotbar spells glow green in their matching form and red when Bear form weakens them.
+
+### Spell tooltips
+- Shorter spell tooltips for every class, with live damage numbers in the first sentence.
+- Updated tooltips across the board.
+
+### Account bank
+- New account-wide bank shared by every non-Ironman character on the account.
+
+### Hotbar
+- Moved everything closer and re-positioned some elements to make it look more like a proper UI.
+
+### Difficulty and pacing
+- The calm opening of a run is shorter on Heroic and gone on Mythic.
+- Stage 2 and later start close to the previous stage's pressure instead of from scratch, with calmer stretches kept.
+
+### Enemies
+- Enemy casters glow during their wind-up, play cast animations, and their impacts land inside their circles.
+- Some enemies left far behind no longer race across the map, they now teleport properly.
+
+### Death recap additions
+- Hover the health graph to see your health at that moment. Hits and heals show their amounts when the cursor snaps to them.
+
+### Warrior
+- Fixed builds that could stand still forever: shields from all sources share one Shield capped at 50%, Campfire healing is capped at 3%, regeneration no longer feeds Lifegiving Gem, on-hit cards count once per cast, and Vengeance stores only health damage.
+
+### Warlock
+- Fixed: Burning stacks now gain your damage bonuses (Power, spec, talents, cards) like every other damage over time.
+
+### Launcher
+- If the game crashes while reading a damaged MPQ archive, the launcher names that archive after the game closes and tells you how to fix it.
+
+### Other changes
+- XP orbs follow you through a dash and get picked up when you dash over them.
+- No more reputation gains or reputation chat lines. Eastern Plaguelands towers and Silithus world PvP are off, so no capture bar covers the run timer.
+- If the server stops after you connect, the login screen says so and points to Report a bug instead of showing the stock "Failed to connect" text.
+- Rebuilt: character list on the right, class info on the left, and you create characters on the same screen.
+
 ## 0.3.1
 
 ### Enemies

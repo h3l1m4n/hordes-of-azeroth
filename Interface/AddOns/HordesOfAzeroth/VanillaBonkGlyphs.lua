@@ -368,19 +368,20 @@ end
 local sockets = {}
 
 local function MakeSockets()
-    local level = VanillaBonkLevelRing
-    if not level or sockets[1] then
+    local anchor = UI.GlyphAnchor
+    if not anchor or sockets[1] then
         return
     end
     for index = 1, SOCKETS do
-        local socket = UI.Ring(level:GetParent(), SOCKET_SIZE, true)
-        socket:SetPoint("BOTTOM", level, "BOTTOM", -(26 + 4 + SOCKET_SIZE / 2) - (index - 1) * (SOCKET_SIZE + 6), 7)
+        local socket = UI.Ring(anchor:GetParent(), SOCKET_SIZE, true)
+        socket:SetPoint("BOTTOMLEFT", anchor, "BOTTOMLEFT", (index - 1) * (SOCKET_SIZE + 6), 0)
+        socket:SetFrameLevel(anchor:GetParent():GetFrameLevel() + 7)
         socket.icon = UI.RingArt(socket, "")
         socket.circle = socket:CreateTexture(nil, "OVERLAY")
         socket.circle:SetTexture("Interface\\MiniMap\\Ping\\ping4")
         socket.circle:SetBlendMode("ADD")
-        socket.circle:SetWidth(SOCKET_SIZE * 1.5)
-        socket.circle:SetHeight(SOCKET_SIZE * 1.5)
+        socket.circle:SetWidth(SOCKET_SIZE * 1.08)
+        socket.circle:SetHeight(SOCKET_SIZE * 1.08)
         socket.circle:SetPoint("CENTER", socket, "CENTER", 0, 0)
         socket.index = index
         socket:EnableMouse(true)

@@ -24,6 +24,24 @@ namespace BonkTelegraphs
             return manifest;
         }
 
+        const uint CatAttackSound = 4121;
+
+        static readonly uint[] CatClawKits = { 269, 3370, 3373 };
+
+        public static List<string> MuteCatClaws(Dbc kits)
+        {
+            List<string> manifest = new List<string>();
+            foreach (uint kitId in CatClawKits)
+            {
+                uint[] kit = kits.Find(kitId);
+                if (kit == null || kit[KitSoundField] != CatAttackSound)
+                    throw new InvalidDataException("Spell visual kit " + kitId + " does not play the cat attack sound.");
+                kit[KitSoundField] = 0;
+                manifest.Add(string.Format("kit {0}: cat attack sound {1} muted", kitId, CatAttackSound));
+            }
+            return manifest;
+        }
+
         const int SpellVisualField = 115;
         const uint HearthstoneSpell = 8690;
         const uint HearthstoneVisual = 220;
@@ -40,6 +58,7 @@ namespace BonkTelegraphs
         static readonly uint[][] SoundSwaps =
         {
             new uint[] { 487, 3320, 1273 },
+            new uint[] { 3381, 5895, 3333 },
         };
 
         public static List<string> SwapKitSounds(Dbc kits)

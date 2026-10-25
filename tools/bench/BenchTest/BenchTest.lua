@@ -32,8 +32,13 @@ local function scheduleBuild(build, start)
     end
     local ready = start + 1.5 + (table.getn(build.steps) + 1) * BUILD_GAP
     at(ready, function() sandbox("heal") end)
-    at(ready + 1.5, function() sandbox(BenchDummies and ("dummies " .. BenchDummies) or BenchPack or "pack 150") end)
+    at(ready + 1.5, function() sandbox(BenchDummies and ((BenchDummyVerb or "dummies") .. " " .. BenchDummies) or BenchPack or "pack 150") end)
     at(ready + 2.7, function() mark("window pack " .. build.name) end)
+    if BenchWaveEvery and not BenchDummies then
+        for wave = ready + 1.5 + BenchWaveEvery, start + BUILD_SECONDS - 1, BenchWaveEvery do
+            at(wave, function() sandbox(BenchPack or "pack 150") end)
+        end
+    end
 end
 
 local function scheduleAll()
@@ -56,6 +61,11 @@ local function scheduleAll()
     end)
     at(t + 1, function() sandbox("forget 0") end)
     at(t + FALLBACK_QUIT_DELAY, function() ForceQuit() end)
+    if BenchVitalsEvery then
+        for probe = SETUP_AT + table.getn(BenchSetup) * SETUP_GAP + 1, t, BenchVitalsEvery do
+            at(probe, function() sandbox("vitals") end)
+        end
+    end
     if BenchCrowdProbeEvery then
         for probe = SETUP_AT, t, BenchCrowdProbeEvery do
             at(probe, function() SendChatMessage(".bonk crowd", "SAY") end)

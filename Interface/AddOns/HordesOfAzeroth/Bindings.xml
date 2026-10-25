@@ -8,6 +8,9 @@
 	<Binding name="VANILLABONK_HEARTH">
 		VanillaBonk_UseHearthstone();
 	</Binding>
+	<Binding name="VANILLABONK_SHAPESHIFT">
+		VanillaBonk_Shapeshift();
+	</Binding>
 	<Binding name="VANILLABONK_CHOICE1">
 		VanillaBonk_ChoiceKey("1");
 	</Binding>

@@ -75,6 +75,10 @@ namespace BonkTelegraphs
             new AuraRingLook { Name = "MarkFill", TemplateSpell = 33424, FirstSpellId = 33562, Telegraph = true, TelegraphFill = true, GrowMs = 4000,
                 Dark = new[] { 0.85f, 0.62f, 0.02f }, Bright = new[] { 1f, 0.92f, 0.25f },
                 OwnEffectId = 3622, OwnKitId = 7922, OwnVisualId = 9022 },
+            new AuraRingLook { Name = "NatureRing", TemplateSpell = 33424, FirstSpellId = 33600,
+                Dark = new[] { 0.06f, 0.3f, 0.04f }, Bright = new[] { 0.45f, 0.95f, 0.3f },
+                HazeAlpha = 0.3f, StreakAlpha = 0.42f, RimAlpha = 0.45f, MaxAlpha = 0.8f,
+                OwnEffectId = 3650, OwnKitId = 7950, OwnVisualId = 9050 },
         };
 
         public static List<string> AddSpells(Dbc spells, Dbc visuals, Dbc kits, Dbc effects)

@@ -130,12 +130,14 @@ local function EvolutionNames(evolutions)
     return text
 end
 
+local tooltip = GameTooltip
+
 local function AddLock(lock)
-    GameTooltip:AddLine(" ")
-    GameTooltip:AddLine("Locked", 1, 0.3, 0.3)
+    tooltip:AddLine(" ")
+    tooltip:AddLine("Locked", 1, 0.3, 0.3)
     if lock then
-        GameTooltip:AddLine("Quest: " .. lock.name, 1, 0.6, 0.6)
-        GameTooltip:AddLine(lock.description, 0.9, 0.9, 0.9, 1)
+        tooltip:AddLine("Quest: " .. lock.name, 1, 0.6, 0.6)
+        tooltip:AddLine(lock.description, 0.9, 0.9, 0.9, 1)
     end
 end
 
@@ -162,11 +164,11 @@ end
 
 local function AddState(entry, atSayge)
     if entry.forSale then
-        GameTooltip:AddLine(" ")
-        GameTooltip:AddDoubleLine("Unlock", PriceText(entry), 1, 0.82, 0, 1, 1, 1)
-        GameTooltip:AddLine(UnlockHint(entry, atSayge), 0.6, 0.8, 1, 1)
+        tooltip:AddLine(" ")
+        tooltip:AddDoubleLine("Unlock", PriceText(entry), 1, 0.82, 0, 1, 1, 1)
+        tooltip:AddLine(UnlockHint(entry, atSayge), 0.6, 0.8, 1, 1)
         if not SoldBySayge(entry) and not CanAfford(entry) then
-            GameTooltip:AddLine("You need " .. VanillaBonkUI.FormatGold(entry.price - GetMoney()) .. " more.", 1, 0.3, 0.3)
+            tooltip:AddLine("You need " .. VanillaBonkUI.FormatGold(entry.price - GetMoney()) .. " more.", 1, 0.3, 0.3)
         end
     elseif entry.locked then
         AddLock(book.locks[entry.kind .. entry.id])
@@ -174,76 +176,81 @@ local function AddState(entry, atSayge)
 end
 
 local function ShowSpellTooltip(owner, spell)
-    GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
-    GameTooltip:AddLine(spell.name, 1, 0.82, 0)
-    if spell.evolvesFrom > 0 then
-        GameTooltip:AddLine("Evolved spell (" .. ClassNames(SpellClasses(spell)) .. ")", 1, 0.55, 0.15)
-    else
-        GameTooltip:AddLine(ClassNames(spell.classMask), 0.7, 0.7, 0.7)
+    local Tip = VanillaBonkSpellTip
+    local evolved = spell.evolvesFrom > 0
+    tooltip = Tip
+    Tip:SetOwner(owner, "ANCHOR_RIGHT")
+    Tip:SetLegendary(evolved)
+    Tip:Title(spell.name, evolved and Tip.ORANGE or Tip.WHITE, Tip:SpellTags(spell.school, spell.aoe))
+    local classes = ClassNames(evolved and SpellClasses(spell) or spell.classMask)
+    Tip:AddDoubleLine(spell.spec or "", classes, Tip.SPEC[1], Tip.SPEC[2], Tip.SPEC[3], 0.62, 0.62, 0.62)
+    local base = evolved and book.weapons[spell.evolvesFrom]
+    if base then
+        Tip:AddDoubleLine("Evolved from " .. base.name, "", 1, 0.5, 0, 1, 1, 1, 11)
     end
     if spell.description ~= "" then
-        GameTooltip:AddLine(spell.description, 1, 1, 1, 1)
+        Tip:AddLine(spell.description, 1, 0.82, 0)
     end
 
-    local base = spell.evolvesFrom > 0 and book.weapons[spell.evolvesFrom]
+    Tip:AddRule()
     if base then
-        GameTooltip:AddLine(" ")
-        GameTooltip:AddLine(base.name .. " evolves into this through a Legendary rank, offered from rank " .. EVOLVE_RANK .. ".", 1, 0.5, 0, 1)
+        Tip:AddSmallLine(base.name .. " evolves into this through a Legendary rank, offered from rank " .. EVOLVE_RANK .. ".", Tip.ORANGE)
     else
         local evolutions = book.evolutionOf[spell.id]
         if evolutions then
-            GameTooltip:AddLine(" ")
-            GameTooltip:AddLine("From rank " .. EVOLVE_RANK .. ", a Legendary rank can evolve it into " .. EvolutionNames(evolutions) .. ".", 1, 0.5, 0, 1)
+            Tip:AddSmallLine("From rank " .. EVOLVE_RANK .. ", a Legendary rank can evolve it into " .. EvolutionNames(evolutions) .. ".", Tip.ORANGE)
         end
     end
-
     if spell.starterMask > 0 then
-        GameTooltip:AddLine(gsub(ClassNames(spell.starterMask), ",", "s,") .. "s can choose it as their starter spell at the Run Master.", 0.6, 0.8, 1, 1)
+        Tip:AddSmallLine(gsub(ClassNames(spell.starterMask), ",", "s,") .. "s can choose it as their starter spell at the Run Master.", { 0.6, 0.8, 1 })
     end
     AddState(spell)
-    GameTooltip:Show()
+    tooltip:Show()
 end
 
 local function ShowPassiveTooltip(owner, passive)
+    tooltip = GameTooltip
     GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
-    GameTooltip:AddLine(passive.name, 1, 0.82, 0)
-    GameTooltip:AddLine("Passive (all classes)", 0.7, 0.7, 0.7)
-    GameTooltip:AddLine(passive.description, 1, 1, 1, 1)
-    GameTooltip:AddLine(" ")
-    GameTooltip:AddLine("Max rank " .. passive.maxRank, 1, 0.82, 0)
+    tooltip:AddLine(passive.name, 1, 0.82, 0)
+    tooltip:AddLine("Passive (all classes)", 0.7, 0.7, 0.7)
+    tooltip:AddLine(passive.description, 1, 1, 1, 1)
+    tooltip:AddLine(" ")
+    tooltip:AddLine("Max rank " .. passive.maxRank, 1, 0.82, 0)
     AddState(passive)
-    GameTooltip:Show()
+    tooltip:Show()
 end
 
 local function ShowCardTooltip(owner, card, atSayge)
     local rarity = VanillaBonkUI.RARITY[card.rarity] or VanillaBonkUI.RARITY[0]
+    tooltip = GameTooltip
     GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
-    GameTooltip:AddLine(card.name, rarity.r, rarity.g, rarity.b)
-    GameTooltip:AddLine(rarity.name .. " Darkmoon Card (all classes)", 0.7, 0.7, 0.7)
+    tooltip:AddLine(card.name, rarity.r, rarity.g, rarity.b)
+    tooltip:AddLine(rarity.name .. " Darkmoon Card (all classes)", 0.7, 0.7, 0.7)
     if card.description ~= "" then
-        GameTooltip:AddLine(card.description, 1, 1, 1, 1)
+        tooltip:AddLine(card.description, 1, 1, 1, 1)
     end
-    GameTooltip:AddLine(" ")
-    GameTooltip:AddLine(card.maxCopies == 1 and "1 copy per run" or ("Up to " .. card.maxCopies .. " copies per run"), 1, 0.82, 0)
+    tooltip:AddLine(" ")
+    tooltip:AddLine(card.maxCopies == 1 and "1 copy per run" or ("Up to " .. card.maxCopies .. " copies per run"), 1, 0.82, 0)
     AddState(card, atSayge)
-    GameTooltip:Show()
+    tooltip:Show()
 end
 
 local function ShowGlyphTooltip(owner, glyph, atSayge)
     local rarity = VanillaBonkUI.RARITY[glyph.rarity] or VanillaBonkUI.RARITY[0]
+    tooltip = GameTooltip
     GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
-    GameTooltip:AddLine(glyph.name, rarity.r, rarity.g, rarity.b)
-    GameTooltip:AddLine(rarity.name .. " Glyph (all classes)", 0.7, 0.7, 0.7)
+    tooltip:AddLine(glyph.name, rarity.r, rarity.g, rarity.b)
+    tooltip:AddLine(rarity.name .. " Glyph (all classes)", 0.7, 0.7, 0.7)
     if glyph.description ~= "" then
-        GameTooltip:AddLine(glyph.description, 1, 1, 1, 1)
+        tooltip:AddLine(glyph.description, 1, 1, 1, 1)
     end
     if glyph.drawback ~= "" then
-        GameTooltip:AddLine(glyph.drawback, 1, 0.29, 0.23, 1)
+        tooltip:AddLine(glyph.drawback, 1, 0.29, 0.23, 1)
     end
-    GameTooltip:AddLine(" ")
-    GameTooltip:AddLine("Offered after the first timed mini-boss of a run and after every stage boss except the last. The Foresight upgrade adds one at the start of a run.", 1, 0.82, 0, 1)
+    tooltip:AddLine(" ")
+    tooltip:AddLine("Offered after the first timed mini-boss of a run and after every stage boss except the last. The Foresight upgrade adds one at the start of a run.", 1, 0.82, 0, 1)
     AddState(glyph, atSayge)
-    GameTooltip:Show()
+    tooltip:Show()
 end
 
 local function HideTooltip()
@@ -256,18 +263,18 @@ local function ShowEntryTooltip(owner, entry)
     if entry and TOOLTIPS[entry.kind] then
         TOOLTIPS[entry.kind](owner, entry)
         if CanSwitch(entry) then
-            GameTooltip:AddLine(" ")
+            tooltip:AddLine(" ")
             if entry.off then
-                GameTooltip:AddLine("Switched off. It won't be offered in runs.", 1, 0.3, 0.3)
-                GameTooltip:AddLine("Right-click to switch it back on.", 0.4, 1, 0.4)
+                tooltip:AddLine("Switched off. It won't be offered in runs.", 1, 0.3, 0.3)
+                tooltip:AddLine("Right-click to switch it back on.", 0.4, 1, 0.4)
             else
-                GameTooltip:AddLine("Right-click to switch it off. It won't be offered in runs.", 0.7, 0.7, 0.7, 1)
+                tooltip:AddLine("Right-click to switch it off. It won't be offered in runs.", 0.7, 0.7, 0.7, 1)
             end
-            GameTooltip:Show()
+            tooltip:Show()
         elseif book and entry.owned and POOL_KINDS[entry.kind] and book.pool.slots > 0 then
-            GameTooltip:AddLine(" ")
-            GameTooltip:AddLine("Every Stacked Deck slot is in use (" .. book.pool.used .. "/" .. book.pool.slots .. ").", 0.7, 0.7, 0.7, 1)
-            GameTooltip:Show()
+            tooltip:AddLine(" ")
+            tooltip:AddLine("Every Stacked Deck slot is in use (" .. book.pool.used .. "/" .. book.pool.slots .. ").", 0.7, 0.7, 0.7, 1)
+            tooltip:Show()
         end
     end
 end
@@ -1127,6 +1134,9 @@ handlers["cdxwd"] = function(f)
     local spell = incoming and incoming.weapons[tonumber(f[2]) or 0]
     if spell then
         spell.description = f[3] or ""
+        spell.school = f[4] or ""
+        spell.spec = f[5] or ""
+        spell.aoe = f[6] == "1"
     end
 end
 

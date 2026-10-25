@@ -65,9 +65,12 @@ namespace BonkTelegraphs
                 castVisuals.AddRange(BoltVisuals.AddBoltVisuals(spells, spellVisuals));
                 castVisuals.AddRange(ExploderVisuals.AddExploderVisuals(spells, spellVisuals, spellVisualKits));
                 castVisuals.AddRange(MutedSounds.MuteMeleeSwings(spellVisualKits));
+                castVisuals.AddRange(MutedSounds.MuteCatClaws(spellVisualKits));
                 castVisuals.AddRange(MutedSounds.SwapKitSounds(spellVisualKits));
                 castVisuals.Add(MutedSounds.ClearHearthstoneCast(spells));
                 castVisuals.AddRange(QuietKits.AddQuietCopies(spellVisualKits));
+                castVisuals.AddRange(QuietKits.AddStillClawCopies(spellVisualKits));
+                castVisuals.AddRange(QuietKits.AddAreaFreeCopies(spellVisualKits));
                 castVisuals.AddRange(BossLooks.AddLooks(spellVisualKits, spellEffectNames));
                 castVisuals.AddRange(AuraLooks.AddAuraLooks(spells, spellVisuals, spellVisualKits, spellEffectNames, new Dbc(client.Read("DBFilesClient\\SpellIcon.dbc"))));
                 castVisuals.AddRange(AuraRings.AddSpells(spells, spellVisuals, spellVisualKits, spellEffectNames));

@@ -214,7 +214,7 @@ namespace BonkTelegraphs
         {
             HashSet<string> skipped = new HashSet<string>(skip, StringComparer.OrdinalIgnoreCase);
             string[] order = { "patch-9.MPQ", "patch-8.MPQ", "patch-7.MPQ", "patch-6.MPQ", "patch-5.MPQ", "patch-4.MPQ", "patch-3.MPQ",
-                "patch-2.MPQ", "patch.MPQ", "dbc.MPQ", "model.MPQ", "texture.MPQ", "misc.MPQ", "interface.MPQ", "base.MPQ" };
+                "patch-2.MPQ", "patch.MPQ", "dbc.MPQ", "model.MPQ", "texture.MPQ", "misc.MPQ", "interface.MPQ", "sound.MPQ", "base.MPQ" };
             foreach (string file in order)
             {
                 string path = System.IO.Path.Combine(dataDir, file);

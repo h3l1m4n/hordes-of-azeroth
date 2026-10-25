@@ -7,7 +7,7 @@ BONK_CLASSES = {
 	{ token = "SHAMAN",  name = "Shaman",  races = { "ORC", "TAUREN", "TROLL" } },
 	{ token = "MAGE",    name = "Mage",    races = { "HUMAN", "GNOME", "SCOURGE", "TROLL" } },
 	{ token = "WARLOCK", name = "Warlock", races = { "HUMAN", "GNOME", "ORC", "SCOURGE" } },
-	{ token = "DRUID",   name = "Druid",   races = { "NIGHTELF", "TAUREN" }, locked = 1 },
+	{ token = "DRUID",   name = "Druid",   races = { "NIGHTELF", "TAUREN" } },
 };
 
 BONK_RACE_NAMES = {
@@ -15,29 +15,31 @@ BONK_RACE_NAMES = {
 	ORC = "Orc", SCOURGE = "Undead", TAUREN = "Tauren", TROLL = "Troll",
 };
 
+BONK_CLASS_COLORS = {
+	WARRIOR = { 0.78, 0.61, 0.43 }, PALADIN = { 0.96, 0.55, 0.73 }, HUNTER = { 0.67, 0.83, 0.45 },
+	ROGUE = { 1.0, 0.96, 0.41 }, PRIEST = { 1.0, 1.0, 1.0 }, SHAMAN = { 0.0, 0.44, 0.87 },
+	MAGE = { 0.41, 0.8, 0.94 }, WARLOCK = { 0.58, 0.51, 0.79 }, DRUID = { 1.0, 0.49, 0.04 },
+};
+
 BONK_CLASS_TOKENS = {};
 for _, class in BONK_CLASSES do
 	BONK_CLASS_TOKENS[class.name] = class.token;
 end
 
-local NUM_STAT_ROWS = 8;
-local INFO_HEIGHT = 520;
-local INFO_CREATE_HEIGHT = 620;
+BONK_IRONMAN_TIP = "This character does not share gold or unlocks with other characters.";
+
+local NUM_STAT_ROWS = 9;
+local NUM_SPELL_ROWS = 7;
+local NUM_SPECS = 3;
+local NUM_CLASS_RACES = 8;
+local ROW_STEP = 58;
 local IRONMAN_NAME = "Ironmanmode";
-local IRONMAN_TIP = "This character does not share gold or unlocks with other characters.";
 local RACES_PER_ROW = 4;
-local RACE_ROW_HEIGHT = 72;
-local CREATE_LAYOUT = {
-	{ "BonkHeroLookLabel", 26, -262 },
-	{ "BonkHeroGenderButton1", 26, -284 },
-	{ "BonkHeroLook1", 22, -342 },
-	{ "BonkHeroLook2", 22, -372 },
-	{ "BonkHeroLook3", 22, -402 },
-	{ "BonkHeroLook4", 22, -432 },
-	{ "BonkHeroLook5", 22, -462 },
-	{ "BonkHeroNameLabel", 26, -506 },
-	{ "BonkHeroNameEdit", 18, -520 },
-};
+local RACE_COLUMN_STEP = 70;
+local RACE_ROW_STEP = 64;
+local STARTER_TEXT_WIDTH = 176;
+local STARTER_NAME_HEIGHT = 14;
+local STARTER_LINE_HEIGHT = 12;
 
 local function Flag(condition)
 	if ( condition ) then
@@ -50,6 +52,8 @@ Bonk = {
 	classIndex = 1,
 	raceIndex = 1,
 	sex = 1,
+	specIndex = 1,
+	customizing = nil,
 	heroes = {},
 	listLoaded = false,
 	reuseList = false,
@@ -80,6 +84,8 @@ function AccountLogin_OnShow()
 	Bonk.startPicked = false;
 	Bonk.classIndex = 1;
 	Bonk.raceIndex = 1;
+	Bonk.specIndex = 1;
+	Bonk.customizing = nil;
 	Bonk.creating = nil;
 	Bonk.wiping = nil;
 	Bonk.heroes = {};
@@ -226,8 +232,12 @@ function GlueDialog_OnEvent()
 		GlueDialogText:SetText("The game's server isn't running. Close the game and start Hordes of Azeroth with HoALauncher.exe in your World of Warcraft folder.");
 		GlueDialogBackground:SetHeight(32 + GlueDialogText:GetHeight() + 8 + GlueDialogButton1:GetHeight() + 16);
 		BonkLoginStatus:SetText("");
+	elseif ( noServer ) then
+		GlueDialogText:SetText("The game's server stopped. Close the game and start Hordes of Azeroth again with HoALauncher.exe. If it keeps happening, click Report a bug in the launcher.");
+		GlueDialogBackground:SetHeight(32 + GlueDialogText:GetHeight() + 8 + GlueDialogButton1:GetHeight() + 16);
+		BonkLoginStatus:SetText("");
 	elseif ( wipeRefused ) then
-		GlueDialogText:SetText("The account was not wiped because a hero is still left. Try again.");
+		GlueDialogText:SetText("The account was not wiped because a character is still left. Try again.");
 		GlueDialogBackground:SetHeight(32 + GlueDialogText:GetHeight() + 8 + GlueDialogButton1:GetHeight() + 16);
 	elseif ( Bonk.wiping and success and event == "UPDATE_STATUS_DIALOG" and arg2 ) then
 		GlueDialog:Hide();
@@ -243,7 +253,7 @@ function GlueDialog_OnClick(index)
 		BonkHero_SetStatus("");
 	end
 	if ( Bonk.wiping and which ~= "BONK_WIPE" ) then
-		BonkHero_StopWipe("Wipe stopped. Some heroes may already be gone.");
+		BonkHero_StopWipe("Wipe stopped. Some characters may already be gone.");
 	end
 end
 
@@ -271,7 +281,7 @@ GlueDialogTypes["BONK_RETIRE"] = {
 };
 
 GlueDialogTypes["BONK_WIPE"] = {
-	text = "Are you sure? This deletes all your heroes and all account progress: gold, Darkmoon Tickets, upgrades, Sayge's Fortunes, quests and Mastery. It cannot be undone.",
+	text = "Are you sure? This deletes all your characters and all account progress: gold, Darkmoon Tickets, upgrades, Sayge's Fortunes, quests and Mastery. It cannot be undone.",
 	button1 = TEXT(YES),
 	button2 = TEXT(NO),
 	showAlert = 1,
@@ -337,51 +347,77 @@ local function RaceIconCoords(race, sex)
 	return RACE_ICON_TCOORDS[race.."_"..gender];
 end
 
+local function SexName(sex)
+	if ( sex == 2 ) then
+		return "Female";
+	end
+	return "Male";
+end
+
+local function SetClassColor(fontString, token)
+	local color = BONK_CLASS_COLORS[token];
+	fontString:SetTextColor(color[1], color[2], color[3]);
+end
+
+local function IsSelectable(class)
+	return not class.locked or Bonk.heroes[class.token];
+end
+
+local function PlayableCount()
+	local playable = 0;
+	for _, class in BONK_CLASSES do
+		if ( not class.locked ) then
+			playable = playable + 1;
+		end
+	end
+	return playable;
+end
+
+local function HeroCount()
+	local count = 0;
+	for _, class in BONK_CLASSES do
+		if ( Bonk.heroes[class.token] ) then
+			count = count + 1;
+		end
+	end
+	return count;
+end
+
 function BonkHero_SetStatus(text)
 	BonkHeroStatus:SetText(text);
 end
 
 function BonkHero_OnLoad()
 	for index, class in BONK_CLASSES do
-		local tile = getglobal("BonkHeroClassButton"..index);
-		local column = mod(index - 1, 3);
-		local row = floor((index - 1) / 3);
-		tile:SetPoint("TOP", "BonkHeroClassPanel", "TOP", -96 + column * 96, -50 - row * 112);
-		local icon = getglobal(tile:GetName().."Icon");
-		icon:SetTexture("Interface\\Glues\\CharacterCreate\\UI-CharacterCreate-Classes");
-		SetTexCoords(icon, CLASS_ICON_TCOORDS[class.token]);
-		getglobal(tile:GetName().."Class"):SetText(class.name);
-	end
-
-	for index = 1, 8 do
-		local button = getglobal("BonkHeroRaceButton"..index);
-		local column = mod(index - 1, RACES_PER_ROW);
-		local row = floor((index - 1) / RACES_PER_ROW);
-		button:SetPoint("TOPLEFT", "BonkHeroCreateFrame", "TOPLEFT", 30 + column * 74, -114 - row * RACE_ROW_HEIGHT);
+		local row = getglobal("BonkCharRow"..index);
+		row:SetPoint("TOPLEFT", "BonkListPanel", "TOPLEFT", 20, -50 - (index - 1) * ROW_STEP);
+		SetTexCoords(getglobal(row:GetName().."Icon"), CLASS_ICON_TCOORDS[class.token]);
 	end
 
 	for index = 1, NUM_STAT_ROWS do
-		getglobal("BonkHeroStat"..index):SetPoint("TOPLEFT", "BonkHeroRecordFrame", "TOPLEFT", 30, -126 - (index - 1) * 24);
+		getglobal("BonkHeroStat"..index):SetPoint("TOPLEFT", "BonkHeroRecordFrame", "TOPLEFT", 0, -(index - 1) * 22);
 	end
 
-	getglobal("BonkHeroGenderButton1Icon"):SetTexCoord(0, 0.5, 0, 1.0);
-	getglobal("BonkHeroGenderButton2Icon"):SetTexCoord(0.5, 1.0, 0, 1.0);
+	BonkClassStarterName:SetWidth(STARTER_TEXT_WIDTH);
+	BonkClassStarterName:SetHeight(STARTER_NAME_HEIGHT);
+	BonkClassStarterLine:SetWidth(STARTER_TEXT_WIDTH);
+	BonkClassStarterLine:SetHeight(STARTER_LINE_HEIGHT);
 
-	BonkHero_UpdateGold(nil);
+	BonkHeroGenderButton1Icon:SetTexCoord(0, 0.5, 0, 1.0);
+	BonkHeroGenderButton2Icon:SetTexCoord(0.5, 1.0, 0, 1.0);
+	BonkHeroGenderButton1Label:SetText("Male");
+	BonkHeroGenderButton2Label:SetText("Female");
+	BonkRaceBoxCaption:SetText("Race");
+	BonkGenderBoxCaption:SetText("Gender");
+	BonkFeatureBoxCaption:SetText("Features");
+	BonkListPanelTitle:SetText("Characters");
+	BonkAppearPanelTitle:SetText("Appearance");
+
+	BonkHero_UpdateCount();
 end
 
-function BonkHero_UpdateGold(stats)
-	if ( not BONK_STATS or not BONK_STATS.gold ) then
-		return;
-	end
-	if ( stats and stats.ironman ) then
-		BonkHeroGoldLabel:SetText("Gold (This character only)");
-		BonkHeroGold:SetText(FormatGold(stats.gold or 0));
-	else
-		BonkHeroGoldLabel:SetText("Gold (shared by all heroes)");
-		BonkHeroGold:SetText(FormatGold(BONK_STATS.gold));
-	end
-	BonkHeroGoldFrame:Show();
+function BonkHero_UpdateCount()
+	BonkListCount:SetText(HeroCount().." of "..PlayableCount().." classes created");
 end
 
 function BonkHero_ToggleIronman()
@@ -393,12 +429,29 @@ function BonkHero_ToggleIronman()
 	end
 end
 
-function BonkHero_ShowIronmanTip()
-	BonkIronmanTipText:SetText(IRONMAN_TIP);
-	BonkIronmanTip:SetHeight(BonkIronmanTipText:GetHeight() + 20);
-	BonkIronmanTip:ClearAllPoints();
-	BonkIronmanTip:SetPoint("BOTTOMLEFT", "BonkHeroIronman", "TOPRIGHT", 0, 0);
-	BonkIronmanTip:Show();
+function BonkHero_ShowTip(owner, title, text)
+	BonkTipTitle:SetText(title);
+	BonkTipText:SetText(text);
+	BonkTip:SetHeight(BonkTipTitle:GetHeight() + BonkTipText:GetHeight() + 24);
+	BonkTip:ClearAllPoints();
+	if ( owner:GetLeft() and owner:GetLeft() > GlueParent:GetWidth() / 2 ) then
+		BonkTip:SetPoint("BOTTOMRIGHT", owner, "TOPLEFT", 0, 0);
+	else
+		BonkTip:SetPoint("BOTTOMLEFT", owner, "TOPRIGHT", 0, 0);
+	end
+	BonkTip:Show();
+end
+
+function BonkHero_ShowSpellTip(frame)
+	if ( frame.spell ) then
+		BonkHero_ShowTip(frame, frame.spell.name, frame.spell.tip);
+	end
+end
+
+function BonkHero_ShowRaceTip(frame)
+	if ( frame.race ) then
+		BonkHero_ShowTip(frame, BONK_RACE_NAMES[frame.race], "");
+	end
 end
 
 function BonkHero_ReadHeroes()
@@ -421,10 +474,6 @@ function BonkHero_ReadHeroes()
 	if ( unknown ) then
 		BonkHero_SetStatus("Could not read the class of "..unknown..".");
 	end
-end
-
-local function IsSelectable(class)
-	return not class.locked or Bonk.heroes[class.token];
 end
 
 local function SelectClassToken(classToken)
@@ -460,6 +509,7 @@ function BonkHero_OnCharacterList()
 		local hero = Bonk.heroes[Bonk.creating.class];
 		if ( hero ) then
 			Bonk.creating = nil;
+			Bonk.customizing = nil;
 			BonkHeroNameEdit:SetText("");
 			BonkHero_EnterWorld(hero);
 			return;
@@ -496,98 +546,236 @@ function BonkHero_Refresh()
 		return;
 	end
 	Bonk.refreshing = true;
+	if ( CurrentHero() ) then
+		Bonk.customizing = nil;
+	end
 	BonkHero_UpdateRoster();
 	BonkHero_UpdateInfo();
+	BonkHero_UpdateCount();
+	BonkHero_UpdateControls();
 	Bonk.refreshing = false;
 
 	Bonk.sceneDirty = true;
 end
 
 function BonkHero_UpdateRoster()
-	local count = 0;
-	local playable = 0;
 	for index, class in BONK_CLASSES do
-		local tile = getglobal("BonkHeroClassButton"..index);
-		local icon = getglobal(tile:GetName().."Icon");
-		local heroText = getglobal(tile:GetName().."Hero");
+		local row = getglobal("BonkCharRow"..index);
+		local icon = getglobal(row:GetName().."Icon");
+		local name = getglobal(row:GetName().."Name");
+		local sub = getglobal(row:GetName().."Sub");
 		local hero = Bonk.heroes[class.token];
-		tile:SetChecked(Flag(index == Bonk.classIndex));
-		if ( not class.locked ) then
-			playable = playable + 1;
+		if ( index == Bonk.classIndex ) then
+			getglobal(row:GetName().."Selected"):Show();
+		else
+			getglobal(row:GetName().."Selected"):Hide();
 		end
 		if ( hero ) then
-			count = count + 1;
+			local stats = HeroStats(hero) or {};
 			icon:SetVertexColor(1.0, 1.0, 1.0);
-			icon:SetAlpha(1.0);
-			getglobal(tile:GetName().."Glow"):Show();
-			heroText:SetText(hero.name);
-			heroText:SetTextColor(1.0, 1.0, 1.0);
+			name:SetText(hero.name);
+			name:SetTextColor(1.0, 0.82, 0);
+			sub:SetText(format("Mastery %d %s %s", stats.mastery or 0, BONK_RACE_NAMES[hero.race] or "", class.name));
+			sub:SetTextColor(1.0, 1.0, 1.0);
 		elseif ( class.locked ) then
 			icon:SetVertexColor(0.25, 0.25, 0.25);
-			icon:SetAlpha(0.5);
-			getglobal(tile:GetName().."Glow"):Hide();
-			heroText:SetText("Locked");
-			heroText:SetTextColor(0.4, 0.4, 0.4);
+			name:SetText(class.name);
+			name:SetTextColor(0.4, 0.4, 0.4);
+			sub:SetText("Locked");
+			sub:SetTextColor(0.4, 0.4, 0.4);
 		else
-			icon:SetVertexColor(0.45, 0.45, 0.45);
-			icon:SetAlpha(0.7);
-			getglobal(tile:GetName().."Glow"):Hide();
-			heroText:SetText("+ New");
-			heroText:SetTextColor(0.5, 0.5, 0.5);
+			icon:SetVertexColor(0.4, 0.4, 0.4);
+			name:SetText(class.name);
+			name:SetTextColor(0.55, 0.55, 0.55);
+			sub:SetText("Create a "..class.name);
+			sub:SetTextColor(0.5, 0.5, 0.5);
 		end
 	end
-	BonkHeroCount:SetText(count.." of "..playable.." classes have a hero");
 end
 
-function BonkHero_LayoutCreate(raceCount)
-	local unusedRows = 2 - ceil(raceCount / RACES_PER_ROW);
-	local lift = unusedRows * RACE_ROW_HEIGHT;
-	for _, place in ipairs(CREATE_LAYOUT) do
-		local frame = getglobal(place[1]);
-		frame:ClearAllPoints();
-		frame:SetPoint("TOPLEFT", "BonkHeroCreateFrame", "TOPLEFT", place[2], place[3] + lift);
+function BonkHero_UpdateControls()
+	local hero = CurrentHero();
+	if ( hero ) then
+		BonkHeroPlayButton:SetText("Play");
+	elseif ( Bonk.customizing ) then
+		BonkHeroPlayButton:SetText("Create");
+	else
+		BonkHeroPlayButton:SetText("Create "..CurrentClass().name);
 	end
-	BonkHeroInfoPanel:SetHeight(INFO_CREATE_HEIGHT - lift);
+
+	if ( Bonk.customizing ) then
+		BonkListPanel:Hide();
+		BonkAppearPanel:Show();
+		BonkHeroNameEdit:Show();
+		BonkHeroQuitButton:Hide();
+		BonkHeroWipeButton:Hide();
+		BonkHeroBackButton:Show();
+		BonkHeroSubtitle:SetText("Create your "..CurrentClass().name);
+		BonkHeroPreview:SetText("");
+	else
+		BonkAppearPanel:Hide();
+		BonkListPanel:Show();
+		BonkHeroNameEdit:Hide();
+		BonkHeroNameEdit:ClearFocus();
+		BonkHeroBackButton:Hide();
+		BonkHeroQuitButton:Show();
+		BonkHeroWipeButton:Show();
+		BonkHeroSubtitle:SetText("Choose your character");
+		if ( hero ) then
+			BonkHeroPreview:SetText("");
+		else
+			BonkHeroPreview:SetText("Preview: "..BONK_RACE_NAMES[NewHeroRace()]);
+		end
+	end
+end
+
+local function ShowSpellRow(row, spell, tag)
+	row.spell = spell;
+	getglobal(row:GetName().."Icon"):SetTexture(spell.icon);
+	getglobal(row:GetName().."Name"):SetText(spell.name);
+	getglobal(row:GetName().."Line"):SetText(spell.line);
+	local tagText = getglobal(row:GetName().."Tag");
+	if ( tagText ) then
+		tagText:SetText(tag or "");
+	end
+	row:Show();
+end
+
+function BonkHero_UpdateClassInfo(class, sex)
+	local info = BONK_CLASS_INFO[class.token];
+	BonkClassFrame:Show();
+	if ( not info ) then
+		BonkClassBlurb:SetText("");
+		return;
+	end
+
+	BonkClassBlurb:SetText(info.blurb);
+
+	for index = 1, NUM_CLASS_RACES do
+		local frame = getglobal("BonkClassRace"..index);
+		local race = class.races[index];
+		if ( race ) then
+			frame.race = race;
+			SetTexCoords(getglobal(frame:GetName().."Icon"), RaceIconCoords(race, sex));
+			frame:Show();
+		else
+			frame:Hide();
+		end
+	end
+
+	if ( info.starter ) then
+		ShowSpellRow(BonkClassStarter, info.starter);
+		BonkClassStarterLabel:Show();
+	else
+		BonkClassStarter:Hide();
+		BonkClassStarterLabel:Hide();
+	end
+
+	local specCount = getn(info.specs);
+	if ( Bonk.specIndex > specCount ) then
+		Bonk.specIndex = 1;
+	end
+	for index = 1, NUM_SPECS do
+		local button = getglobal("BonkSpecButton"..index);
+		local spec = info.specs[index];
+		if ( spec ) then
+			getglobal(button:GetName().."Icon"):SetTexture(spec.icon);
+			local label = getglobal(button:GetName().."Label");
+			label:SetText(spec.name);
+			if ( index == Bonk.specIndex ) then
+				label:SetTextColor(1.0, 0.82, 0);
+				getglobal(button:GetName().."Icon"):SetVertexColor(1.0, 1.0, 1.0);
+			else
+				label:SetTextColor(0.78, 0.75, 0.68);
+				getglobal(button:GetName().."Icon"):SetVertexColor(0.6, 0.6, 0.6);
+			end
+			button:SetChecked(Flag(index == Bonk.specIndex));
+			button:Show();
+		else
+			button:Hide();
+		end
+	end
+
+	local spec = info.specs[Bonk.specIndex];
+	local rows = 0;
+	if ( spec ) then
+		BonkClassSpecText:SetText(spec.text);
+		for _, spell in ipairs(spec.spells) do
+			if ( rows < NUM_SPELL_ROWS ) then
+				rows = rows + 1;
+				ShowSpellRow(getglobal("BonkSpellRow"..rows), spell);
+			end
+		end
+	else
+		BonkClassSpecText:SetText("");
+	end
+	for _, spell in ipairs(info.shared) do
+		if ( rows < NUM_SPELL_ROWS ) then
+			rows = rows + 1;
+			ShowSpellRow(getglobal("BonkSpellRow"..rows), spell, "every spec");
+		end
+	end
+	for index = rows + 1, NUM_SPELL_ROWS do
+		getglobal("BonkSpellRow"..index):Hide();
+	end
 end
 
 function BonkHero_UpdateInfo()
 	local class = CurrentClass();
 	local hero = CurrentHero();
+	SetTexCoords(BonkInfoIcon, CLASS_ICON_TCOORDS[class.token]);
 
 	if ( hero ) then
+		BonkInfoPanelTitle:SetText("Stats");
 		BonkHeroName:SetText(hero.name);
+		SetClassColor(BonkHeroName, class.token);
 		local stats = HeroStats(hero) or {};
-		local mastery = stats.mastery or 0;
-		local detail = format("Mastery %d %s %s", mastery, BONK_RACE_NAMES[hero.race] or "", class.name);
+		local detail = format("Mastery %d %s %s", stats.mastery or 0, BONK_RACE_NAMES[hero.race] or "", class.name);
 		if ( stats.ironman ) then
 			detail = detail.." (Ironman)";
 		end
 		BonkHeroDetail:SetText(detail);
-		BonkHero_UpdateGold(stats);
-		BonkHeroCreateFrame:Hide();
-		BonkHeroInfoPanel:SetHeight(INFO_HEIGHT);
+		BonkHeroRetireButton:Show();
+		BonkClassFrame:Hide();
 		BonkHeroRecordFrame:Show();
 		BonkHero_UpdateRecord(hero);
-		BonkHeroPlayButton:SetText("Play");
 		return;
 	end
 
 	if ( Bonk.raceIndex > getn(class.races) ) then
 		Bonk.raceIndex = 1;
 	end
-	BonkHeroName:SetText("New "..class.name);
-	BonkHeroDetail:SetText(BONK_RACE_NAMES[NewHeroRace()].." "..class.name);
+	BonkInfoPanelTitle:SetText("Class");
+	BonkHeroName:SetText(class.name);
+	SetClassColor(BonkHeroName, class.token);
+	if ( Bonk.customizing ) then
+		BonkHeroDetail:SetText(BONK_RACE_NAMES[NewHeroRace()].." - "..SexName(Bonk.sex));
+	else
+		BonkHeroDetail:SetText("|cff808080Not created yet|r");
+	end
+	BonkHeroRetireButton:Hide();
 	BonkHeroRecordFrame:Hide();
-	BonkHero_UpdateGold(nil);
-	BonkHeroIronman:SetChecked(Flag(Bonk.ironman));
-	BonkHero_LayoutCreate(getn(class.races));
-	BonkHeroCreateFrame:Show();
-	BonkHeroPlayButton:SetText("Create hero");
+	BonkHero_UpdateClassInfo(class, Bonk.sex);
+	BonkHero_UpdateAppearance(class);
+end
 
+function BonkHero_UpdateAppearance(class)
+	BonkHeroIronman:SetChecked(Flag(Bonk.ironman));
+	local raceCount = getn(class.races);
+	local rows = ceil(raceCount / RACES_PER_ROW);
 	for index = 1, 8 do
 		local button = getglobal("BonkHeroRaceButton"..index);
 		local race = class.races[index];
 		if ( race ) then
+			local rowIndex = floor((index - 1) / RACES_PER_ROW);
+			local inRow = RACES_PER_ROW;
+			if ( rowIndex == rows - 1 ) then
+				inRow = raceCount - rowIndex * RACES_PER_ROW;
+			end
+			local column = mod(index - 1, RACES_PER_ROW);
+			local x = (column - (inRow - 1) / 2) * RACE_COLUMN_STEP;
+			button:ClearAllPoints();
+			button:SetPoint("TOP", "BonkRaceBox", "TOP", x, -10 - rowIndex * RACE_ROW_STEP);
 			local icon = getglobal(button:GetName().."Icon");
 			icon:SetTexture("Interface\\Glues\\CharacterCreate\\UI-CharacterCreate-Races");
 			SetTexCoords(icon, RaceIconCoords(race, Bonk.sex));
@@ -598,6 +786,7 @@ function BonkHero_UpdateInfo()
 			button:Hide();
 		end
 	end
+	BonkRaceBox:SetHeight(rows * RACE_ROW_STEP + 10);
 	BonkHeroGenderButton1:SetChecked(Flag(Bonk.sex == 1));
 	BonkHeroGenderButton2:SetChecked(Flag(Bonk.sex == 2));
 end
@@ -635,6 +824,12 @@ function BonkHero_UpdateRecord(hero)
 		SetStatRow(7, "Gear", "-");
 	end
 	SetStatRow(8, "Gear value", FormatGold(stats.gearValue));
+	if ( stats.ironman ) then
+		SetStatRow(9, "Gold", FormatGold(stats.gold));
+		BonkHeroStat9:Show();
+	else
+		BonkHeroStat9:Hide();
+	end
 
 	if ( not HeroStats(hero) ) then
 		BonkHeroRecordNote:SetText("The record updates when "..hero.name.." logs out.");
@@ -725,12 +920,19 @@ function BonkHero_SelectClass(index)
 		return;
 	end
 	PlaySound("gsCharacterCreationClass");
-	if ( not Bonk.creating and not Bonk.wiping and index ~= Bonk.classIndex ) then
+	if ( not Bonk.creating and not Bonk.wiping and not Bonk.customizing and index ~= Bonk.classIndex ) then
 		Bonk.classIndex = index;
 		Bonk.raceIndex = 1;
+		Bonk.specIndex = 1;
 		BonkHero_SetStatus("");
 	end
 	BonkHero_Refresh();
+end
+
+function BonkHero_SelectSpec(index)
+	PlaySound("igMainMenuOptionCheckBoxOn");
+	Bonk.specIndex = index;
+	BonkHero_UpdateInfo();
 end
 
 function BonkHero_SelectRace(index)
@@ -754,6 +956,7 @@ function BonkHero_Randomize()
 	PlaySound("gsCharacterCreationLook");
 	if ( Bonk.screen == "charcreate" ) then
 		RandomizeCharCustomization();
+		BonkHero_UpdateCustomization();
 	end
 end
 
@@ -769,6 +972,24 @@ function BonkHero_EnterWorld(hero)
 	EnterWorld();
 end
 
+function BonkHero_StartCustomizing()
+	PlaySound("gsCharacterSelectionCreateNew");
+	Bonk.customizing = true;
+	BonkHero_SetStatus("");
+	BonkHero_Refresh();
+	BonkHeroNameEdit:SetFocus();
+end
+
+function BonkHero_Back()
+	if ( not Bonk.customizing or Bonk.creating ) then
+		return;
+	end
+	PlaySound("gsCharacterCreationCancel");
+	Bonk.customizing = nil;
+	BonkHero_SetStatus("");
+	BonkHero_Refresh();
+end
+
 function BonkHero_Play()
 	if ( Bonk.creating or Bonk.wiping or not Bonk.listLoaded ) then
 		return;
@@ -780,10 +1001,11 @@ function BonkHero_Play()
 		return;
 	end
 
-	if ( GetNumCharacters() >= MAX_CHARACTERS_PER_REALM ) then
-		BonkHero_SetStatus("No room for another hero. Retire one first.");
+	if ( not Bonk.customizing ) then
+		BonkHero_StartCustomizing();
 		return;
 	end
+
 	if ( Bonk.screen ~= "charcreate" ) then
 		return;
 	end
@@ -795,7 +1017,7 @@ function BonkHero_Play()
 
 	BonkHeroNameEdit:ClearFocus();
 	Bonk.creating = { class = CurrentClass().token };
-	BonkHero_SetStatus("Creating your hero...");
+	BonkHero_SetStatus("Creating your character...");
 	if ( Bonk.ironman ) then
 		Bonk.creating.ironmanSent = true;
 		CreateCharacter(IRONMAN_NAME);
@@ -810,7 +1032,7 @@ function BonkHero_Retire()
 		return;
 	end
 	PlaySound("gsCharacterSelectionDelCharacter");
-	GlueDialog_Show("BONK_RETIRE", format("Retire %s, your %s?\nThis permanently deletes the hero and their gear. Your gold stays on the account.",
+	GlueDialog_Show("BONK_RETIRE", format("Delete %s, your %s?\nThis permanently deletes the character and their gear. Your gold stays on the account.",
 		hero.name, CurrentClass().name), hero.index);
 end
 
@@ -829,6 +1051,7 @@ end
 
 function BonkHero_StartWipe()
 	Bonk.wiping = { step = "delete", wait = 0 };
+	Bonk.customizing = nil;
 	BonkHeroNameEdit:ClearFocus();
 	BonkHero_SetStatus("Wiping the account...");
 end
@@ -842,13 +1065,12 @@ end
 function BonkHero_FinishWipe()
 	Bonk.wiping = nil;
 	BONK_STATS = { gold = 0, lastHero = "", heroes = {} };
-	BonkHeroGold:SetText(FormatGold(0));
-	BonkHeroGoldFrame:Show();
 	Bonk.classIndex = 1;
 	Bonk.raceIndex = 1;
+	Bonk.specIndex = 1;
 	BonkHeroNameEdit:SetText("");
 	BonkHero_Refresh();
-	BonkHero_SetStatus("|cff20ff20Account wiped.|r Every hero and all progress are gone.");
+	BonkHero_SetStatus("|cff20ff20Account wiped.|r Every character and all progress are gone.");
 end
 
 function BonkHero_UpdateWipe(elapsed)
@@ -871,9 +1093,9 @@ function BonkHero_UpdateWipe(elapsed)
 	local count = GetNumCharacters();
 	if ( count > 0 ) then
 		if ( count == 1 ) then
-			BonkHero_SetStatus("Wiping the account... 1 hero left");
+			BonkHero_SetStatus("Wiping the account... 1 character left");
 		else
-			BonkHero_SetStatus("Wiping the account... "..count.." heroes left");
+			BonkHero_SetStatus("Wiping the account... "..count.." characters left");
 		end
 		wipe.sent = "delete";
 		wipe.sentFor = 0;
@@ -900,6 +1122,9 @@ function BonkHero_Quit()
 end
 
 function BonkHero_StepClass(direction)
+	if ( Bonk.customizing ) then
+		return;
+	end
 	local count = getn(BONK_CLASSES);
 	local index = Bonk.classIndex;
 	for step = 1, count do
@@ -911,22 +1136,31 @@ function BonkHero_StepClass(direction)
 	end
 end
 
+function BonkHero_StepRace(direction)
+	if ( not Bonk.customizing ) then
+		return;
+	end
+	local count = getn(CurrentClass().races);
+	BonkHero_SelectRace(mod(Bonk.raceIndex - 1 + direction + count, count) + 1);
+end
+
 function BonkHero_OnKeyDown()
 	if ( arg1 == "ESCAPE" ) then
-		BonkHero_Quit();
+		if ( Bonk.customizing ) then
+			BonkHero_Back();
+		else
+			BonkHero_Quit();
+		end
 	elseif ( arg1 == "ENTER" ) then
 		BonkHero_Play();
-	elseif ( arg1 == "LEFT" ) then
+	elseif ( arg1 == "UP" ) then
 		BonkHero_StepClass(-1);
-	elseif ( arg1 == "RIGHT" ) then
+	elseif ( arg1 == "DOWN" ) then
 		BonkHero_StepClass(1);
-	elseif ( (arg1 == "UP" or arg1 == "DOWN") and not CurrentHero() ) then
-		local count = getn(CurrentClass().races);
-		if ( arg1 == "UP" ) then
-			BonkHero_SelectRace(mod(Bonk.raceIndex - 2 + count, count) + 1);
-		else
-			BonkHero_SelectRace(mod(Bonk.raceIndex, count) + 1);
-		end
+	elseif ( arg1 == "LEFT" ) then
+		BonkHero_StepRace(-1);
+	elseif ( arg1 == "RIGHT" ) then
+		BonkHero_StepRace(1);
 	elseif ( arg1 == "PRINTSCREEN" ) then
 		Screenshot();
 	end

@@ -10,7 +10,6 @@ local PAD_GRID = 8;
 local PAD_STICK_DEADZONE = 0.25;
 local PAD_ROTATE_DEGREES = 180;
 local PAD_PAIR_GAP = 2;
-local PAD_CLASS_COLUMNS = 3;
 local PAD_CELLS = {
 	xbox = { a = { 0, 0 }, b = { 1, 0 }, x = { 2, 0 }, y = { 3, 0 }, lb = { 4, 0 }, rb = { 5, 0 }, view = { 0, 2 }, menu = { 1, 2 }, rs = { 3, 2 } },
 	ps = { a = { 0, 1 }, b = { 1, 1 }, x = { 2, 1 }, y = { 3, 1 }, lb = { 4, 1 }, rb = { 5, 1 }, view = { 0, 3 }, menu = { 1, 3 }, rs = { 3, 3 } },
@@ -35,18 +34,15 @@ local function PadDialogOpen()
 end
 
 local function PadCreating()
-	return Bonk and Bonk.screen == "charcreate";
+	return Bonk and Bonk.customizing;
+end
+
+local function PadPreviewing()
+	return Bonk and not Bonk.customizing and Bonk.heroes and not Bonk.heroes[BONK_CLASSES[Bonk.classIndex].token];
 end
 
 local function PadHeroScreen()
 	return BonkHeroFrame and BonkHeroFrame:IsShown();
-end
-
-local function PadPress(key)
-	local saved = arg1;
-	arg1 = key;
-	BonkHero_OnKeyDown();
-	arg1 = saved;
 end
 
 local function PadDialogButton(name)
@@ -71,63 +67,6 @@ end
 local function PadNewLook()
 	BonkHero_Randomize();
 	BonkHeroNameEdit:SetText(BonkPad_RandomName());
-end
-
-local function PadSelectable(index)
-	local class = BONK_CLASSES[index];
-	return class ~= nil and (not class.locked or Bonk.heroes[class.token] ~= nil);
-end
-
-local function PadClassAt(row, column)
-	if ( column < 0 or column >= PAD_CLASS_COLUMNS ) then
-		return nil;
-	end
-	local index = row * PAD_CLASS_COLUMNS + column + 1;
-	if ( PadSelectable(index) ) then
-		return index;
-	end
-	return nil;
-end
-
-local function PadClassRows()
-	return floor((getn(BONK_CLASSES) + PAD_CLASS_COLUMNS - 1) / PAD_CLASS_COLUMNS);
-end
-
-local function PadSameColumn(row, column, direction)
-	local rows = PadClassRows();
-	for offset = 1, rows - 1 do
-		local index = PadClassAt(mod(row + direction * offset + rows * offset, rows), column);
-		if ( index ) then
-			return index;
-		end
-	end
-	return nil;
-end
-
-local function PadNearestInRow(row, column)
-	for distance = 1, PAD_CLASS_COLUMNS - 1 do
-		local index = PadClassAt(row, column - distance) or PadClassAt(row, column + distance);
-		if ( index ) then
-			return index;
-		end
-	end
-	return nil;
-end
-
-local function PadStepClassRow(direction)
-	local rows = PadClassRows();
-	local row = floor((Bonk.classIndex - 1) / PAD_CLASS_COLUMNS);
-	local column = mod(Bonk.classIndex - 1, PAD_CLASS_COLUMNS);
-	local index = PadSameColumn(row, column, direction);
-	for offset = 1, rows - 1 do
-		if ( index ) then
-			break;
-		end
-		index = PadNearestInRow(mod(row + direction * offset + rows * offset, rows), column);
-	end
-	if ( index and index ~= Bonk.classIndex ) then
-		BonkHero_SelectClass(index);
-	end
 end
 
 local function PadToggleSex()
@@ -155,24 +94,22 @@ function HoAController_OnButton(name, down)
 		else
 			BonkHero_Play();
 		end
-	elseif ( name == "left" ) then
+	elseif ( name == "up" or name == "left" ) then
 		BonkHero_StepClass(-1);
-	elseif ( name == "right" ) then
+	elseif ( name == "down" or name == "right" ) then
 		BonkHero_StepClass(1);
-	elseif ( name == "up" ) then
-		PadStepClassRow(-1);
-	elseif ( name == "down" ) then
-		PadStepClassRow(1);
 	elseif ( name == "lb" and PadCreating() ) then
-		PadPress("UP");
+		BonkHero_StepRace(-1);
 	elseif ( name == "rb" and PadCreating() ) then
-		PadPress("DOWN");
+		BonkHero_StepRace(1);
 	elseif ( name == "x" and PadCreating() ) then
 		PadToggleSex();
 	elseif ( name == "y" and PadCreating() ) then
 		PadNewLook();
 	elseif ( name == "view" and not PadCreating() ) then
 		BonkHero_Retire();
+	elseif ( name == "b" and PadCreating() ) then
+		BonkHero_Back();
 	elseif ( name == "b" or name == "menu" ) then
 		BonkHero_Quit();
 	end
@@ -195,9 +132,12 @@ local function PadPrompts()
 		return nil;
 	end
 	if ( PadCreating() ) then
-		return { { "a", "Create hero" }, { "dpad", "Class" }, { "lbrb", "Race" }, { "x", "Male or female" }, { "y", "New look" }, { "b", "Quit" } };
+		return { { "a", "Create" }, { "lbrb", "Race" }, { "x", "Male or female" }, { "y", "New look" }, { "rs", "Turn" }, { "b", "Back" } };
 	end
-	return { { "a", "Play" }, { "dpad", "Class" }, { "view", "Retire" }, { "rs", "Turn" }, { "b", "Quit" } };
+	if ( PadPreviewing() ) then
+		return { { "a", "Create " .. BONK_CLASSES[Bonk.classIndex].name }, { "dpad", "Class" }, { "rs", "Turn" }, { "b", "Quit" } };
+	end
+	return { { "a", "Play" }, { "dpad", "Class" }, { "view", "Delete" }, { "rs", "Turn" }, { "b", "Quit" } };
 end
 
 local function PadSetGlyph(texture, name)
@@ -275,7 +215,7 @@ local function PadTurn(elapsed)
 		return;
 	end
 	local turn = rx * PAD_ROTATE_DEGREES * elapsed;
-	if ( PadCreating() ) then
+	if ( Bonk.screen == "charcreate" ) then
 		SetCharacterCreateFacing(GetCharacterCreateFacing() + turn);
 	else
 		SetCharacterSelectFacing(GetCharacterSelectFacing() + turn);

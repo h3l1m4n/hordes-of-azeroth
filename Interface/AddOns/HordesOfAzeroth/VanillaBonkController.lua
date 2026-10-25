@@ -1119,13 +1119,24 @@ local function VerbLabel(phrase)
     return label
 end
 
-local function TooltipVerb(button, prefix)
-    if not GameTooltip:IsShown() or not GameTooltip:IsOwned(button) then
-        return nil
-    end
-    for index = 1, GameTooltip:NumLines() do
+local function TooltipLineText(tip, index)
+    if tip == GameTooltip then
         local line = getglobal("GameTooltipTextLeft" .. index)
-        local text = line and line:GetText()
+        return line and line:GetText()
+    end
+    return tip:LineText(index)
+end
+
+local function TooltipVerb(button, prefix)
+    local tip = VanillaBonkSpellTip
+    if not tip:IsOwned(button) then
+        tip = GameTooltip
+        if not GameTooltip:IsShown() or not GameTooltip:IsOwned(button) then
+            return nil
+        end
+    end
+    for index = 1, tip:NumLines() do
+        local text = TooltipLineText(tip, index)
         if text then
             text = string.gsub(string.gsub(text, "|c%x%x%x%x%x%x%x%x", ""), "|r", "")
             local _, _, rest = string.find(text, "^" .. prefix .. " to (.+)")

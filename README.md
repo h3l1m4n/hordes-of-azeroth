@@ -69,7 +69,7 @@ Updates come through the launcher. When a new version is out, **Play** turns int
 - **Runs across Azeroth's zones** on Normal, Heroic and Mythic, with more zones on the way.
 - **Endless mode** on Mythic that lasts as long as you do.
 - **Challenge mode** inside raids, or **Invasions** that bring their enemies into the open world.
-- **Six classes so far**, each with their own spells and evolutions. Druid, Paladin and Warlock are on the way.
+- **All nine classes**, each with their own spells and evolutions.
 - **Bosses you can outplay**: see their attacks coming and dodge them.
 - **Dash** out of danger: making you untouchable for a moment. Rebind it in Key Bindings, and upgrade its range and cooldown at the Inn.
 - **Find gear, Darkmoon Cards and Glyphs**, and extract one item at the end of a stage.
