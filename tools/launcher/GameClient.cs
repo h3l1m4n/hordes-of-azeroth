@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -23,9 +22,7 @@ namespace HordesOfAzeroth.Launcher
 
         string RealmName => new UpdateCheck(m_folder).LoadCached()?.RealmName ?? "Hordes of Azeroth";
 
-        public string ProcessName => Path.GetFileNameWithoutExtension(m_folder.GameExeName);
-
-        public bool IsRunning => Process.GetProcessesByName(ProcessName).Length > 0;
+        public bool IsRunning => GameProcessSnapshot.Contains(m_folder.GameExeName);
 
         public DateTime LaunchedAt { get; private set; }
 
@@ -56,7 +53,7 @@ namespace HordesOfAzeroth.Launcher
             DxvkMod.Apply(m_folder);
         }
 
-        public async Task<Process> StartAsync(CancellationToken cancel)
+        public async Task StartAsync(CancellationToken cancel)
         {
             string vanillaFixes = Path.Combine(m_folder.Root, "VanillaFixes.exe");
             ProcessStartInfo info = File.Exists(vanillaFixes)
@@ -71,9 +68,8 @@ namespace HordesOfAzeroth.Launcher
             Stopwatch clock = Stopwatch.StartNew();
             while (clock.Elapsed < TimeSpan.FromSeconds(30))
             {
-                Process game = Process.GetProcessesByName(ProcessName).FirstOrDefault();
-                if (game != null)
-                    return game;
+                if (IsRunning)
+                    return;
                 await Task.Delay(250, cancel);
             }
             throw new TimeoutException("The game did not start. Check that VanillaFixes and the game files are complete.");
