@@ -93,7 +93,7 @@ local function Refresh()
     else
         tracker.timer:SetText(UI.FormatTime(elapsed))
     end
-    local stage = "|cffffd100Stage " .. run.stage .. "|r"
+    local stage = "|cffffd100" .. "Floor " .. run.stage .. "|r"
     local color = DIFFICULTY_COLORS[run.difficulty]
     if run.difficulty ~= "" and color then
         stage = stage .. format("  |cff9d9d9d·|r  |cff%02x%02x%02x%s|r", color[1] * 255, color[2] * 255, color[3] * 255, run.difficulty)
@@ -224,6 +224,7 @@ handlers["start"] = function(f)
     run.difficulty = f[3] or ""
     run.duration = tonumber(f[4]) or 600
     run.stage = tonumber(f[5]) or 1
+    run.floors = f[8] == "1"
     run.elapsed = 0
     HideCallout()
     run.boss, run.portal = false, false

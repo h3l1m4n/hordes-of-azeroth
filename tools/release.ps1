@@ -4,7 +4,8 @@ param(
     [string]$Repository,
     [string]$PreviousManifest,
     [switch]$ReuseWorldDump,
-    [string]$NotesFile
+    [string]$NotesFile,
+    [switch]$OwnNotesOnly
 )
 . "$PSScriptRoot\common.ps1"
 Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
@@ -13,6 +14,8 @@ Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
 $releaseConfig = Get-Content (Join-Path $ConfigDir 'release.json') -Raw | ConvertFrom-Json
 $repository = if ($Repository) { $Repository } else { $releaseConfig.repository }
 $testChannel = $repository -ne $releaseConfig.repository
+$statsUrl = "$env:HOA_STATS_URL"
+if (-not $statsUrl) { Write-Warning 'HOA_STATS_URL is not set: this launcher will not send run data or bug reports.' }
 if ($Publish -and $Version -and -not $testChannel) { throw 'A -Version test release only goes to a test repository (-Repository): change VERSION and CHANGELOG.md for a real one.' }
 $version = if ($Version) { $Version } else { (Get-Content (Join-Path $RepoRoot 'VERSION') -Raw).Trim() }
 $tag = "v$version"
@@ -25,6 +28,10 @@ $assetsDir = Join-Path $outDir 'assets'
 $serverSource = Join-Path $releaseRoot 'src\core'
 $serverBuild = Join-Path $buildDir 'server'
 $serverInstall = Join-Path $buildDir 'server-install'
+$clientSource = Join-Path $releaseRoot 'src\client'
+$clientTarget = Join-Path $buildDir 'client-target'
+$clientOut = Join-Path $buildDir 'client'
+$linuxOut = Join-Path $buildDir 'linux'
 $runtimeDlls = @('msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll')
 $fixedZipTime = [DateTimeOffset]::new(2000, 1, 1, 0, 0, 0, [TimeSpan]::Zero)
 
@@ -180,22 +187,80 @@ function Invoke-ServerBuild {
     [System.IO.File]::WriteAllText($stamp, $commit)
 }
 
+function Write-ClientLicenses {
+    if (-not (Get-Command cargo-about -ErrorAction SilentlyContinue)) { throw 'cargo-about is needed for the client licence list: cargo install cargo-about --locked --features cli' }
+    $hoa = Join-Path $clientSource 'crates\hoa'
+    Invoke-Native 'Client licence list' 'cargo' @('about', 'generate', '-c', (Join-Path $hoa 'about.toml'), '-m', (Join-Path $hoa 'Cargo.toml'), '--no-default-features', '--locked', '-o', (Join-Path $clientOut 'CLIENT-LICENSES.md'), (Join-Path $hoa 'about.hbs'))
+}
+
+function Invoke-ClientBuild {
+    $commit = (git -C $RepoRoot rev-parse HEAD:client).Trim()
+    $stamp = Join-Path $clientOut 'commit.txt'
+    if ((Test-Path $stamp) -and (Get-Content $stamp -Raw).Trim() -eq $commit) { return }
+
+    $fork = Join-Path $RepoRoot 'client'
+    if (-not (Test-Path (Join-Path $clientSource '.git'))) {
+        Invoke-Quiet 'git worktree add' 'git' @('-C', $fork, 'worktree', 'add', '--detach', $clientSource, $commit)
+    } else {
+        Invoke-Quiet 'git checkout' 'git' @('-C', $clientSource, 'checkout', '--quiet', '--force', '--detach', $commit)
+    }
+
+    Write-Host "Building the client from fork commit $($commit.Substring(0, 9)) (player build)..."
+    $env:CARGO_TARGET_DIR = $clientTarget
+    $env:RUSTFLAGS = '-C target-feature=+crt-static'
+    try {
+        Invoke-Native 'Client build' 'cargo' @('build', '--manifest-path', (Join-Path $clientSource 'Cargo.toml'), '--profile', 'ship', '--locked', '-p', 'hoa', '--no-default-features')
+    } finally {
+        Remove-Item Env:CARGO_TARGET_DIR, Env:RUSTFLAGS -ErrorAction SilentlyContinue
+    }
+    New-Item -ItemType Directory -Force $clientOut | Out-Null
+    Copy-Item (Join-Path $clientTarget 'ship\HordesOfAzeroth.exe') (Join-Path $clientOut 'HordesOfAzeroth.exe') -Force
+    Write-ClientLicenses
+    [System.IO.File]::WriteAllText($stamp, $commit)
+}
+
+function Sync-ReleaseSource([string]$Fork, [string]$Directory, [string]$Commit) {
+    if (-not (Test-Path (Join-Path $Directory '.git'))) {
+        Invoke-Quiet 'git worktree add' 'git' @('-C', $Fork, 'worktree', 'add', '--detach', $Directory, $Commit)
+    } else {
+        Invoke-Quiet 'git checkout' 'git' @('-C', $Directory, 'checkout', '--quiet', '--force', '--detach', $Commit)
+    }
+}
+
+function Invoke-LinuxBuild([string]$Part) {
+    $submodule = if ($Part -eq 'server') { 'server/core' } else { 'client' }
+    $source = if ($Part -eq 'server') { $serverSource } else { $clientSource }
+    $commit = (git -C $RepoRoot rev-parse "HEAD:$submodule").Trim()
+    $stamp = Join-Path $linuxOut "$Part-commit.txt"
+    if ((Test-Path $stamp) -and (Get-Content $stamp -Raw).Trim() -eq $commit) { return }
+    Sync-ReleaseSource (Join-Path $RepoRoot $submodule) $source $commit
+    Write-Host "Building the Linux $Part from fork commit $($commit.Substring(0, 9)) in Docker..."
+    & (Join-Path $PSScriptRoot 'build-linux.ps1') -Part $Part -ClientSource $clientSource -ServerSource $serverSource -Out $linuxOut
+    [System.IO.File]::WriteAllText($stamp, $commit)
+}
+
 function Invoke-PackageBuild([string]$Name) {
     New-Item -ItemType Directory -Force $buildDir | Out-Null
     switch ($Name) {
         'telegraphkit' {
             $csc = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
             $sources = Get-ChildItem (Join-Path (Get-CommittedTree) 'tools\telegraphs') -Filter '*.cs' | ForEach-Object FullName
-            & $csc -nologo -optimize '-r:System.Drawing.dll' "-out:$(Join-Path $buildDir 'TelegraphKit.exe')" @sources | Out-Null
+            & $csc -nologo -optimize "-out:$(Join-Path $buildDir 'TelegraphKit.exe')" @sources | Out-Null
             if ($LASTEXITCODE -ne 0) { throw 'TelegraphKit did not compile.' }
         }
         'server' { Invoke-ServerBuild }
-        'client-runtime' { Copy-Runtime (Get-CMake).Instance @(Join-Path $buildDir 'client-runtime') 'x86' @('vcruntime140.dll') }
+        'client' { Invoke-ClientBuild }
         'version' { [System.IO.File]::WriteAllText((Join-Path $buildDir 'VERSION'), "$version`n") }
         'launcher' {
             $project = Join-Path (Get-CommittedTree) 'tools\launcher\HordesOfAzerothLauncher.csproj'
-            Invoke-Native 'Launcher build' 'dotnet' @('build', $project, '-c', 'Release', '-nologo', "-p:Repository=$repository", "-p:OutputPath=$(Join-Path $buildDir 'launcher')/")
+            Invoke-Native 'Launcher build' 'dotnet' @('publish', $project, '-c', 'Release', '-r', 'win-x64', '-nologo', "-p:Repository=$repository", "-p:StatsUrl=$statsUrl", '-o', (Join-Path $buildDir 'launcher'))
         }
+        'linux-launcher' {
+            $project = Join-Path (Get-CommittedTree) 'tools\launcher\HordesOfAzerothLauncher.csproj'
+            Invoke-Native 'Linux launcher build' 'dotnet' @('publish', $project, '-c', 'Release', '-r', 'linux-x64', '-nologo', "-p:Repository=$repository", "-p:StatsUrl=$statsUrl", '-o', (Join-Path $linuxOut 'launcher'))
+        }
+        'linux-server' { Invoke-LinuxBuild 'server' }
+        'linux-client' { Invoke-LinuxBuild 'client' }
         'world-dump' {
             $dump = Join-Path $buildDir 'world.sql'
             if ($ReuseWorldDump -and (Test-Path $dump)) { return }
@@ -292,14 +357,14 @@ function New-PackageZip([string]$Name, $Files) {
     Get-Item $zipPath
 }
 
-function Get-PreviousManifest {
-    if ($PreviousManifest) { return Get-Content $PreviousManifest -Raw | ConvertFrom-Json }
+function Get-PreviousManifest([string]$Name) {
+    if ($PreviousManifest -and $Name -eq 'manifest.json') { return Get-Content $PreviousManifest -Raw | ConvertFrom-Json }
     $previousDir = Join-Path $releaseRoot 'previous'
     New-Item -ItemType Directory -Force $previousDir | Out-Null
-    $target = Join-Path $previousDir 'manifest.json'
+    $target = Join-Path $previousDir $Name
     if (Test-Path $target) { Remove-Item $target -Force }
     $ErrorActionPreference = 'Continue'
-    gh release download --repo $repository --pattern manifest.json --dir $previousDir 2>$null | Out-Null
+    gh release download --repo $repository --pattern $Name --dir $previousDir 2>$null | Out-Null
     $ErrorActionPreference = 'Stop'
     if (Test-Path $target) { return Get-Content $target -Raw | ConvertFrom-Json }
     $null
@@ -384,6 +449,7 @@ function Get-NavGroups($Previous) {
 
 if (-not (Test-DbUp)) { throw 'MariaDB is not running. Start it with tools\start-server.ps1 -DatabaseOnly.' }
 & (Join-Path $PSScriptRoot 'build-navtiles.ps1') | Out-Null
+git -C $RepoRoot update-index -q --refresh -- config/navtiles.json
 if (git -C $RepoRoot status --porcelain -- config/navtiles.json) { throw 'config/navtiles.json did not match the run zones and has been rebuilt: commit it, then release again.' }
 
 if ($Publish -and -not $testChannel -and (git -C $RepoRoot status --porcelain)) { throw 'Commit or stash every change before publishing: the release is built from the working tree.' }
@@ -391,47 +457,78 @@ if ($Publish -and -not $testChannel -and (git -C $RepoRoot status --porcelain)) 
 if (Test-Path $outDir) { Remove-Item $outDir -Recurse -Force }
 New-Item -ItemType Directory -Force $assetsDir | Out-Null
 
-$previous = Get-PreviousManifest
-$previousPackages = @{}
-if ($previous) { foreach ($package in $previous.packages) { $previousPackages[$package.name] = $package } }
+$operatingSystems = @(
+    [pscustomobject]@{ Name = 'windows'; Manifest = 'manifest.json'; ZipSuffix = ''; Launcher = 'HoALauncher.exe'; Download = 'HoALauncher.exe' },
+    [pscustomobject]@{ Name = 'linux'; Manifest = 'manifest-linux.json'; ZipSuffix = '-linux'; Launcher = 'HoALauncher'; Download = 'HoALauncher-linux.tar.gz' }
+)
+$previousByOs = @{}
+foreach ($os in $operatingSystems) {
+    $previousByOs[$os.Name] = @{}
+    $old = Get-PreviousManifest $os.Manifest
+    if ($old) { foreach ($package in $old.packages) { $previousByOs[$os.Name][$package.name] = $package } }
+    if ($os.Name -eq 'windows') { $previous = $old }
+}
 $baseUrl = "https://github.com/$repository/releases/download/$packageTag"
 
-$packages = [System.Collections.Generic.List[object]]::new()
 $uploads = [System.Collections.Generic.List[string]]::new()
 $releaseUploads = [System.Collections.Generic.List[string]]::new()
-foreach ($package in $releaseConfig.packages) {
-    if ($package.build) { Invoke-PackageBuild $package.build }
-    $files = Resolve-PackageFiles $package
-    if ($null -eq $files) {
-        if ($package.optional) { Write-Host "$($package.name): skipped (not built yet)"; continue }
-        throw "Package $($package.name) is missing files: build them first."
+$builtSteps = @{}
+$sharedEntries = @{}
+$packagesByOs = @{}
+foreach ($os in $operatingSystems) {
+    $packages = [System.Collections.Generic.List[object]]::new()
+    foreach ($package in $releaseConfig.packages | Where-Object { -not $_.os -or $_.os -eq $os.Name }) {
+        $shared = -not $package.os
+        if ($shared -and $sharedEntries.ContainsKey($package.name)) {
+            if ($sharedEntries[$package.name]) { $packages.Add($sharedEntries[$package.name]) }
+            continue
+        }
+        if ($package.build -and -not $builtSteps.ContainsKey($package.build)) {
+            Invoke-PackageBuild $package.build
+            $builtSteps[$package.build] = $true
+        }
+        $label = "$($package.name)$($os.ZipSuffix)"
+        $files = Resolve-PackageFiles $package
+        if ($null -eq $files) {
+            if ($package.optional) { Write-Host "${label}: skipped (not built yet)"; if ($shared) { $sharedEntries[$package.name] = $null }; continue }
+            throw "Package $label is missing files: build them first."
+        }
+        $listed = @($files | Sort-Object Target | ForEach-Object {
+            [ordered]@{ path = $_.Target; size = (Get-Item $_.Source).Length; sha256 = Get-Sha256 $_.Source }
+        })
+        $hashed = if ($package.changesWith) {
+            Get-ChildItem (Join-Path $RepoRoot $package.changesWith) -File | Sort-Object Name |
+                ForEach-Object { [ordered]@{ path = $_.Name; sha256 = Get-Sha256 $_.FullName } }
+        } else { $listed }
+        $contentHash = Get-TextSha256 (($hashed | ForEach-Object { "$($_.path):$($_.sha256)" }) -join "`n")
+        $old = $previousByOs[$os.Name][$package.name]
+        if ($shared -and -not ($old -and $old.contentHash -eq $contentHash)) {
+            foreach ($other in $previousByOs.Values) {
+                $candidate = $other[$package.name]
+                if ($candidate -and $candidate.contentHash -eq $contentHash) { $old = $candidate }
+            }
+        }
+        $entry = if ($old -and $old.contentHash -eq $contentHash) {
+            Write-Host "${label}: unchanged since $($old.release)"
+            $old
+        } else {
+            $zip = New-PackageZip $label $files
+            $uploads.Add($zip.FullName)
+            Write-Host ('{0}: {1} files, {2:N1} MB zipped' -f $label, $listed.Count, ($zip.Length / 1MB))
+            [ordered]@{
+                name = $package.name
+                release = $tag
+                url = "$baseUrl/$($zip.Name)"
+                size = $zip.Length
+                sha256 = Get-Sha256 $zip.FullName
+                contentHash = $contentHash
+                files = $listed
+            }
+        }
+        if ($shared) { $sharedEntries[$package.name] = $entry }
+        $packages.Add($entry)
     }
-    $listed = @($files | Sort-Object Target | ForEach-Object {
-        [ordered]@{ path = $_.Target; size = (Get-Item $_.Source).Length; sha256 = Get-Sha256 $_.Source }
-    })
-    $hashed = if ($package.changesWith) {
-        Get-ChildItem (Join-Path $RepoRoot $package.changesWith) -File | Sort-Object Name |
-            ForEach-Object { [ordered]@{ path = $_.Name; sha256 = Get-Sha256 $_.FullName } }
-    } else { $listed }
-    $contentHash = Get-TextSha256 (($hashed | ForEach-Object { "$($_.path):$($_.sha256)" }) -join "`n")
-    $old = $previousPackages[$package.name]
-    if ($old -and $old.contentHash -eq $contentHash) {
-        $packages.Add($old)
-        Write-Host "$($package.name): unchanged since $($old.release)"
-        continue
-    }
-    $zip = New-PackageZip $package.name $files
-    $uploads.Add($zip.FullName)
-    $packages.Add([ordered]@{
-        name = $package.name
-        release = $tag
-        url = "$baseUrl/$($zip.Name)"
-        size = $zip.Length
-        sha256 = Get-Sha256 $zip.FullName
-        contentHash = $contentHash
-        files = $listed
-    })
-    Write-Host ('{0}: {1} files, {2:N1} MB zipped' -f $package.name, $listed.Count, ($zip.Length / 1MB))
+    $packagesByOs[$os.Name] = $packages
 }
 
 $navGroups = @(Get-NavGroups $previous)
@@ -446,43 +543,52 @@ if ($Version -and -not ($notes | Where-Object { $_.version -eq $version })) {
 if ($testChannel) { $notes = @(Add-EarlierTestNotes $notes $previous) }
 $currentNotes = $notes | Where-Object { $_.version -eq $version } | Select-Object -First 1
 if (-not $currentNotes) { throw "CHANGELOG.md has no section for $version." }
+if ($OwnNotesOnly) { $notes = @($currentNotes) }
 
-$manifest = [ordered]@{
-    product = $releaseConfig.productName
-    version = $version
-    tag = $tag
-    published = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
-    minLauncherVersion = $releaseConfig.minLauncherVersion
-    realmName = $releaseConfig.realmName
-    clientDlls = $releaseConfig.clientDlls
-    releaseNotes = $notes
-    navTiles = $navGroups
-    thirdParty = @($releaseConfig.thirdParty | ForEach-Object { Get-ThirdPartyEntry $_ })
-    packages = $packages
+$published = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+$launcherHashes = [System.Collections.Generic.List[string]]::new()
+foreach ($os in $operatingSystems) {
+    $manifest = [ordered]@{
+        product = $releaseConfig.productName
+        version = $version
+        tag = $tag
+        published = $published
+        minLauncherVersion = $releaseConfig.minLauncherVersion
+        realmName = $releaseConfig.realmName
+        clientDlls = $releaseConfig.clientDlls
+        releaseNotes = $notes
+        navTiles = $navGroups
+        thirdParty = @($releaseConfig.thirdParty | Where-Object { -not $_.os -or $_.os -eq $os.Name } | ForEach-Object { Get-ThirdPartyEntry $_ })
+        packages = $packagesByOs[$os.Name]
+    }
+    $manifestPath = Join-Path $assetsDir $os.Manifest
+    [System.IO.File]::WriteAllText($manifestPath, ($manifest | ConvertTo-Json -Depth 8) + "`n")
+    $releaseUploads.Add($manifestPath)
+
+    $launcherBuild = if ($os.Name -eq 'windows') { Join-Path $buildDir "launcher\$($os.Launcher)" } else { Join-Path $linuxOut "launcher\$($os.Launcher)" }
+    if (-not (Test-Path $launcherBuild)) { continue }
+    $download = Join-Path $assetsDir $os.Download
+    if ($os.Name -eq 'windows') {
+        Copy-Item $launcherBuild $download -Force
+    } else {
+        Invoke-Native 'Linux launcher archive' 'python' @((Join-Path $PSScriptRoot 'linux\pack-launcher.py'), $launcherBuild, $download)
+    }
+    $releaseUploads.Add($download)
+    $launcherHashes.Add("``$($os.Download)`` SHA-256: ``$(Get-Sha256 $download)``")
 }
-$launcherExe = Join-Path $buildDir 'launcher\HoALauncher.exe'
-if (Test-Path $launcherExe) {
-    Copy-Item $launcherExe (Join-Path $assetsDir 'HoALauncher.exe') -Force
-    $releaseUploads.Add((Join-Path $assetsDir 'HoALauncher.exe'))
-}
-$manifestPath = Join-Path $assetsDir 'manifest.json'
-[System.IO.File]::WriteAllText($manifestPath, ($manifest | ConvertTo-Json -Depth 8) + "`n")
 $notesPath = Join-Path $outDir 'notes.md'
 $releaseBody = $currentNotes.notes
-$stagedLauncher = Join-Path $assetsDir 'HoALauncher.exe'
-if (Test-Path $stagedLauncher) {
-    $launcherHash = (Get-FileHash $stagedLauncher -Algorithm SHA256).Hash.ToLowerInvariant()
-    $releaseBody += "`n`n---`n`nNew here? Download ``HoALauncher.exe`` below and put it in your World of Warcraft 1.12.1 folder. Already playing? The launcher updates itself.`n`n``HoALauncher.exe`` SHA-256: ``$launcherHash``"
+if ($launcherHashes.Count) {
+    $releaseBody += "`n`n---`n`nNew here? On Windows, download ``HoALauncher.exe`` below and put it in your World of Warcraft 1.12.1 folder. On Linux and Steam Deck, unpack ``HoALauncher-linux.tar.gz`` into that folder and run ``HoALauncher``. Already playing? The launcher updates itself.`n`n" + ($launcherHashes -join "`n`n")
 }
 [System.IO.File]::WriteAllText($notesPath, $releaseBody + "`n")
-$releaseUploads.Add($manifestPath)
 
 Write-Host "Release $tag staged in $outDir ($($uploads.Count) changed packages for $packageTag)"
 if (-not $Publish) { return }
 
 $title = if ($testChannel) { "$($releaseConfig.productName) $version (test build)" } else { "$($releaseConfig.productName) $version" }
 if ($uploads.Count) {
-    gh release create $packageTag @uploads --repo $repository --prerelease --title "$title update packages" --notes "Packages the launcher downloads for $tag. Players don't need anything here: get HoALauncher.exe from the $tag release."
+    gh release create $packageTag @uploads --repo $repository --prerelease --title "$title update packages" --notes "Packages the launcher downloads for $tag. Players don't need anything here: get the launcher from the $tag release."
     if ($LASTEXITCODE -ne 0) { throw "gh release create $packageTag failed with exit code $LASTEXITCODE." }
 }
 gh release create $tag @releaseUploads --repo $repository --title $title --notes-file $notesPath --latest

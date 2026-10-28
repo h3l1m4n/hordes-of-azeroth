@@ -83,6 +83,28 @@ local function OverrideShiftKeys()
     end
 end
 
+local shiftWatch = CreateFrame("Frame")
+shiftWatch:Hide()
+shiftWatch:SetScript("OnUpdate", function()
+    local down = IsShiftKeyDown()
+    if down and not this.wasDown and not HoAKeys_IsTyping() then
+        local before = keystate
+        keystate = "down"
+        VanillaBonk_Dash()
+        keystate = before
+    end
+    this.wasDown = down
+end)
+
+local function WatchShift(on)
+    shiftWatch.wasDown = IsShiftKeyDown()
+    if on then
+        shiftWatch:Show()
+    else
+        shiftWatch:Hide()
+    end
+end
+
 local function SyncKeys()
     if UI.SetDashKey then
         UI.SetDashKey(UI.DashKeyText())
@@ -90,10 +112,14 @@ local function SyncKeys()
     if not active then
         return
     end
+    if HoAKeys_IsTyping then
+        WatchShift(onShift)
+        return
+    end
     if not SetOverrideBinding or not ClearOverrideBindings then
         if onShift and not warned then
             warned = true
-            DEFAULT_CHAT_FRAME:AddMessage("Hordes of Azeroth: Shift can't dash because ClassicAPI.dll isn't loaded. Bind Dash to another key under Key Bindings instead.")
+            DEFAULT_CHAT_FRAME:AddMessage("Hordes of Azeroth: Shift can't dash in this client. Bind Dash to another key under Key Bindings instead.")
         end
         return
     end
@@ -196,7 +222,9 @@ function LoadBindings(which)
     SyncKeys()
 end
 
-local DASH_THROUGH_WINDOWS = { VanillaBonkMap = true }
+local DASH_THROUGH_WINDOWS = {
+    VanillaBonkMap = true, VanillaBonkBags = true, VanillaBonkHearthTip = true, VanillaBonkControllerTip = true,
+}
 
 local function IsShown(name)
     local frame = getglobal(name)

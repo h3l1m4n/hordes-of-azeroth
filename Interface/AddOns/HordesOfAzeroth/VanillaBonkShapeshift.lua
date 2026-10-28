@@ -117,10 +117,15 @@ driver:SetScript("OnUpdate", function()
 end)
 
 local function BindDefaultKey()
-    if UnitClass("player") ~= "Druid" or GetBindingKey(SHAPESHIFT) then
+    if UnitClass("player") ~= "Druid" or VanillaBonkChoiceKeys then
         return
     end
-    if VanillaBonkChoiceKeys or not FREE_ACTIONS[GetBindingAction(DEFAULT_KEY) or ""] then
+    VanillaBonkKeysGiven = VanillaBonkKeysGiven or {}
+    if VanillaBonkKeysGiven[SHAPESHIFT] then
+        return
+    end
+    VanillaBonkKeysGiven[SHAPESHIFT] = true
+    if GetBindingKey(SHAPESHIFT) or not FREE_ACTIONS[GetBindingAction(DEFAULT_KEY) or ""] then
         return
     end
     SetBinding(DEFAULT_KEY, SHAPESHIFT)

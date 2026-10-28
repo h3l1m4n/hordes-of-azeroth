@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
 
@@ -41,7 +43,7 @@ namespace HordesOfAzeroth.Launcher
 
             public string Describe()
             {
-                if (ProcessId == SystemProcessId)
+                if (Platform.IsWindows && ProcessId == SystemProcessId)
                     return "Windows itself (System)";
                 if (Path != null)
                     return $"{System.IO.Path.GetFileName(Path)} ({System.IO.Path.GetDirectoryName(Path)})";
@@ -52,8 +54,15 @@ namespace HordesOfAzeroth.Launcher
         public static List<Owner> Listening(int port)
         {
             HashSet<int> ids = new HashSet<int>();
-            ids.UnionWith(ListenerIds(IPv4, IPv4RowSize, IPv4PortOffset, IPv4PidOffset, port));
-            ids.UnionWith(ListenerIds(IPv6, IPv6RowSize, IPv6PortOffset, IPv6PidOffset, port));
+            if (Platform.IsWindows)
+            {
+                ids.UnionWith(ListenerIds(IPv4, IPv4RowSize, IPv4PortOffset, IPv4PidOffset, port));
+                ids.UnionWith(ListenerIds(IPv6, IPv6RowSize, IPv6PortOffset, IPv6PidOffset, port));
+            }
+            else
+            {
+                ids.UnionWith(LinuxListenerIds(port));
+            }
             List<Owner> owners = new List<Owner>();
             foreach (int id in ids)
                 owners.Add(Describe(id));
@@ -87,6 +96,54 @@ namespace HordesOfAzeroth.Launcher
             return ids;
         }
 
+        const string LinuxListenState = "0A";
+
+        static IEnumerable<int> LinuxListenerIds(int port)
+        {
+            HashSet<string> sockets = new HashSet<string>();
+            foreach (string table in new[] { "/proc/net/tcp", "/proc/net/tcp6" })
+            {
+                if (!File.Exists(table))
+                    continue;
+                foreach (string line in File.ReadLines(table))
+                {
+                    string[] fields = line.Split((char[])null, StringSplitOptions.RemoveEmptyEntries);
+                    if (fields.Length < 10 || fields[3] != LinuxListenState)
+                        continue;
+                    string local = fields[1];
+                    int colon = local.LastIndexOf(':');
+                    if (colon < 0 || !int.TryParse(local.Substring(colon + 1), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out int localPort))
+                        continue;
+                    if (localPort == port)
+                        sockets.Add("socket:[" + fields[9] + "]");
+                }
+            }
+            List<int> ids = new List<int>();
+            if (sockets.Count == 0)
+                return ids;
+            foreach (string process in Directory.EnumerateDirectories("/proc"))
+            {
+                if (!int.TryParse(Path.GetFileName(process), out int id))
+                    continue;
+                try
+                {
+                    foreach (string descriptor in Directory.EnumerateFileSystemEntries(Path.Combine(process, "fd")))
+                    {
+                        string target = new FileInfo(descriptor).LinkTarget;
+                        if (target != null && sockets.Contains(target))
+                        {
+                            ids.Add(id);
+                            break;
+                        }
+                    }
+                }
+                catch (Exception e) when (e is UnauthorizedAccessException || e is IOException)
+                {
+                }
+            }
+            return ids;
+        }
+
         static int HostOrderPort(int networkOrder) => ((networkOrder & 0xFF) << 8) | ((networkOrder >> 8) & 0xFF);
 
         static Owner Describe(int processId)
@@ -108,6 +165,17 @@ namespace HordesOfAzeroth.Launcher
 
         static string ImagePath(int processId)
         {
+            if (!Platform.IsWindows)
+            {
+                try
+                {
+                    return new FileInfo($"/proc/{processId}/exe").LinkTarget;
+                }
+                catch (Exception e) when (e is UnauthorizedAccessException || e is IOException)
+                {
+                    return null;
+                }
+            }
             IntPtr handle = OpenProcess(QueryLimitedInformation, false, processId);
             if (handle == IntPtr.Zero)
                 return null;
@@ -128,7 +196,7 @@ namespace HordesOfAzeroth.Launcher
             if (owner.Path == null)
                 return false;
             string root = System.IO.Path.GetFullPath(folder).TrimEnd(System.IO.Path.DirectorySeparatorChar) + System.IO.Path.DirectorySeparatorChar;
-            return owner.Path.StartsWith(root, StringComparison.OrdinalIgnoreCase);
+            return owner.Path.StartsWith(root, Platform.IsWindows ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
         }
     }
 }

@@ -80,6 +80,8 @@ namespace BonkTelegraphs
                     () => FelFire.AddFelFire(client, files, spells, spellVisuals, spellVisualKits, spellEffectNames), new List<string>()));
                 castVisuals.AddRange(IfClientHasArt("the loot beams", files, spellTables,
                     () => LootBeams.AddLootBeams(client, files, spells, spellVisuals, spellVisualKits, spellEffectNames), new List<string>()));
+                castVisuals.AddRange(IfClientHasArt("the drop glows", files, spellTables,
+                    () => DropGlows.AddDropGlows(client, files, spells, spellVisuals, spellVisualKits, spellEffectNames), new List<string>()));
 
                 areaPois = new Dbc(client.Read("DBFilesClient\\AreaPOI.dbc"));
                 landmarks = Landmarks.HideFromMinimap(areaPois);

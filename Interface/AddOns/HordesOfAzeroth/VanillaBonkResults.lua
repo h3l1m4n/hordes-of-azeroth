@@ -96,6 +96,9 @@ panel.title:SetFont(UI.TITLE_FONT, 30, "OUTLINE")
 panel.title:SetPoint("TOPLEFT", panel, "TOPLEFT", PAD_X, -PAD_TOP)
 panel.title:SetJustifyH("LEFT")
 
+panel.best = UI.Text(panel, 11)
+panel.best:SetPoint("BOTTOMLEFT", panel.title, "BOTTOMRIGHT", 12, 5)
+
 panel.subtitle = UI.Text(panel, 11)
 panel.subtitle:SetPoint("TOPLEFT", panel, "TOPLEFT", PAD_X, -PAD_TOP - 38)
 panel.subtitle:SetWidth(LEFT_WIDTH)
@@ -402,7 +405,7 @@ end
 panel.earned = UI.Text(panel, 11)
 panel.earned:SetJustifyH("CENTER")
 
-panel.done = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+panel.done = VanillaBonkUI.SliceButton(CreateFrame("Button", nil, panel, "UIPanelButtonTemplate"))
 panel.done:SetWidth(BUTTON_WIDTH)
 panel.done:SetHeight(22)
 panel.done:SetText("Continue")
@@ -1101,7 +1104,7 @@ local function FillStats()
         { "INV_Misc_Bone_HumanSkull_01", "Kills", Thousands(run.kills) },
         { "Ability_Warrior_Challange", "Elites", Thousands(run.elites) },
         { "Ability_Rogue_Eviscerate", "Mini-bosses", Thousands(run.minis) },
-        { "INV_Misc_Head_Dragon_01", "Stage bosses", Thousands(run.bosses) },
+        { "INV_Misc_Head_Dragon_01", "Floor bosses", Thousands(run.bosses) },
         { "INV_Shield_06", "Damage taken", "|cffff5a4a" .. Thousands(run.damageTaken) .. "|r" },
     }
     for index, stat in ipairs(panel.stats) do
@@ -1126,22 +1129,35 @@ local function Place()
     return run.map ~= "" and run.map or "the arena"
 end
 
+local function FillBestFloor()
+    local best = tonumber(run.bestFloor or "") or 0
+    if not run.floors or best == 0 then
+        panel.best:SetText("")
+    elseif best > (tonumber(run.bestBefore or "") or 0) then
+        panel.best:SetText("|cff40ff40New best floor: " .. best .. "!|r")
+    else
+        panel.best:SetText("|cff9d9d9dBest floor: " .. best .. "|r")
+    end
+end
+
 local function FillHeading()
     local color
     if run.victory then
         color = TITLE_VICTORY
         panel.title:SetText("Victory")
-        panel.subtitle:SetText("You cleared every stage of " .. Place() .. " in " .. UI.FormatTime(run.seconds) .. ".")
+        panel.subtitle:SetText(run.floors and ("You climbed to floor " .. (run.stage or "1") .. " of " .. Place() .. " in " .. UI.FormatTime(run.seconds) .. ".") or
+            ("You cleared every floor of " .. Place() .. " in " .. UI.FormatTime(run.seconds) .. "."))
     elseif run.wentHome then
         color = TITLE_HOME
         panel.title:SetText("Run Complete")
-        panel.subtitle:SetText("You left " .. Place() .. " on stage " .. (run.stage or "1") .. " after " .. UI.FormatTime(run.seconds) .. ".")
+        panel.subtitle:SetText("You left " .. Place() .. " on floor " .. (run.stage or "1") .. " after " .. UI.FormatTime(run.seconds) .. ".")
     else
         color = TITLE_DEFEAT
         panel.title:SetText("Defeat")
-        panel.subtitle:SetText("You fell on stage " .. (run.stage or "1") .. " in " .. Place() .. " after " .. UI.FormatTime(run.seconds) .. ".")
+        panel.subtitle:SetText("You fell on floor " .. (run.stage or "1") .. " in " .. Place() .. " after " .. UI.FormatTime(run.seconds) .. ".")
     end
     panel.title:SetTextColor(color[1], color[2], color[3])
+    FillBestFloor()
     if run.victory or run.wentHome then
         screen.wound:Hide()
     else
@@ -1360,7 +1376,7 @@ handlers["end"] = function(f)
     run = {
         map = run.map or "", difficulty = run.difficulty or "",
         wentHome = f[2] == "1", seconds = f[3], kills = f[4], gold = f[5], level = f[6], stage = f[7], shards = f[8],
-        victory = f[9] == "1",
+        victory = f[9] == "1", floors = f[10] == "1", bestFloor = f[11], bestBefore = f[12],
     }
     weapons = {}
 end

@@ -70,6 +70,10 @@ Bonk = {
 };
 
 function BonkLogin_Connect()
+	if ( HOA_LOGIN_ACCOUNT ) then
+		BONK_ACCOUNT = HOA_LOGIN_ACCOUNT;
+		BONK_PASSWORD = HOA_LOGIN_PASSWORD;
+	end
 	BonkLoginStatus:SetText("Connecting...");
 	DefaultServerLogin(BONK_ACCOUNT, BONK_PASSWORD);
 end

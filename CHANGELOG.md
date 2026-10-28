@@ -1,5 +1,101 @@
 # Changelog
 
+## 0.5.0
+
+### New client and Linux
+- 0.5 runs on a new client (benilla), heavily modified for performance. Expect bugs.
+- Linux and Steam Deck support (beta): native launcher, client and server.
+- Controller support, with Steam Deck button prompts.
+
+### Launcher
+- New launcher for Windows and Linux.
+- Optional: send run data and bug reports to help with class tuning and crash fixes.
+
+### Mythic floors
+- Mythic is now a climb of 20 floors, starting on floor 1 every run, with Endless past floor 20. Difficulty rises in three bands.
+- All difficulties now use floors.
+- Heroic and Mythic have tougher early enemies. Normal is unchanged.
+- Gold and Darkmoon Tickets increase by 10% per Mythic floor. Milestone floors award double first-clear tickets.
+
+### Run Master
+- Redesigned window with a difficulty ladder, map list, loadout and floor slider.
+- The floor preview shows enemy behavior, rewards and milestones for each floor.
+
+### Mythic Quartermaster
+- New vendor selling class tier sets, weapons, accessories and proc trinkets in Tiers 1-20. Each tier is 12% stronger than the last.
+- Stock is two tiers below your best Mythic floor cleared.
+- Set pieces from other classes can be refitted for your class for a small fee.
+- Eight new trinkets, each with a 5% chance on cast to proc.
+- More rings, necks and weapons are coming.
+
+### Loot
+- Extraction Pillar: appears after a floor's second mini-boss (every second floor up to 10, every floor after) and sends one item home.
+- Scrap: items you don't extract become Scrap. 100 Scrap buys an item one tier above the shop, or upgrades a legendary.
+- Legendaries now have tiers and drop only from floor bosses. Old legendaries upgrade to the shop's tier +1.
+- Mini-bosses drop tier pieces more often on floors at or above the shop's tier. Blue items phase out over the first 10 Mythic floors.
+- Gear worse than what you have equipped is salvaged for Valor automatically.
+- Greens and blues go on Durgan's shelf at half price the first time you find them.
+- Extraction item cards show the item's tier, an upgrade arrow, and whether you already own it.
+- New loot beams, brighter by rarity. Darkmoon Tickets and Glyphs sit in glowing pools.
+
+### Talents
+- New talent trees for every class, with larger rows, a choice row and a capstone.
+- Capstones no longer cost stats, and weak capstones have new effects.
+- Talent tooltips explain terms such as Enrage, Bleed and Shield.
+- Locked rows show how many points they still require.
+
+### Darkmoon Cards and Glyphs
+- Cards no longer have a copy limit. Each extra copy is slightly weaker. New card effects.
+- New Darkmoon Deck table at the Inn for unlocking cards and Glyphs and buying ban slots.
+- Up to 7 Glyph sockets on Mythic. Glyphs drop from mini-bosses and floor bosses, and Glyph damage shows on the damage meter.
+- New Glyph of Raise Dead: slain elites rise as skeletons to fight for you.
+- Gnomish Death Ray now grants +400% Power to the triggering cast instead of multiplying all damage by 5.
+- Locked cards and Glyphs show their unlock progress.
+
+### Pets and summons
+- Pets and summons inherit 100% of your Power, Crit, Crit Damage, Haste, Duration and Movement Speed. They no longer trigger your on-hit or on-cast effects.
+- Melee pets deal damage with their attacks. Spirit Wolves, Shadowfiends, Treants and the Felhunter cleave enemies in front of them.
+- Hydra heads now attack different targets. Searing Totem hits 2 targets.
+- Increased damage for Hydra, Searing Totem, Totem of Wrath, Imp and Felhunter.
+
+### Codex and tutorial
+- New Rules tab in the Codex. Highlighted terms show an explanation on hover.
+- New tutorial steps for the Darkmoon Deck and the Quartermaster. Tutorial arrows now follow the camera.
+- Town NPCs appear once unlocked.
+- New account-wide titles, each with a small stat bonus. New class quests for Mythic floors.
+
+### Interface
+- New spell tooltip layout with rank, radius, range, cooldown and upgrades.
+- Enrage, Divine Shield, Renew and other buffs now have their own tooltips.
+- The damage meter shows Glyphs. Right-click a row to hide it; the eye button shows all rows again.
+- Character stats show the Armor cap and Shield restore.
+
+### Balance
+- Determination: each death grants a little Power and toughness until you clear Normal.
+- Tuning pass for every class.
+- Area and Haste have diminishing returns.
+- Armor reduces damage taken by up to 60%, with diminishing returns.
+- Hit has been removed, along with elite dodge.
+- Account Training ranks are stronger.
+- Proc damage no longer scales with difficulty.
+- Damage over time ticks no longer count as hits.
+- Elemental Mastery and Blast Wave damage reduced.
+
+### Fixes
+- Clearing a harder difficulty now also completes class quests for easier ones.
+- Earth Shock now consumes Static.
+- Trinkets no longer proc while your spells have no target.
+- Glyph of Divine Shield now recharges on every difficulty.
+- Spirit Wolf bites now apply Static and Shadowfiend bites now apply Decay.
+- Monster spells no longer slow you for now. Stuns still apply.
+- Fixed a run freeze when a Ley Line offer appeared as another choice closed. Stuck pauses now recover on their own.
+- Damage over time and pets no longer damage enemies while a level-up choice is open.
+- Custom key bindings are no longer reset at login.
+- Windfury Weapon kills now count toward Windwalker's quest.
+- Enemies no longer regenerate health out of combat.
+- Clearing a floor now removes leftover shrine pins and events from the map.
+- Ascension is no longer offered once no spell can evolve.
+
 ## 0.4.0
 
 ### Druid

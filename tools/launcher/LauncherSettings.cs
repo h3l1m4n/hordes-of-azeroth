@@ -13,10 +13,13 @@ namespace HordesOfAzeroth.Launcher
 
         public bool KeepInTray = true;
         public bool BuildWhilePlaying = true;
-        public bool Widescreen = true;
         public bool BuildSpeedChosen;
         public CoreShare InstallCores = CoreShare.All;
         public CoreShare BackgroundCores = CoreShare.Half;
+        public bool SendRunData = true;
+        public bool RunDataAsked;
+        public string InstallId = Guid.NewGuid().ToString("N");
+        public long RunLogOffset;
 
         public static int Workers(CoreShare share) => share == CoreShare.All ? Environment.ProcessorCount : HalfOfCores;
 
@@ -40,14 +43,20 @@ namespace HordesOfAzeroth.Launcher
                 settings.KeepInTray = tray != "0";
             if (values.TryGetValue("BuildWhilePlaying", out string build))
                 settings.BuildWhilePlaying = build != "0";
-            if (values.TryGetValue("Widescreen", out string widescreen))
-                settings.Widescreen = widescreen != "0";
             if (values.TryGetValue("BuildSpeedChosen", out string chosen))
                 settings.BuildSpeedChosen = chosen == "1";
             if (values.TryGetValue("InstallCores", out string install) && Enum.TryParse(install, true, out CoreShare installShare))
                 settings.InstallCores = installShare;
             if (values.TryGetValue("BackgroundCores", out string background) && Enum.TryParse(background, true, out CoreShare backgroundShare))
                 settings.BackgroundCores = backgroundShare;
+            if (values.TryGetValue("SendRunData", out string send))
+                settings.SendRunData = send != "0";
+            if (values.TryGetValue("RunDataAsked", out string asked))
+                settings.RunDataAsked = asked == "1";
+            if (values.TryGetValue("InstallId", out string id) && id.Length > 0)
+                settings.InstallId = id;
+            if (values.TryGetValue("RunLogOffset", out string offset) && long.TryParse(offset, out long runLogOffset))
+                settings.RunLogOffset = runLogOffset;
             return settings;
         }
 
@@ -58,10 +67,13 @@ namespace HordesOfAzeroth.Launcher
             {
                 "KeepInTray=" + (KeepInTray ? "1" : "0"),
                 "BuildWhilePlaying=" + (BuildWhilePlaying ? "1" : "0"),
-                "Widescreen=" + (Widescreen ? "1" : "0"),
                 "BuildSpeedChosen=" + (BuildSpeedChosen ? "1" : "0"),
                 "InstallCores=" + InstallCores,
                 "BackgroundCores=" + BackgroundCores,
+                "SendRunData=" + (SendRunData ? "1" : "0"),
+                "RunDataAsked=" + (RunDataAsked ? "1" : "0"),
+                "InstallId=" + InstallId,
+                "RunLogOffset=" + RunLogOffset,
             });
         }
     }

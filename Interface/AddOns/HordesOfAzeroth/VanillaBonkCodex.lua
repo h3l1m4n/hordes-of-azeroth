@@ -59,16 +59,9 @@ local function SetFont(fontString, font, size, flags)
     fontString:SetFont(font, size, flags or "")
 end
 
-local function ReadState(entry, locked, price)
-    locked = tonumber(locked or "") or 1
-    entry.owned = locked == 0
-    entry.forSale = locked == 2
-    entry.locked = not entry.owned and not entry.forSale
-    entry.price = tonumber(price or "") or 0
-end
-
-local function CanAfford(entry)
-    return GetMoney() >= entry.price
+local function ReadState(entry, locked)
+    entry.owned = (tonumber(locked or "") or 1) == 0
+    entry.locked = not entry.owned
 end
 
 local POOL_KINDS = { c = true, g = true }
@@ -77,7 +70,8 @@ local function CanSwitch(entry)
     if not book or not entry or not entry.owned or not POOL_KINDS[entry.kind] then
         return false
     end
-    return entry.off or (book.pool.open and book.pool.used < book.pool.slots)
+    local pool = book.pool[entry.kind]
+    return entry.off or pool.used < pool.slots
 end
 
 local function HasFlag(mask, flag)
@@ -138,39 +132,12 @@ local function AddLock(lock)
     if lock then
         tooltip:AddLine("Quest: " .. lock.name, 1, 0.6, 0.6)
         tooltip:AddLine(lock.description, 0.9, 0.9, 0.9, 1)
+        VanillaBonkUI.AddQuestProgress(tooltip, lock)
     end
 end
 
-local function SoldBySayge(entry)
-    return entry.kind == "c" or entry.kind == "g"
-end
-
-local function PriceText(entry)
-    if SoldBySayge(entry) then
-        return entry.price .. (entry.price == 1 and " Darkmoon Ticket" or " Darkmoon Tickets")
-    end
-    return VanillaBonkUI.FormatGold(entry.price)
-end
-
-local function UnlockHint(entry, atSayge)
-    if SoldBySayge(entry) and not atSayge then
-        return "Unlock it from Sayge at the Inn to find it during runs."
-    end
-    if not SoldBySayge(entry) and not atKeeper then
-        return "Unlock it from the Spellbook Keeper at the Inn to find it during runs."
-    end
-    return "Unlock it to find it during runs."
-end
-
-local function AddState(entry, atSayge)
-    if entry.forSale then
-        tooltip:AddLine(" ")
-        tooltip:AddDoubleLine("Unlock", PriceText(entry), 1, 0.82, 0, 1, 1, 1)
-        tooltip:AddLine(UnlockHint(entry, atSayge), 0.6, 0.8, 1, 1)
-        if not SoldBySayge(entry) and not CanAfford(entry) then
-            tooltip:AddLine("You need " .. VanillaBonkUI.FormatGold(entry.price - GetMoney()) .. " more.", 1, 0.3, 0.3)
-        end
-    elseif entry.locked then
+local function AddState(entry)
+    if entry.locked then
         AddLock(book.locks[entry.kind .. entry.id])
     end
 end
@@ -181,16 +148,18 @@ local function ShowSpellTooltip(owner, spell)
     tooltip = Tip
     Tip:SetOwner(owner, "ANCHOR_RIGHT")
     Tip:SetLegendary(evolved)
-    Tip:Title(spell.name, evolved and Tip.ORANGE or Tip.WHITE, Tip:SpellTags(spell.school, spell.aoe))
+    Tip:Title(spell.name, evolved and Tip.ORANGE or Tip.WHITE)
     local classes = ClassNames(evolved and SpellClasses(spell) or spell.classMask)
     Tip:AddDoubleLine(spell.spec or "", classes, Tip.SPEC[1], Tip.SPEC[2], Tip.SPEC[3], 0.62, 0.62, 0.62)
     local base = evolved and book.weapons[spell.evolvesFrom]
     if base then
         Tip:AddDoubleLine("Evolved from " .. base.name, "", 1, 0.5, 0, 1, 1, 1, 11)
     end
+    Tip:AddReach(spell.radius, spell.range)
     if spell.description ~= "" then
         Tip:AddLine(spell.description, 1, 0.82, 0)
     end
+    Tip:AddFooter(nil, spell.school, spell.aoe)
 
     Tip:AddRule()
     if base then
@@ -214,13 +183,15 @@ local function ShowPassiveTooltip(owner, passive)
     tooltip:AddLine(passive.name, 1, 0.82, 0)
     tooltip:AddLine("Passive (all classes)", 0.7, 0.7, 0.7)
     tooltip:AddLine(passive.description, 1, 1, 1, 1)
-    tooltip:AddLine(" ")
-    tooltip:AddLine("Max rank " .. passive.maxRank, 1, 0.82, 0)
+    if passive.maxRank > 0 then
+        tooltip:AddLine(" ")
+        tooltip:AddLine("Max rank " .. passive.maxRank, 1, 0.82, 0)
+    end
     AddState(passive)
     tooltip:Show()
 end
 
-local function ShowCardTooltip(owner, card, atSayge)
+local function ShowCardTooltip(owner, card)
     local rarity = VanillaBonkUI.RARITY[card.rarity] or VanillaBonkUI.RARITY[0]
     tooltip = GameTooltip
     GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
@@ -230,12 +201,12 @@ local function ShowCardTooltip(owner, card, atSayge)
         tooltip:AddLine(card.description, 1, 1, 1, 1)
     end
     tooltip:AddLine(" ")
-    tooltip:AddLine(card.maxCopies == 1 and "1 copy per run" or ("Up to " .. card.maxCopies .. " copies per run"), 1, 0.82, 0)
-    AddState(card, atSayge)
+    tooltip:AddLine(card.maxCopies == 1 and "1 copy per run" or "Each copy adds a bit less than the one before.", 1, 0.82, 0, 1)
+    AddState(card)
     tooltip:Show()
 end
 
-local function ShowGlyphTooltip(owner, glyph, atSayge)
+local function ShowGlyphTooltip(owner, glyph)
     local rarity = VanillaBonkUI.RARITY[glyph.rarity] or VanillaBonkUI.RARITY[0]
     tooltip = GameTooltip
     GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
@@ -248,8 +219,8 @@ local function ShowGlyphTooltip(owner, glyph, atSayge)
         tooltip:AddLine(glyph.drawback, 1, 0.29, 0.23, 1)
     end
     tooltip:AddLine(" ")
-    tooltip:AddLine("Offered after the first timed mini-boss of a run and after every stage boss except the last. The Foresight upgrade adds one at the start of a run.", 1, 0.82, 0, 1)
-    AddState(glyph, atSayge)
+    tooltip:AddLine("Offered after the first timed mini-boss of a run and after every floor boss except the last. The Foresight upgrade adds one at the start of a run.", 1, 0.82, 0, 1)
+    AddState(glyph)
     tooltip:Show()
 end
 
@@ -259,21 +230,27 @@ end
 
 local TOOLTIPS = { w = ShowSpellTooltip, p = ShowPassiveTooltip, c = ShowCardTooltip, g = ShowGlyphTooltip }
 
-local function ShowEntryTooltip(owner, entry)
+local function ShowEntryTooltip(owner, entry, manage)
     if entry and TOOLTIPS[entry.kind] then
         TOOLTIPS[entry.kind](owner, entry)
-        if CanSwitch(entry) then
+        if entry.off then
             tooltip:AddLine(" ")
-            if entry.off then
-                tooltip:AddLine("Switched off. It won't be offered in runs.", 1, 0.3, 0.3)
-                tooltip:AddLine("Right-click to switch it back on.", 0.4, 1, 0.4)
-            else
-                tooltip:AddLine("Right-click to switch it off. It won't be offered in runs.", 0.7, 0.7, 0.7, 1)
+            tooltip:AddLine("Banned. It won't turn up in runs.", 1, 0.3, 0.3)
+            if manage then
+                tooltip:AddLine("Right-click to allow it again.", 0.4, 1, 0.4)
             end
             tooltip:Show()
-        elseif book and entry.owned and POOL_KINDS[entry.kind] and book.pool.slots > 0 then
+        elseif not manage then
+            return
+        elseif CanSwitch(entry) then
             tooltip:AddLine(" ")
-            tooltip:AddLine("Every Stacked Deck slot is in use (" .. book.pool.used .. "/" .. book.pool.slots .. ").", 0.7, 0.7, 0.7, 1)
+            tooltip:AddLine("Right-click to ban it from your runs.", 1, 0.82, 0)
+            tooltip:Show()
+        elseif book and entry.owned and POOL_KINDS[entry.kind] then
+            local pool = book.pool[entry.kind]
+            tooltip:AddLine(" ")
+            tooltip:AddLine(pool.slots > 0 and ("All your ban slots are in use (" .. pool.used .. "/" .. pool.slots .. ").") or
+                "You have no ban slots yet.", 0.7, 0.7, 0.7, 1)
             tooltip:Show()
         end
     end
@@ -311,16 +288,14 @@ window.empty:SetPoint("TOP", window.list, "TOP", 0, -40)
 window.empty:SetTextColor(0.6, 0.6, 0.6)
 
 local Refresh
-local Buy
 
 local TABS = {
     { key = "spells",     label = "Spells" },
     { key = "unlocks",    label = "Passives" },
-    { key = "cards",      label = "Cards" },
-    { key = "glyphs",     label = "Glyphs" },
     { key = "debuffs",    label = "Debuffs" },
     { key = "affixes",    label = "Affixes" },
     { key = "evolutions", label = "Evolutions" },
+    { key = "rules",      label = "Rules" },
 }
 
 local eliteAffixes = {}
@@ -340,7 +315,8 @@ local function TabLabels()
     for _, tab in ipairs(TABS) do
         if (tab.key ~= "evolutions" or (book and getn(book.evolutions) > 0)) and
             (tab.key ~= "debuffs" or (book and book.debuffs and getn(book.debuffs) > 0)) and
-            (tab.key ~= "affixes" or getn(eliteAffixes) > 0) then
+            (tab.key ~= "affixes" or getn(eliteAffixes) > 0) and
+            (tab.key ~= "rules" or (book and book.rules and getn(book.rules) > 0)) then
             tinsert(shownTabs, tab)
         end
     end
@@ -459,12 +435,6 @@ local function CreateCard(index)
     local card = CreateFrame("Button", nil, window.list)
     card:SetWidth(CARD_WIDTH)
     card:SetHeight(CARD_HEIGHT)
-    card:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-    card:SetScript("OnClick", function()
-        if arg1 == "RightButton" then
-            TogglePool(this.entry)
-        end
-    end)
     card:SetBackdrop({
         bgFile = FLAT, edgeFile = FLAT, edgeSize = 1,
         insets = { left = 1, right = 1, top = 1, bottom = 1 },
@@ -504,25 +474,6 @@ local function CreateCard(index)
     SetFont(card.badge, NUMBER_FONT, 11, "OUTLINE")
     card.badge:SetPoint("TOPRIGHT", card, "TOPRIGHT", -6, -5)
 
-    card.buy = CreateFrame("Button", nil, card, "UIPanelButtonTemplate")
-    card.buy:SetWidth(60)
-    card.buy:SetHeight(20)
-    card.buy:SetPoint("BOTTOMRIGHT", card, "BOTTOMRIGHT", -6, 6)
-    card.buy:SetText("Unlock")
-    card.buy:SetScript("OnClick", function()
-        Buy(this:GetParent().entry)
-    end)
-    card.buy:SetScript("OnEnter", function()
-        this:GetParent():SetBackdropBorderColor(1, 0.82, 0, 1)
-        ShowEntryTooltip(this, this:GetParent().entry)
-    end)
-    card.buy:SetScript("OnLeave", function()
-        local border = this:GetParent().border
-        this:GetParent():SetBackdropBorderColor(border[1], border[2], border[3], 1)
-        HideTooltip()
-    end)
-    card.buy:Hide()
-
     card.offTag = card:CreateTexture(nil, "OVERLAY")
     card.offTag:SetTexture(FLAT)
     card.offTag:SetVertexColor(0.55, 0.06, 0.06, 1)
@@ -548,13 +499,7 @@ local function PlaceCard(index, card)
 end
 
 local function StyleCard(card, entry)
-    if entry.forSale then
-        card.border = { 0.55, 0.42, 0.1 }
-        card:SetBackdropColor(0.08, 0.06, 0.01, 0.72)
-        card.name:SetTextColor(0.9, 0.9, 0.9)
-        card.detail:SetTextColor(1, 0.82, 0)
-        SetDesaturation(card.icon, nil)
-    elseif entry.locked then
+    if entry.locked then
         card.border = { 0.35, 0.1, 0.1 }
         card:SetBackdropColor(0.1, 0.02, 0.02, 0.72)
         card.name:SetTextColor(0.65, 0.65, 0.65)
@@ -643,7 +588,7 @@ local function FillPart(part, entry)
     part.entry = entry
     part.icon:SetTexture(ICON_PATH .. (entry.icon ~= "" and entry.icon or "INV_Misc_QuestionMark"))
     part.name:SetText(entry.name)
-    if entry.locked or entry.forSale then
+    if entry.locked then
         part.name:SetTextColor(1, 0.4, 0.4)
         SetDesaturation(part.icon, 1)
     else
@@ -682,34 +627,6 @@ local function SortedPassives()
     return list
 end
 
-local function SortedCards()
-    local list = {}
-    for _, card in pairs(book.cards) do
-        tinsert(list, card)
-    end
-    table.sort(list, function(a, b)
-        if a.rarity ~= b.rarity then
-            return a.rarity < b.rarity
-        end
-        return a.name < b.name
-    end)
-    return list
-end
-
-local function SortedGlyphs()
-    local list = {}
-    for _, glyph in pairs(book.glyphs) do
-        tinsert(list, glyph)
-    end
-    table.sort(list, function(a, b)
-        if a.rarity ~= b.rarity then
-            return a.rarity < b.rarity
-        end
-        return a.name < b.name
-    end)
-    return list
-end
-
 local function ShowCards(entries)
     for index, entry in ipairs(entries) do
         local card = window.cards[index] or CreateCard(index)
@@ -719,20 +636,10 @@ local function ShowCards(entries)
         card.name:SetText(entry.name)
 
         local lock = book.locks[entry.kind .. entry.id]
-        if entry.forSale and SoldBySayge(entry) then
-            card.detail:SetText("Unlock at Sayge: " .. PriceText(entry))
-        elseif entry.forSale then
-            card.detail:SetText("Unlock: " .. VanillaBonkUI.FormatGold(entry.price))
-        elseif entry.locked then
+        if entry.locked then
             card.detail:SetText("Locked by " .. (lock and ("\"" .. lock.name .. "\"") or "a quest"))
         elseif entry.kind == "p" then
-            card.detail:SetText("Unlocked, max rank " .. entry.maxRank)
-        elseif entry.kind == "c" then
-            local rarity = VanillaBonkUI.RARITY[entry.rarity] or VanillaBonkUI.RARITY[0]
-            card.detail:SetText(rarity.name .. ", " .. (entry.maxCopies == 1 and "1 copy" or ("up to " .. entry.maxCopies .. " copies")) .. " per run")
-        elseif entry.kind == "g" then
-            local rarity = VanillaBonkUI.RARITY[entry.rarity] or VanillaBonkUI.RARITY[0]
-            card.detail:SetText(rarity.name .. " Glyph" .. (entry.drawback ~= "" and " with a |cffff4a3adrawback|r" or ""))
+            card.detail:SetText(entry.maxRank > 0 and "Unlocked, max rank " .. entry.maxRank or "Unlocked")
         else
             local text = ClassNames(entry.classMask)
             if entry.starterMask > 0 and (classFilter == 0 or HasFlag(entry.starterMask, classFilter)) then
@@ -748,24 +655,6 @@ local function ShowCards(entries)
         end
 
         StyleCard(card, entry)
-        if (entry.kind == "c" or entry.kind == "g") and entry.owned then
-            local rarity = VanillaBonkUI.RARITY[entry.rarity] or VanillaBonkUI.RARITY[0]
-            card.name:SetTextColor(rarity.r, rarity.g, rarity.b)
-        end
-        if entry.forSale and not SoldBySayge(entry) then
-            card.name:SetWidth(CARD_WIDTH - 84 - 50)
-            card.detail:SetWidth(CARD_WIDTH - 60 - 60)
-            if CanAfford(entry) and atKeeper and not window.buying then
-                card.buy:Enable()
-            else
-                card.buy:Disable()
-            end
-            card.buy:Show()
-        else
-            card.name:SetWidth(CARD_WIDTH - 84)
-            card.detail:SetWidth(CARD_WIDTH - 60)
-            card.buy:Hide()
-        end
         if entry.off then
             card.name:SetTextColor(0.55, 0.55, 0.55)
             card.detail:SetText("|cffff6060Switched off: never offered|r")
@@ -777,7 +666,7 @@ local function ShowCards(entries)
             card.offTag:Hide()
             card.offText:Hide()
         end
-        if GetMouseFocus() == card.buy or GetMouseFocus() == card then
+        if GetMouseFocus() == card then
             ShowEntryTooltip(GetMouseFocus(), entry)
         end
         card:Show()
@@ -885,7 +774,7 @@ local function ShowEvolutions()
             for index, evolved in ipairs(evolutions) do
                 local part = PlaceEvolution(row, index, columns)
                 FillPart(part, evolved)
-                if not evolved.locked and not evolved.forSale then
+                if not evolved.locked then
                     part.name:SetTextColor(1, 0.65, 0.2)
                 end
                 part:Show()
@@ -903,10 +792,197 @@ local function ShowEvolutions()
     return top, shown
 end
 
+local rules = { section = 1, topics = {}, rows = {} }
+
+do
+    local SIDE_WIDTH = 140
+    local TOPIC_HEIGHT = 24
+    local PAGE_LEFT = SIDE_WIDTH + 14
+    local PAGE_WIDTH = LIST_WIDTH - PAGE_LEFT - 24
+    local LINE_GAP = 7
+    local LINE_HEIGHT = 14
+    local GOLD = "|cffffd100"
+    local TEXT = "|cffe6e6e6"
+
+    local frame = CreateFrame("Frame", nil, window)
+    frame:SetPoint("TOPLEFT", window, "TOPLEFT", 26, -84)
+    frame:SetWidth(LIST_WIDTH)
+    frame:SetHeight(LIST_HEIGHT + 30)
+    frame:SetFrameLevel(window.pane:GetFrameLevel() + 2)
+    frame:Hide()
+    rules.frame = frame
+
+    local side = frame:CreateTexture(nil, "BACKGROUND")
+    side:SetTexture(0, 0, 0, 0.35)
+    side:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
+    side:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 0, 0)
+    side:SetWidth(SIDE_WIDTH)
+    local edge = frame:CreateTexture(nil, "BORDER")
+    edge:SetTexture(0.23, 0.2, 0.14, 1)
+    edge:SetPoint("TOPLEFT", side, "TOPRIGHT", 0, 0)
+    edge:SetPoint("BOTTOMLEFT", side, "BOTTOMRIGHT", 0, 0)
+    edge:SetWidth(1)
+
+    local scroll = CreateFrame("ScrollFrame", "VanillaBonkRulesScroll", frame, "UIPanelScrollFrameTemplate")
+    scroll:SetPoint("TOPLEFT", frame, "TOPLEFT", PAGE_LEFT, -4)
+    scroll:SetWidth(PAGE_WIDTH)
+    scroll:SetHeight(LIST_HEIGHT + 22)
+    local page = CreateFrame("Frame", nil, scroll)
+    page:SetWidth(PAGE_WIDTH)
+    page:SetHeight(LIST_HEIGHT)
+    scroll:SetScrollChild(page)
+
+    page.heading = page:CreateFontString(nil, "OVERLAY")
+    SetFont(page.heading, FONT, 15)
+    page.heading:SetTextColor(1, 0.82, 0)
+    page.heading:SetPoint("TOPLEFT", page, "TOPLEFT", 0, -2)
+
+    local function SelectTopic(index)
+        rules.section = index
+        PlaySound("igMainMenuOptionCheckBoxOn")
+        Refresh()
+    end
+
+    local function CreateTopic(index)
+        local topic = CreateFrame("Button", nil, frame)
+        topic:SetWidth(SIDE_WIDTH)
+        topic:SetHeight(TOPIC_HEIGHT)
+        topic:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, -4 - (index - 1) * TOPIC_HEIGHT)
+        topic.glow = topic:CreateTexture(nil, "ARTWORK")
+        topic.glow:SetTexture(FLAT)
+        topic.glow:SetAllPoints(topic)
+        topic.glow:SetGradientAlpha("HORIZONTAL", 1, 0.82, 0, 0.25, 1, 0.82, 0, 0.05)
+        topic.bar = topic:CreateTexture(nil, "OVERLAY")
+        topic.bar:SetTexture(1, 0.82, 0, 1)
+        topic.bar:SetPoint("TOPLEFT", topic, "TOPLEFT", 0, 0)
+        topic.bar:SetPoint("BOTTOMLEFT", topic, "BOTTOMLEFT", 0, 0)
+        topic.bar:SetWidth(2)
+        topic.label = topic:CreateFontString(nil, "OVERLAY")
+        SetFont(topic.label, FONT, 12)
+        topic.label:SetPoint("LEFT", topic, "LEFT", 10, 0)
+        topic:SetHighlightTexture(FLAT)
+        topic:GetHighlightTexture():SetVertexColor(1, 0.82, 0, 0.08)
+        topic.index = index
+        topic:SetScript("OnClick", function() SelectTopic(this.index) end)
+        rules.topics[index] = topic
+        return topic
+    end
+
+    local function ShowLineTooltip()
+        GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+        GameTooltip:AddLine(this.label or rules.sections[rules.section].name, 1, 0.82, 0)
+        UI.AddGlossary(GameTooltip, { this.plain })
+        if GameTooltip:NumLines() > 2 then
+            GameTooltip:Show()
+        else
+            GameTooltip:Hide()
+        end
+    end
+
+    local function CreateLine(index)
+        local row = CreateFrame("Button", nil, page)
+        row:SetWidth(PAGE_WIDTH)
+        row.dot = row:CreateTexture(nil, "ARTWORK")
+        row.dot:SetTexture(1, 0.82, 0, 1)
+        row.dot:SetWidth(4)
+        row.dot:SetHeight(4)
+        row.dot:SetPoint("TOPLEFT", row, "TOPLEFT", 1, -5)
+        row.text = row:CreateFontString(nil, "OVERLAY")
+        SetFont(row.text, FONT, 12)
+        row.text:SetPoint("TOPLEFT", row, "TOPLEFT", 12, 0)
+        row.text:SetWidth(PAGE_WIDTH - 14)
+        row.text:SetJustifyH("LEFT")
+        row:SetScript("OnEnter", ShowLineTooltip)
+        row:SetScript("OnLeave", HideTooltip)
+        rules.rows[index] = row
+        return row
+    end
+
+    local function FillLine(row, line)
+        local label = line.label
+        row.label, row.plain = label, (label and (label .. ": ") or "") .. line.text
+        local text = TEXT .. UI.HighlightGlossary(line.text, TEXT) .. "|r"
+        if label then
+            text = GOLD .. label .. ":|r " .. text
+        end
+        row.text:SetText(text)
+        local height = row.text:GetHeight()
+        if height < 1 then
+            height = math.ceil(row.text:GetStringWidth() / row.text:GetWidth() + 0.25) * LINE_HEIGHT
+        end
+        row:SetHeight(height)
+        return height
+    end
+
+    function rules.Show(sections)
+        rules.sections = sections
+        if rules.section > getn(sections) then
+            rules.section = 1
+        end
+        for index, section in ipairs(sections) do
+            local topic = rules.topics[index] or CreateTopic(index)
+            local selected = index == rules.section
+            topic.label:SetText(section.name)
+            if selected then
+                topic.label:SetTextColor(1, 1, 1)
+                topic.glow:Show()
+                topic.bar:Show()
+            else
+                topic.label:SetTextColor(1, 0.82, 0)
+                topic.glow:Hide()
+                topic.bar:Hide()
+            end
+            topic:Show()
+        end
+        for index = getn(sections) + 1, getn(rules.topics) do
+            rules.topics[index]:Hide()
+        end
+
+        local section = sections[rules.section]
+        page.heading:SetText(section.name)
+        local top = page.heading:GetHeight() + 12
+        for index, line in ipairs(section.lines) do
+            local row = rules.rows[index] or CreateLine(index)
+            row:ClearAllPoints()
+            row:SetPoint("TOPLEFT", page, "TOPLEFT", 0, -top)
+            top = top + FillLine(row, line) + LINE_GAP
+            row:Show()
+        end
+        for index = getn(section.lines) + 1, getn(rules.rows) do
+            rules.rows[index]:Hide()
+        end
+        page:SetHeight(max(LIST_HEIGHT, top))
+        scroll:UpdateScrollChildRect()
+        scroll:SetVerticalScroll(0)
+        frame:Show()
+        return section.name
+    end
+
+    function rules.Hide()
+        frame:Hide()
+    end
+end
+
 function Refresh(keepScroll)
     if not book then
         return
     end
+    if currentTab == "rules" and book.rules and getn(book.rules) > 0 then
+        UpdateTabs()
+        UpdateFilters()
+        for _, card in ipairs(window.cards) do
+            card:Hide()
+        end
+        window.scroll:Hide()
+        window.empty:SetText("")
+        window.tally:SetText("")
+        window.pool:SetText("")
+        local name = rules.Show(book.rules)
+        window.header:SetText("Rules|cff9d9d9d: " .. name .. "|r")
+        return
+    end
+    rules.Hide()
+    window.scroll:Show()
     local scroll = keepScroll and window.scroll:GetVerticalScroll() or 0
     UpdateTabs()
     UpdateFilters()
@@ -943,10 +1019,6 @@ function Refresh(keepScroll)
         local entries
         if currentTab == "unlocks" then
             entries = SortedPassives()
-        elseif currentTab == "cards" then
-            entries = SortedCards()
-        elseif currentTab == "glyphs" then
-            entries = SortedGlyphs()
         else
             entries = SortedSpells()
         end
@@ -964,50 +1036,30 @@ function Refresh(keepScroll)
     window.scroll:UpdateScrollChildRect()
     window.scroll:SetVerticalScroll(min(scroll, window.scroll:GetVerticalScrollRange()))
 
-    local forSale, locked = 0, 0
-    for _, list in ipairs({ book.weapons, book.passives, book.cards, book.glyphs }) do
+    local locked = 0
+    for _, list in ipairs({ book.weapons, book.passives }) do
         for _, entry in pairs(list) do
-            if entry.forSale then
-                forSale = forSale + 1
-            elseif entry.locked then
+            if entry.locked then
                 locked = locked + 1
             end
         end
     end
-    local still = "|cffffd100" .. forSale .. " to unlock|r"
-    window.subtitle:SetText(still .. "|cffffffff, " .. locked .. " locked by quests|r")
+    window.subtitle:SetText("|cffffffff" .. locked .. " locked by quests|r")
 
     if TabHasClasses() or TabHasInfoRows() then
         window.tally:SetText("")
     else
-        local owned, sale, held = 0, 0, 0
-        local list = book.passives
-        if currentTab == "cards" then
-            list = book.cards
-        elseif currentTab == "glyphs" then
-            list = book.glyphs
-        end
-        for _, entry in pairs(list) do
+        local owned, held = 0, 0
+        for _, entry in pairs(book.passives) do
             if entry.owned then
                 owned = owned + 1
-            elseif entry.forSale then
-                sale = sale + 1
             else
                 held = held + 1
             end
         end
-        window.tally:SetText("|cffffffff" .. owned .. " owned|r|cff9d9d9d,|r |cffffd100" .. sale .. " to unlock|r|cff9d9d9d,|r |cffff6666"
-            .. held .. " locked by quests|r")
+        window.tally:SetText("|cffffffff" .. owned .. " owned|r|cff9d9d9d,|r |cffff6666" .. held .. " locked by quests|r")
     end
-
-    local pool = book.pool
-    if currentTab ~= "cards" and currentTab ~= "glyphs" then
-        window.pool:SetText("")
-    elseif pool.slots > 0 then
-        window.pool:SetText("|cffffd100Switched off:|r |cffffffff" .. pool.used .. "/" .. pool.slots .. ".|r |cff9d9d9dRight-click a Darkmoon Card or Glyph to switch it off.|r")
-    else
-        window.pool:SetText("|cff9d9d9dBuy Stacked Deck from the Upgrades vendor to switch off Darkmoon Cards and Glyphs.|r")
-    end
+    window.pool:SetText("")
 
     local className = "All classes"
     if TabHasClasses() then
@@ -1017,27 +1069,17 @@ function Refresh(keepScroll)
             end
         end
     end
-    window.header:SetText(className .. "|cff9d9d9d: " .. book.spellCount .. " spells, " .. book.passiveCount .. " passives, "
-        .. book.cardCount .. " Darkmoon Cards, " .. book.glyphCount .. " Glyphs|r")
+    window.header:SetText(className .. "|cff9d9d9d: " .. book.spellCount .. " spells, " .. book.passiveCount .. " passives|r")
 end
 
 TogglePool = function(entry)
     if not CanSwitch(entry) or window.buying then
-        return
+        return false
     end
     window.buying = GetTime()
     PlaySound(entry.off and "igMainMenuOptionCheckBoxOn" or "igMainMenuOptionCheckBoxOff")
     SendChatMessage(".bonk pool " .. entry.kind .. " " .. entry.id .. (entry.off and " on" or " off"), "SAY")
-end
-
-function Buy(entry)
-    if not entry or not entry.forSale or SoldBySayge(entry) or not CanAfford(entry) or not atKeeper or window.buying then
-        return
-    end
-    window.buying = GetTime()
-    PlaySound("igMainMenuOptionCheckBoxOn")
-    SendChatMessage(".bonk unlock " .. entry.kind .. " " .. entry.id, "SAY")
-    Refresh(true)
+    return true
 end
 
 window:SetScript("OnShow", function()
@@ -1064,21 +1106,36 @@ window:SetScript("OnHide", function()
     window.gossipClosed = nil
 end)
 
+local function OpenFromGossip()
+    window.fromGossip = true
+    atKeeper = true
+    window:Show()
+    Refresh()
+end
+
+function VanillaBonkCodex.TakeOverGossip()
+    local closeOnHide = GossipFrame:GetScript("OnHide")
+    GossipFrame:SetScript("OnHide", nil)
+    HideUIPanel(GossipFrame)
+    GossipFrame:SetScript("OnHide", closeOnHide)
+    OpenFromGossip()
+end
+
 local PreviousGossipOnEvent = GossipFrame_OnEvent
 function GossipFrame_OnEvent()
     if event == "GOSSIP_SHOW" and pendingNpc then
         local npc = pendingNpc
         pendingNpc = nil
         if UnitName("npc") == npc then
-            window.fromGossip = true
-            atKeeper = true
-            window:Show()
-            Refresh()
+            OpenFromGossip()
             return
         end
-    elseif event == "GOSSIP_CLOSED" and window.fromGossip and window:IsShown() then
-        window.gossipClosed = true
-        window:Hide()
+    elseif event == "GOSSIP_CLOSED" then
+        pendingNpc = nil
+        if window.fromGossip and window:IsShown() then
+            window.gossipClosed = true
+            window:Hide()
+        end
     end
     PreviousGossipOnEvent()
 end
@@ -1100,15 +1157,37 @@ handlers["cdx"] = function(f)
     incoming = {
         npc = f[2] or "",
         classMask = tonumber(f[3]) or 0,
+        deck = f[4] == "1",
         weapons = {},
         passives = {},
         cards = {},
         glyphs = {},
         debuffs = {},
-        pool = { open = false, used = 0, slots = 0 },
+        pool = { c = { used = 0, slots = 0 }, g = { used = 0, slots = 0 } },
+        bans = { c = {}, g = {} },
+        stacks = {},
+        tickets = 0,
         off = {},
         locks = {},
+        rules = {},
     }
+end
+
+handlers["cdxr"] = function(f)
+    if not incoming or not f[2] or not f[3] then
+        return
+    end
+    local sections = incoming.rules
+    local last = sections[getn(sections)]
+    if not last or last.name ~= f[2] then
+        last = { name = f[2], lines = {} }
+        tinsert(sections, last)
+    end
+    if f[4] then
+        tinsert(last.lines, { label = f[3] ~= "" and f[3] or nil, text = f[4] })
+    else
+        tinsert(last.lines, { text = f[3] })
+    end
 end
 
 handlers["cdxw"] = function(f)
@@ -1126,7 +1205,7 @@ handlers["cdxw"] = function(f)
         evolvesFrom = tonumber(f[7]) or 0,
         description = "",
     }
-    ReadState(spell, f[8], f[9])
+    ReadState(spell, f[8])
     incoming.weapons[id] = spell
 end
 
@@ -1137,6 +1216,8 @@ handlers["cdxwd"] = function(f)
         spell.school = f[4] or ""
         spell.spec = f[5] or ""
         spell.aoe = f[6] == "1"
+        spell.radius = tonumber(f[7]) or 0
+        spell.range = tonumber(f[8]) or 0
     end
 end
 
@@ -1153,7 +1234,7 @@ handlers["cdxp"] = function(f)
         maxRank = tonumber(f[5]) or 1,
         description = f[7] or "",
     }
-    ReadState(passive, f[6], f[8])
+    ReadState(passive, f[6])
     incoming.passives[id] = passive
 end
 
@@ -1171,7 +1252,7 @@ handlers["cdxc"] = function(f)
         maxCopies = tonumber(f[6]) or 1,
         description = "",
     }
-    ReadState(card, f[7], f[8])
+    ReadState(card, f[7])
     incoming.cards[id] = card
 end
 
@@ -1215,13 +1296,31 @@ handlers["cdxg"] = function(f)
         return
     end
     local glyph = { kind = "g", id = tonumber(f[2]) or f[2], key = f[2] }
-    ReadState(glyph, f[3], f[4])
+    ReadState(glyph, f[3])
     incoming.glyphs[f[2]] = glyph
 end
 
 handlers["cdxpool"] = function(f)
+    if incoming and incoming.pool[f[2] or ""] then
+        incoming.pool[f[2]] = { used = tonumber(f[3] or "") or 0, slots = tonumber(f[4] or "") or 0 }
+    end
+end
+
+handlers["cdxban"] = function(f)
+    if incoming and incoming.bans[f[2] or ""] then
+        tinsert(incoming.bans[f[2]], { earned = f[3] == "1", tickets = tonumber(f[4] or "") or 0, label = f[5] or "", detail = f[6] or "" })
+    end
+end
+
+handlers["cdxcs"] = function(f)
+    if incoming and f[2] then
+        incoming.stacks[tonumber(f[2]) or 0] = { one = f[3] or "", five = f[4] or "" }
+    end
+end
+
+handlers["cdxtickets"] = function(f)
     if incoming then
-        incoming.pool = { open = f[2] == "1", used = tonumber(f[3] or "") or 0, slots = tonumber(f[4] or "") or 0 }
+        incoming.tickets = tonumber(f[2] or "") or 0
     end
 end
 
@@ -1233,7 +1332,8 @@ end
 
 handlers["cdxq"] = function(f)
     if incoming then
-        incoming.locks[(f[2] or "") .. (f[3] or "")] = { name = f[4] or "", description = f[5] or "" }
+        incoming.locks[(f[2] or "") .. (f[3] or "")] = { name = f[4] or "", description = f[5] or "",
+            progress = tonumber(f[6]) or 0, amount = tonumber(f[7]) or 1 }
     end
 end
 
@@ -1290,6 +1390,14 @@ handlers["cdxend"] = function()
         VanillaBonkCodex.onBook()
     end
 
+    if received.deck then
+        VanillaBonkDeck.Open(received)
+        return
+    end
+    if VanillaBonkDeck.IsShown() then
+        VanillaBonkDeck.Refresh(received)
+    end
+
     if window:IsShown() then
         openRequested = nil
         if received.npc ~= "" then
@@ -1298,7 +1406,11 @@ handlers["cdxend"] = function()
         Refresh(true)
     elseif received.npc ~= "" then
         classFilter = received.classMask
-        pendingNpc = received.npc
+        if GossipFrame:IsVisible() and UnitName("npc") == received.npc then
+            VanillaBonkCodex.TakeOverGossip()
+        else
+            pendingNpc = received.npc
+        end
     elseif openRequested then
         openRequested = nil
         classFilter = received.classMask
@@ -1307,17 +1419,10 @@ handlers["cdxend"] = function()
     end
 end
 
-VanillaBonkCodex.Cards = function()
-    return book and book.cards
-end
-VanillaBonkCodex.ShowCardTooltip = function(owner, card)
-    ShowCardTooltip(owner, card, true)
-end
-VanillaBonkCodex.Glyphs = function()
-    return book and book.glyphs
-end
-VanillaBonkCodex.ShowGlyphTooltip = function(owner, glyph)
-    ShowGlyphTooltip(owner, glyph, true)
+VanillaBonkCodex.ShowEntryTooltip = ShowEntryTooltip
+VanillaBonkCodex.CanSwitch = CanSwitch
+VanillaBonkCodex.TogglePool = function(entry)
+    return TogglePool(entry)
 end
 
 local events = CreateFrame("Frame")

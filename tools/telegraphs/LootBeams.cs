@@ -31,26 +31,36 @@ namespace BonkTelegraphs
         const int ParticleSize = 504, ParticleColoursOffset = 336;
         const float DefaultWhiteCore = 0.25f;
         const int VerticesCountOffset = 68, VerticesOffset = 72, VertexSize = 48, VertexHeightOffset = 8;
+        static readonly int[] BoxSideOffsets = { 180, 184, 192, 196, 208, 212, 220, 224 };
         const int VertexBoxTopOffset = 200, BoundingBoxTopOffset = 228;
-        const float BeamHeight = 1.5f;
+        const float BeamHeight = 2.6f;
+        const float BeamWidth = 0.28f;
 
-        class Beam
+        public class Beam
         {
             public string Name;
             public float R, G, B;
             public float WhiteCore = DefaultWhiteCore;
             public float Gain = 1.0f;
+            public float Height = BeamHeight;
+            public float Width = BeamWidth;
         }
 
         static readonly Beam[] Beams =
         {
             new Beam { Name = "Uncommon",  R = 0.12f, G = 1.0f,  B = 0.0f },
-            new Beam { Name = "Rare",      R = 0.0f,  G = 0.44f, B = 0.87f },
-            new Beam { Name = "Epic",      R = 0.5f, G = 0.0f, B = 1.0f, WhiteCore = 0.1f, Gain = 1.35f },
+            new Beam { Name = "Rare",      R = 0.0f,  G = 0.35f, B = 1.0f, WhiteCore = 0.0f, Gain = 1.6f },
+            new Beam { Name = "Epic",      R = 0.55f, G = 0.1f, B = 1.0f, WhiteCore = 0.0f, Gain = 1.5f },
             new Beam { Name = "Legendary", R = 1.0f,  G = 0.5f,  B = 0.0f },
         };
 
         public static List<string> AddLootBeams(ClientData client, IDictionary<string, byte[]> files, Dbc spells, Dbc visuals, Dbc kits, Dbc effects)
+        {
+            return AddBeams(client, files, spells, visuals, kits, effects, Beams, FirstSpellId, FirstVisualId, FirstKitId, FirstEffectId);
+        }
+
+        public static List<string> AddBeams(ClientData client, IDictionary<string, byte[]> files, Dbc spells, Dbc visuals, Dbc kits, Dbc effects,
+            Beam[] beams, uint firstSpellId, uint firstVisualId, uint firstKitId, uint firstEffectId)
         {
             uint[] spell = spells.Find(SpotlightSpell), visual = visuals.Find(SpotlightVisual), kit = kits.Find(SpotlightKit), effect = effects.Find(MoonBeamEffect);
             if (spell == null || visual == null || kit == null || effect == null || kit[KitSpecialEffectField] != MoonBeamEffect)
@@ -58,10 +68,10 @@ namespace BonkTelegraphs
 
             byte[] model = Require(client, BeamModel), beamTexture = Require(client, BeamTexture), circleTexture = Require(client, CircleTexture);
             List<string> manifest = new List<string>();
-            for (uint i = 0; i < Beams.Length; i++)
+            for (uint i = 0; i < beams.Length; i++)
             {
-                Beam beam = Beams[i];
-                uint spellId = FirstSpellId + i, visualId = FirstVisualId + i, kitId = FirstKitId + i, effectId = FirstEffectId + i;
+                Beam beam = beams[i];
+                uint spellId = firstSpellId + i, visualId = firstVisualId + i, kitId = firstKitId + i, effectId = firstEffectId + i;
                 if (spells.Find(spellId) != null || visuals.Find(visualId) != null || kits.Find(kitId) != null || effects.Find(effectId) != null)
                     throw new InvalidOperationException("Loot beam ids for " + beam.Name + " are taken.");
 
@@ -74,7 +84,7 @@ namespace BonkTelegraphs
                 };
                 files[modelName + ".blp"] = Blp.Recolour(beamTexture, rule);
                 files[modelName + "Circle.blp"] = Blp.Recolour(circleTexture, rule);
-                files[modelName + ".m2"] = Recolour(model, textures, rule);
+                files[modelName + ".m2"] = Recolour(model, textures, rule, beam.Width, beam.Height);
 
                 uint[] newEffect = (uint[])effect.Clone();
                 newEffect[0] = effectId;
@@ -94,10 +104,10 @@ namespace BonkTelegraphs
                 uint[] newSpell = (uint[])spell.Clone();
                 newSpell[0] = spellId;
                 newSpell[SpellVisualField] = visualId;
-                newSpell[NameField] = spells.AddString(beam.Name + " Loot Beam");
+                newSpell[NameField] = spells.AddString(beam.Name + " Beam");
                 spells.Records.Add(newSpell);
 
-                manifest.Add(string.Format("spell {0} ({1} Loot Beam): visual {2}, state kit {3}, effect {4}, {5}.m2", spellId, beam.Name, visualId, kitId, effectId, modelName));
+                manifest.Add(string.Format("spell {0} ({1} Beam): visual {2}, state kit {3}, effect {4}, {5}.m2", spellId, beam.Name, visualId, kitId, effectId, modelName));
             }
             return manifest;
         }
@@ -120,7 +130,7 @@ namespace BonkTelegraphs
             return data;
         }
 
-        static byte[] Recolour(byte[] source, IDictionary<string, string> textures, ColourRule rule)
+        static byte[] Recolour(byte[] source, IDictionary<string, string> textures, ColourRule rule, float width, float height)
         {
             MemoryStream ms = new MemoryStream();
             ms.Write(source, 0, source.Length);
@@ -154,7 +164,7 @@ namespace BonkTelegraphs
             if (swapped.Count != textures.Count)
                 throw new InvalidDataException(BeamModel + " does not name the textures expected.");
 
-            Stretch(m2);
+            Stretch(m2, width, height);
 
             count = BitConverter.ToUInt32(m2, ParticlesCountOffset);
             offset = BitConverter.ToUInt32(m2, ParticlesOffset);
@@ -174,13 +184,20 @@ namespace BonkTelegraphs
             return ms.ToArray();
         }
 
-        static void Stretch(byte[] m2)
+        static void Stretch(byte[] m2, float width, float height)
         {
             uint count = BitConverter.ToUInt32(m2, VerticesCountOffset), offset = BitConverter.ToUInt32(m2, VerticesOffset);
             for (uint i = 0; i < count; i++)
-                ScaleFloat(m2, (int)(offset + i * VertexSize + VertexHeightOffset), BeamHeight);
-            ScaleFloat(m2, VertexBoxTopOffset, BeamHeight);
-            ScaleFloat(m2, BoundingBoxTopOffset, BeamHeight);
+            {
+                int vertex = (int)(offset + i * VertexSize);
+                ScaleFloat(m2, vertex, width);
+                ScaleFloat(m2, vertex + 4, width);
+                ScaleFloat(m2, vertex + VertexHeightOffset, height);
+            }
+            foreach (int side in BoxSideOffsets)
+                ScaleFloat(m2, side, width);
+            ScaleFloat(m2, VertexBoxTopOffset, height);
+            ScaleFloat(m2, BoundingBoxTopOffset, height);
         }
 
         static void ScaleFloat(byte[] data, int at, float factor)

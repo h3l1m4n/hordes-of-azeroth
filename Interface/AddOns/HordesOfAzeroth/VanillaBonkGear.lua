@@ -302,7 +302,7 @@ end
 
 local function Open()
     frame.salvage:SetText("Salvage  |cffffe873+" .. offer.valor .. " Valor|r")
-    local keep = "Worn or looted, found gear is only kept if you put it in the Extraction Vault and leave through a stage portal or the Hearthstone."
+    local keep = "Worn or looted, found gear is only kept if you put it in the Extraction Vault and leave through a floor portal or the Hearthstone."
     if offer.quality >= QUALITY_EPIC then
         frame.ruleText = "|cffffd100" .. keep .. " A permanent copy then arrives by mail. If you die, it is lost.|r"
     else

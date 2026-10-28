@@ -398,7 +398,83 @@ clock:SetScript("OnUpdate", function()
     end
 end)
 
+local glossary = { order = {}, entries = {} }
+
+local function Mentions(text, word)
+    if strfind(word, "[^%a]") then
+        return strfind(text, word, 1, true) ~= nil
+    end
+    for found in string.gfind(text, "%a+") do
+        if found == word then
+            return true
+        end
+    end
+    return false
+end
+
+local function EntryMentioned(entry, texts)
+    for _, word in ipairs(entry.words) do
+        for _, text in ipairs(texts) do
+            if text and Mentions(text, word) then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+function UI.HighlightGlossary(text, color)
+    local words = {}
+    for _, term in ipairs(glossary.order) do
+        for _, word in ipairs(glossary.entries[term].words) do
+            if not strfind(word, "[^%a]") then
+                words[word] = true
+            end
+        end
+    end
+    local out, pos, afterName = "", 1, false
+    while true do
+        local first, last = strfind(text, "%a+", pos)
+        if not first then
+            return out .. strsub(text, pos)
+        end
+        local gap, word = strsub(text, pos, first - 1), strsub(text, first, last)
+        local partOfName = afterName and gap == " "
+        if words[word] and not partOfName then
+            out = out .. gap .. "|cff71d5ff" .. word .. "|r" .. (color or "")
+        else
+            out = out .. gap .. word
+        end
+        afterName = strfind(word, "^%u") ~= nil and first > 1
+        pos = last + 1
+    end
+end
+
+function UI.AddGlossary(tooltip, texts)
+    local spaced = false
+    for _, term in ipairs(glossary.order) do
+        local entry = glossary.entries[term]
+        if EntryMentioned(entry, texts) then
+            if not spaced then
+                tooltip:AddLine(" ")
+                spaced = true
+            end
+            tooltip:AddLine("|cffffd100" .. term .. ":|r " .. entry.description, 0.85, 0.85, 0.85, 1)
+        end
+    end
+end
+
 UI.Listen({
+    ["gls"] = function(f)
+        local term = f[2]
+        if not term or term == "" or not f[4] then
+            return
+        end
+        if not glossary.entries[term] then
+            tinsert(glossary.order, term)
+        end
+        glossary.entries[term] = { words = UI.Split(f[3] or "", ","), description = f[4] }
+    end,
     ["kwdaura"] = function(f)
         local id = tonumber(f[2] or "")
         if not id then

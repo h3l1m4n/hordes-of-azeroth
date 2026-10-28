@@ -12,7 +12,10 @@ local SAVED_LABEL = "Your saved piece"
 local RETRY, RETRIES = 0.25, 12
 local STONE_BORDER = { edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border", edgeSize = 24 }
 
-local vault = { slots = 1, chosen = {}, order = {}, finds = {} }
+local ARROW_UP = "Interface\\Buttons\\UI-ScrollBar-ScrollUpButton-Up"
+local ARROW_DOWN = "Interface\\Buttons\\UI-ScrollBar-ScrollDownButton-Up"
+
+local vault = { slots = 1, chosen = {}, order = {}, finds = {}, pillar = false }
 local incoming
 
 local function Command(text)
@@ -113,7 +116,14 @@ local function ShowItemTooltip(owner, find, line)
     GameTooltip:SetHyperlink("item:" .. find.entry .. ":0:0:0")
     GameTooltip:AddLine(" ")
     GameTooltip:AddLine(line, 1, 0.82, 0)
-    GameTooltip:AddLine("Sells for " .. UI.FormatGold(find.sell) .. " if you leave it out of the vault.", 0.7, 0.7, 0.7)
+    if find.owned then
+        GameTooltip:AddLine("You already own this piece at this tier.", 1, 0.5, 0.25)
+    elseif find.tier > 0 and find.best > 0 then
+        GameTooltip:AddLine("Your best for this slot: Tier " .. find.best .. ".", 0.7, 0.7, 0.7)
+    end
+    if not vault.pillar then
+        GameTooltip:AddLine("Sells for " .. UI.FormatGold(find.sell) .. " if you leave it out of the vault.", 0.7, 0.7, 0.7)
+    end
     if getn(find.saved) == 0 then
         GameTooltip:AddLine("You have nothing saved in this slot.", 0.7, 0.7, 0.7)
     end
@@ -195,6 +205,19 @@ local function Card(index)
     card.price = UI.Text(card, 12, UI.NUMBER_FONT)
     card.price:SetPoint("BOTTOM", card, "BOTTOM", 0, 12)
 
+    card.tier = UI.Text(card, 10)
+    card.tier:SetPoint("TOPLEFT", card, "TOPLEFT", 11, -10)
+    card.tier:SetTextColor(1, 0.82, 0)
+    card.arrow = card:CreateTexture(nil, "OVERLAY")
+    card.arrow:SetWidth(14)
+    card.arrow:SetHeight(14)
+    card.arrow:SetTexCoord(0.25, 0.75, 0.25, 0.75)
+    card.arrow:SetPoint("LEFT", card.tier, "RIGHT", 1, 0)
+    card.owned = UI.Text(card, 10)
+    card.owned:SetPoint("TOPRIGHT", card, "TOPRIGHT", -11, -10)
+    card.owned:SetTextColor(1, 0.5, 0.25)
+    card.owned:SetText("Owned")
+
     card.ribbon = card:CreateTexture(nil, "OVERLAY")
     card.ribbon:SetTexture(UI.FLAT)
     card.ribbon:SetVertexColor(0, 0, 0, 0.8)
@@ -218,7 +241,10 @@ local function Card(index)
         if not find then
             return
         end
-        if vault.chosen[find.guid] then
+        if vault.pillar then
+            PlaySound("igMainMenuOptionCheckBoxOn")
+            Command("send " .. find.guid)
+        elseif vault.chosen[find.guid] then
             PlaySound("igMainMenuOptionCheckBoxOff")
             Command("take " .. find.guid)
         else
@@ -229,7 +255,8 @@ local function Card(index)
     card:SetScript("OnEnter", function()
         local find = this.find
         if find then
-            ShowItemTooltip(this, find, vault.chosen[find.guid] and "Click to take it out of the vault." or "Click to put it in the vault.")
+            local line = vault.chosen[find.guid] and "Click to take it out of the vault." or "Click to put it in the vault."
+            ShowItemTooltip(this, find, vault.pillar and "Click to send it home now." or line)
         end
     end)
     card:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -270,7 +297,26 @@ local function FillCard(card, find)
     card.where:SetText(find.worn and "Equipped" or "In bags")
     local saved, savedKnown = SavedText(find)
     card.saved:SetText(saved)
-    card.price:SetText(UI.FormatGold(find.sell))
+    card.price:SetText(vault.pillar and "" or UI.FormatGold(find.sell))
+    if find.tier > 0 then
+        card.tier:SetText("Tier " .. find.tier)
+        card.tier:Show()
+    else
+        card.tier:Hide()
+    end
+    if find.tier > 0 and find.tier ~= find.best then
+        local better = find.tier > find.best
+        card.arrow:SetTexture(better and ARROW_UP or ARROW_DOWN)
+        card.arrow:SetVertexColor(better and 0.2 or 1, better and 1 or 0.25, better and 0.2 or 0.25)
+        card.arrow:Show()
+    else
+        card.arrow:Hide()
+    end
+    if find.owned then
+        card.owned:Show()
+    else
+        card.owned:Hide()
+    end
     card:SetBackdropBorderColor(r, g, b)
     card.line:SetBackdropBorderColor(r, g, b, 0.8)
     if vault.chosen[find.guid] then
@@ -287,8 +333,15 @@ end
 
 local function Refresh()
     local slots = max(1, vault.slots)
-    frame.subtitle:SetText(slots == 1 and "1 piece comes home with you. The rest sells for gold."
-        or "2 pieces come home with you. The rest sells for gold.")
+    frame.title:SetText(vault.pillar and "Extraction Pillar" or "Extraction Vault")
+    if vault.pillar then
+        frame.subtitle:SetText("1 piece goes home right now. It leaves your character.")
+        frame.box:Hide()
+    else
+        frame.subtitle:SetText(slots == 1 and "1 piece comes home with you. The rest sells for gold."
+            or "2 pieces come home with you. The rest sells for gold.")
+        frame.box:Show()
+    end
 
     local byGuid = {}
     for _, find in ipairs(vault.finds) do
@@ -366,11 +419,17 @@ local function Refresh()
 
     frame.rest:ClearAllPoints()
     frame.rest:SetPoint("TOP", frame.cards, "BOTTOM", 0, -14)
-    frame.rest:SetText(count == 0 and "|cff9d9d9dNothing found this run yet.|r"
-        or ("The rest sells for " .. UI.FormatGold(rest)))
+    if count == 0 then
+        frame.rest:SetText("|cff9d9d9dNothing found this run yet.|r")
+    elseif vault.pillar then
+        frame.rest:SetText("The pillar can send 1 piece.")
+    else
+        frame.rest:SetText("The rest sells for " .. UI.FormatGold(rest))
+    end
     frame.hint:ClearAllPoints()
     frame.hint:SetPoint("TOP", frame.rest, "BOTTOM", 0, -8)
-    frame.hint:SetText("Click an item to put it in the vault. Click it in the vault to take it out.")
+    frame.hint:SetText(vault.pillar and "Click an item to send it home now. It leaves your character for the rest of the run."
+        or "Click an item to put it in the vault. Click it in the vault to take it out.")
     frame.done:ClearAllPoints()
     frame.done:SetPoint("TOP", frame.hint, "BOTTOM", 0, -12)
 
@@ -449,11 +508,15 @@ handlers["vaultitem"] = function(f)
         worn = f[5] == "1",
         sell = tonumber(f[6] or "") or 0,
         saved = SavedEntries(f[7]),
+        tier = tonumber(f[8] or "") or 0,
+        best = tonumber(f[9] or "") or 0,
+        owned = f[10] == "1",
     })
 end
 
 handlers["vaultopen"] = function(f)
     vault.slots = tonumber(f[2] or "") or 1
+    vault.pillar = f[4] == "pillar"
     vault.chosen, vault.order = {}, {}
     for _, guid in ipairs(UI.Split(f[3] or "", ",")) do
         if guid ~= "" then

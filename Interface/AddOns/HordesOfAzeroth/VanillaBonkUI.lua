@@ -119,6 +119,22 @@ function UI.FormatGold(copper)
     return text
 end
 
+function UI.Thousands(value)
+    local text = tostring(math.floor(tonumber(value) or 0))
+    local result = ""
+    while strlen(text) > 3 do
+        result = "," .. strsub(text, -3) .. result
+        text = strsub(text, 1, -4)
+    end
+    return text .. result
+end
+
+function UI.AddQuestProgress(tooltip, lock)
+    if lock and lock.amount and lock.amount > 1 then
+        tooltip:AddLine("Progress: " .. UI.Thousands(math.min(lock.progress, lock.amount)) .. "/" .. UI.Thousands(lock.amount), 0.62, 0.62, 0.62)
+    end
+end
+
 function UI.FormatTime(seconds)
     seconds = tonumber(seconds) or 0
     return format("%d:%02d", floor(seconds / 60), mod(seconds, 60))
@@ -443,8 +459,112 @@ function UI.Slot(parent, size, kind)
     return slot
 end
 
+local BUTTON_ART = {
+    up = "Interface\\Buttons\\UI-Panel-Button-Up",
+    down = "Interface\\Buttons\\UI-Panel-Button-Down",
+    disabled = "Interface\\Buttons\\UI-Panel-Button-Disabled",
+    highlight = "Interface\\Buttons\\UI-Panel-Button-Highlight",
+}
+local BUTTON_SLICES = { { 0, 0.09375 }, { 0.09375, 0.53125 }, { 0.53125, 0.625 } }
+local BUTTON_ART_HEIGHT = 0.6875
+local BUTTON_CAP_RATIO = 12 / 22
+
+local function SliceSet(button, layer, blend)
+    local set = {}
+    for index, range in ipairs(BUTTON_SLICES) do
+        local slice = button:CreateTexture(nil, layer)
+        slice:SetTexCoord(range[1], range[2], 0, BUTTON_ART_HEIGHT)
+        if blend then
+            slice:SetBlendMode(blend)
+        end
+        set[index] = slice
+    end
+    set[1]:SetPoint("TOPLEFT", button, "TOPLEFT", 0, 0)
+    set[1]:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT", 0, 0)
+    set[3]:SetPoint("TOPRIGHT", button, "TOPRIGHT", 0, 0)
+    set[3]:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", 0, 0)
+    set[2]:SetPoint("TOPLEFT", set[1], "TOPRIGHT", 0, 0)
+    set[2]:SetPoint("BOTTOMRIGHT", set[3], "BOTTOMLEFT", 0, 0)
+    return set
+end
+
+local function SizeSlices(button)
+    local cap = math.floor(button:GetHeight() * BUTTON_CAP_RATIO + 0.5)
+    for _, set in ipairs({ button.face, button.shine }) do
+        set[1]:SetWidth(cap)
+        set[3]:SetWidth(cap)
+    end
+end
+
+local function PaintSlices(button, state)
+    local file = BUTTON_ART[state]
+    for _, slice in ipairs(button.face) do
+        slice:SetTexture(file)
+    end
+end
+
+local function RefreshSlices(button)
+    if not button:IsEnabled() or button:IsEnabled() == 0 then
+        PaintSlices(button, "disabled")
+    elseif button.held then
+        PaintSlices(button, "down")
+    else
+        PaintSlices(button, "up")
+    end
+end
+
+function UI.SliceButton(button)
+    button:SetNormalTexture("")
+    button:SetPushedTexture("")
+    button:SetDisabledTexture("")
+    button:SetHighlightTexture("")
+    button.face = SliceSet(button, "BACKGROUND")
+    button.shine = SliceSet(button, "HIGHLIGHT", "ADD")
+    for _, slice in ipairs(button.shine) do
+        slice:SetTexture(BUTTON_ART.highlight)
+    end
+    local setHeight, enable, disable = button.SetHeight, button.Enable, button.Disable
+    button.SetHeight = function(self, height)
+        setHeight(self, height)
+        SizeSlices(self)
+    end
+    button.Enable = function(self)
+        enable(self)
+        RefreshSlices(self)
+    end
+    button.Disable = function(self)
+        disable(self)
+        RefreshSlices(self)
+    end
+    local down, up, hide = button:GetScript("OnMouseDown"), button:GetScript("OnMouseUp"), button:GetScript("OnHide")
+    button:SetScript("OnMouseDown", function()
+        if down then
+            down()
+        end
+        this.held = true
+        RefreshSlices(this)
+    end)
+    button:SetScript("OnMouseUp", function()
+        if up then
+            up()
+        end
+        this.held = nil
+        RefreshSlices(this)
+    end)
+    button:SetScript("OnHide", function()
+        if hide then
+            hide()
+        end
+        this.held = nil
+        RefreshSlices(this)
+    end)
+    SizeSlices(button)
+    RefreshSlices(button)
+    return button
+end
+
 function UI.Button(parent, width, text, onClick)
-    local button = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+    local button = UI.SliceButton(CreateFrame("Button", nil, parent, "UIPanelButtonTemplate"))
     button:SetWidth(width)
     button:SetHeight(22)
     button:SetText(text or "")
@@ -452,6 +572,212 @@ function UI.Button(parent, width, text, onClick)
         button:SetScript("OnClick", onClick)
     end
     return button
+end
+
+UI.PANEL_EDGE = { 0.69, 0.59, 0.38 }
+UI.PANEL_EDGE_DIM = { 0.36, 0.31, 0.23 }
+UI.WINDOW_BG = { 0.035, 0.03, 0.045, 0.97 }
+UI.PANEL_BG = { 0.012, 0.01, 0.015, 0.75 }
+local GOLD_HEADER_WIDTH = 300
+
+function UI.GoldWindow(name, width, height)
+    local frame = CreateFrame("Frame", name, UIParent)
+    frame:SetFrameStrata("DIALOG")
+    frame:SetWidth(width)
+    frame:SetHeight(height)
+    frame:EnableMouse(true)
+    frame:SetMovable(true)
+    if frame.SetClampedToScreen then
+        frame:SetClampedToScreen(true)
+    end
+    frame:RegisterForDrag("LeftButton")
+    frame:SetScript("OnDragStart", function() this:StartMoving() end)
+    frame:SetScript("OnDragStop", function() this:StopMovingOrSizing() end)
+    frame:Hide()
+    tinsert(UISpecialFrames, name)
+    frame:SetBackdrop({ bgFile = UI.FLAT, edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Gold-Border", tile = false, edgeSize = 32,
+        insets = { left = 11, right = 11, top = 11, bottom = 11 } })
+    frame:SetBackdropColor(UI.WINDOW_BG[1], UI.WINDOW_BG[2], UI.WINDOW_BG[3], UI.WINDOW_BG[4])
+
+    frame.headerArt = frame:CreateTexture(nil, "ARTWORK")
+    frame.headerArt:SetTexture("Interface\\DialogFrame\\UI-DialogBox-Gold-Header")
+    frame.headerArt:SetWidth(GOLD_HEADER_WIDTH)
+    frame.headerArt:SetHeight(64)
+    frame.headerArt:SetPoint("TOP", frame, "TOP", 0, 12)
+    frame.title = UI.Text(frame, 13)
+    frame.title:SetPoint("TOP", frame.headerArt, "TOP", 0, -14)
+    frame.title:SetTextColor(1, 0.82, 0)
+
+    frame.close = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
+    frame.close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -4, -4)
+    frame.close:SetScript("OnClick", function() this:GetParent():Hide() end)
+    return frame
+end
+
+function UI.Panel(parent, edge)
+    local panel = CreateFrame("Frame", nil, parent)
+    panel:SetBackdrop({ bgFile = UI.FLAT, edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border", tile = false, edgeSize = 16,
+        insets = { left = 4, right = 4, top = 4, bottom = 4 } })
+    panel:SetBackdropColor(UI.PANEL_BG[1], UI.PANEL_BG[2], UI.PANEL_BG[3], UI.PANEL_BG[4])
+    edge = edge or UI.PANEL_EDGE
+    panel:SetBackdropBorderColor(edge[1], edge[2], edge[3])
+    return panel
+end
+
+function UI.Gradient(texture, direction, r, g, b, fromAlpha, toAlpha)
+    texture:SetTexture(UI.FLAT)
+    if texture.SetGradientAlpha then
+        texture:SetGradientAlpha(direction, r, g, b, fromAlpha, r, g, b, toAlpha)
+    else
+        texture:SetVertexColor(r, g, b, (fromAlpha + toAlpha) / 2)
+    end
+end
+
+function UI.Divider(parent, width)
+    local holder = CreateFrame("Frame", nil, parent)
+    holder:SetWidth(width)
+    holder:SetHeight(1)
+    holder.left = holder:CreateTexture(nil, "ARTWORK")
+    holder.left:SetPoint("TOPLEFT", holder, "TOPLEFT", 0, 0)
+    holder.left:SetWidth(width / 2)
+    holder.left:SetHeight(1)
+    UI.Gradient(holder.left, "HORIZONTAL", 0.78, 0.63, 0.27, 0, 0.8)
+    holder.right = holder:CreateTexture(nil, "ARTWORK")
+    holder.right:SetPoint("TOPRIGHT", holder, "TOPRIGHT", 0, 0)
+    holder.right:SetWidth(width / 2)
+    holder.right:SetHeight(1)
+    UI.Gradient(holder.right, "HORIZONTAL", 0.78, 0.63, 0.27, 0.8, 0)
+    return holder
+end
+
+local PANEL_TAB_HEIGHT = 30
+local PANEL_TAB_PAD = 36
+local PANEL_TAB_GAP = 5
+local PANEL_TAB_OVERLAP = 5
+local PANEL_TAB_CORNER = 3
+local PANEL_TAB_BASE = { 0.02, 0.018, 0.022 }
+
+local function ShadeTab(texture, top, bottom)
+    texture:SetTexture(UI.FLAT)
+    texture:SetGradient("VERTICAL", bottom[1], bottom[2], bottom[3], top[1], top[2], top[3])
+end
+
+local function TabLine(tab)
+    local line = tab:CreateTexture(nil, "ARTWORK")
+    line:SetTexture(UI.FLAT)
+    return line
+end
+
+local function PaintTabEdges(tab, r, g, b)
+    for _, line in ipairs(tab.edges) do
+        line:SetVertexColor(r, g, b, 1)
+    end
+end
+
+local function StylePanelTab(tab, active, color)
+    tab.active = active
+    tab:SetHeight(active and PANEL_TAB_HEIGHT + PANEL_TAB_OVERLAP or PANEL_TAB_HEIGHT - 4)
+    tab:ClearAllPoints()
+    tab:SetPoint("BOTTOMLEFT", tab.set.panel, "TOPLEFT", tab.left, active and -PANEL_TAB_OVERLAP or -1)
+    if active then
+        ShadeTab(tab.fill, { 0.23, 0.19, 0.125 }, PANEL_TAB_BASE)
+        PaintTabEdges(tab, 0.66, 0.54, 0.28)
+        tab.label:SetTextColor(1, 1, 1)
+        tab.label:ClearAllPoints()
+        tab.label:SetPoint("CENTER", tab, "CENTER", 0, 2)
+        local r, g, b = 1, 0.82, 0
+        if color then
+            r, g, b = color[1], color[2], color[3]
+        end
+        UI.Gradient(tab.glow, "VERTICAL", r, g, b, 0, 0.16)
+        tab.glow:Show()
+        tab.shine:Show()
+    else
+        ShadeTab(tab.fill, { 0.11, 0.098, 0.078 }, { 0.047, 0.043, 0.035 })
+        PaintTabEdges(tab, 0.35, 0.29, 0.17)
+        tab.label:SetTextColor(1, 0.82, 0)
+        tab.label:ClearAllPoints()
+        tab.label:SetPoint("CENTER", tab, "CENTER", 0, 0)
+        tab.glow:Hide()
+        tab.shine:Hide()
+    end
+end
+
+local function CreatePanelTab(set, index, onClick)
+    local tab = CreateFrame("Button", nil, set.panel)
+    tab.set = set
+    tab:SetFrameLevel(set.panel:GetFrameLevel() + 3)
+    tab.fill = tab:CreateTexture(nil, "BACKGROUND")
+    tab.fill:SetPoint("TOPLEFT", tab, "TOPLEFT", 1, -1)
+    tab.fill:SetPoint("BOTTOMRIGHT", tab, "BOTTOMRIGHT", -1, 0)
+    local top = TabLine(tab)
+    top:SetHeight(1)
+    top:SetPoint("TOPLEFT", tab, "TOPLEFT", PANEL_TAB_CORNER, 0)
+    top:SetPoint("TOPRIGHT", tab, "TOPRIGHT", -PANEL_TAB_CORNER, 0)
+    local left = TabLine(tab)
+    left:SetWidth(1)
+    left:SetPoint("TOPLEFT", tab, "TOPLEFT", 0, -PANEL_TAB_CORNER)
+    left:SetPoint("BOTTOMLEFT", tab, "BOTTOMLEFT", 0, 0)
+    local right = TabLine(tab)
+    right:SetWidth(1)
+    right:SetPoint("TOPRIGHT", tab, "TOPRIGHT", 0, -PANEL_TAB_CORNER)
+    right:SetPoint("BOTTOMRIGHT", tab, "BOTTOMRIGHT", 0, 0)
+    tab.edges = { top, left, right }
+    for step = 1, PANEL_TAB_CORNER - 1 do
+        for _, side in ipairs({ "LEFT", "RIGHT" }) do
+            local dot = TabLine(tab)
+            dot:SetWidth(1)
+            dot:SetHeight(1)
+            local x = side == "LEFT" and step or -step
+            dot:SetPoint("TOP" .. side, tab, "TOP" .. side, x, -(PANEL_TAB_CORNER - step))
+            tinsert(tab.edges, dot)
+        end
+    end
+    tab.label = UI.Text(tab, 12)
+    tab.glow = tab:CreateTexture(nil, "BORDER")
+    tab.glow:SetPoint("TOPLEFT", tab, "TOPLEFT", 1, -1)
+    tab.glow:SetPoint("TOPRIGHT", tab, "TOPRIGHT", -1, -1)
+    tab.glow:SetHeight(12)
+    tab.shine = tab:CreateTexture(nil, "OVERLAY")
+    tab.shine:SetPoint("TOPLEFT", tab, "TOPLEFT", 8, -1)
+    tab.shine:SetPoint("TOPRIGHT", tab, "TOPRIGHT", -8, -1)
+    tab.shine:SetHeight(1)
+    tab.shine:SetTexture(UI.FLAT)
+    tab.shine:SetVertexColor(1, 0.9, 0.6, 0.5)
+    tab.index = index
+    tab:SetScript("OnClick", function()
+        if not this.active then
+            PlaySound("igCharacterInfoTab")
+            onClick(this.index)
+        end
+    end)
+    return tab
+end
+
+function UI.PanelTabs(panel, x, onClick)
+    local set = { tabs = {}, panel = panel }
+    function set:SetTabs(labels)
+        local left = x
+        for index, label in ipairs(labels) do
+            local tab = self.tabs[index] or CreatePanelTab(self, index, onClick)
+            self.tabs[index] = tab
+            tab.label:SetText(label)
+            tab:SetWidth(tab.label:GetStringWidth() + PANEL_TAB_PAD)
+            tab.left = left
+            StylePanelTab(tab, tab.active, nil)
+            tab:Show()
+            left = left + tab:GetWidth() + PANEL_TAB_GAP
+        end
+        for index = table.getn(labels) + 1, table.getn(self.tabs) do
+            self.tabs[index]:Hide()
+        end
+    end
+    function set:Select(selected, color)
+        for index, tab in ipairs(self.tabs) do
+            StylePanelTab(tab, index == selected, color)
+        end
+    end
+    return set
 end
 
 UI.INNKEEPER_ENTRY = 900140
@@ -592,17 +918,23 @@ end
 function UI.RingArt(ring, path, layer)
     local size = ring:GetWidth()
     local art = ring:CreateTexture(nil, layer or "BORDER")
-    art:SetTexture(path)
+    local inset = ring.minimapStyle and size * 10 / 148 or size * 0.16
+    art:SetPoint("TOPLEFT", ring, "TOPLEFT", inset, -inset)
+    art:SetPoint("BOTTOMRIGHT", ring, "BOTTOMRIGHT", -inset, inset)
     if art.SetMask then
-        local inset = ring.minimapStyle and size * 10 / 148 or size * 0.16
-        art:SetPoint("TOPLEFT", ring, "TOPLEFT", inset, -inset)
-        art:SetPoint("BOTTOMRIGHT", ring, "BOTTOMRIGHT", -inset, inset)
+        art:SetTexture(path)
         art:SetTexCoord(0.1, 0.9, 0.1, 0.9)
         art:SetMask("Textures\\MinimapMask")
     else
-        art:SetWidth(size * 0.6)
-        art:SetHeight(size * 0.6)
-        art:SetPoint("CENTER", ring, "CENTER", 0, 0)
+        local setTexture = art.SetTexture
+        art.SetTexture = function(self, file)
+            if file and file ~= "" and SetPortraitToTexture then
+                SetPortraitToTexture(self, file)
+            else
+                setTexture(self, file)
+            end
+        end
+        art:SetTexture(path)
     end
     return art
 end

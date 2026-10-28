@@ -11,6 +11,8 @@ namespace BonkTelegraphs
         public string Icon;
         public string ToolTip;
         public uint StateKit;
+        public uint Visual;
+        public uint IconId;
     }
 
     static class AuraLooks
@@ -25,6 +27,7 @@ namespace BonkTelegraphs
         public const uint ThornsStateKit = 7350, WhirlwindStateKit = 7351, WhirlwindSpinOnlyKit = 7352, LootSparkleStateKit = 7353, MailSparkleStateKit = 7354;
         const uint PartyFeverStateKit = 560, LootSparkleEffect = 14;
         const uint SandVortexKit = 6472;
+        const uint ShadowTranceVisual = 5219;
         const uint PresenceOfMindStateKit = 4013, BerserkerRageStateKit = 108, RetaliationStateKit = 6443, ArcanePowerStateKit = 3769, ManaShieldStateKit = 990;
 
         const int Attributes = 6, AttributesEx = 7;
@@ -52,6 +55,14 @@ namespace BonkTelegraphs
             new AuraLook { SpellId = 33454, Name = "Loot Sparkle", Icon = "Spell_Holy_HolyBolt", ToolTip = "Something worth picking up.", StateKit = LootSparkleStateKit },
             new AuraLook { SpellId = 33455, Name = "Mail Sparkle", Icon = "Spell_Holy_HolyBolt", ToolTip = "You have mail.", StateKit = MailSparkleStateKit },
             new AuraLook { SpellId = 33460, Name = "Sand Vortex", Icon = "Spell_Nature_Cyclone", ToolTip = "A sand vortex.", StateKit = SandVortexKit },
+            new AuraLook { SpellId = 33461, Name = "Souls", Icon = "Spell_Shadow_Twilight", ToolTip = "You deal 5% more damage for each soul.", Visual = ShadowTranceVisual },
+            new AuraLook { SpellId = 33462, Name = "Enrage", ToolTip = "Haste increased.", Visual = 870, IconId = 95 },
+            new AuraLook { SpellId = 33463, Name = "Divine Shield", ToolTip = "A golden bubble protects you.", Visual = 154, IconId = 81 },
+            new AuraLook { SpellId = 33464, Name = "Renew", ToolTip = "Renew heals you every second. At full health it smites a nearby enemy instead.", Visual = 280, IconId = 321 },
+            new AuraLook { SpellId = 33465, Name = "Lightning Shield", ToolTip = "Enemies that strike you are zapped for Nature damage and gain 1 stack of Static. Each charge zaps once.", Visual = 37, IconId = 19 },
+            new AuraLook { SpellId = 33466, Name = "Blade Flurry", ToolTip = "Your single-target hits also strike more enemies nearby.", Visual = 211, IconId = 1477 },
+            new AuraLook { SpellId = 33467, Name = "Deterrence", ToolTip = "Dodge chance increased by 50%.", Visual = 5739, IconId = 83 },
+            new AuraLook { SpellId = 33468, Name = "Revived", ToolTip = "Immune to physical damage.", Visual = 302, IconId = 303 },
         };
 
         public static List<string> AddAuraLooks(Dbc spells, Dbc visuals, Dbc kits, Dbc effects, Dbc icons)
@@ -81,12 +92,17 @@ namespace BonkTelegraphs
                 spell[EffectRadiusField] = 0;
                 spell[EffectAuraField] = AuraDummy;
                 spell[EffectTriggerSpellField] = 0;
-                spell[SpellIconField] = FindIcon(icons, look.Icon);
+                spell[SpellIconField] = look.IconId != 0 ? look.IconId : FindIcon(icons, look.Icon);
                 spell[NameField] = spells.AddString(look.Name);
                 spell[ToolTipField] = spells.AddString(look.ToolTip);
                 spell[SpellVisualField] = 0;
 
-                if (look.StateKit != 0)
+                if (look.Visual != 0)
+                {
+                    spell[SpellVisualField] = look.Visual;
+                    manifest.Add(string.Format("spell {0} ({1}): visual {2}", look.SpellId, look.Name, look.Visual));
+                }
+                else if (look.StateKit != 0)
                 {
                     if (visuals.Find(visualId) != null)
                         throw new InvalidOperationException("Spell visual " + visualId + " is taken.");

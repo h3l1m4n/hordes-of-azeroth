@@ -28,11 +28,17 @@ LAYOUT = [
     [("xbox", n) for n in ("view", "menu", "ls", "rs", "l3", "r3", "home")],
     [("ps", n) for n in ("view", "menu", "ls", "rs", "l3", "r3", "home")],
     [("any", n) for n in ("dpad", "up", "down", "left", "right", "updown", "leftright")],
+    [("deck", n) for n in ("a", "b", "x", "y", "lb", "rb", "lt", "rt")],
+    [("deck", n) for n in ("view", "menu", "ls", "rs", "l3", "r3", "home")],
 ]
 PILLS = {
     "xbox": {"lb": "LB", "rb": "RB", "lt": "LT", "rt": "RT", "view": "View", "menu": "Menu"},
     "ps": {"lb": "L1", "rb": "R1", "lt": "L2", "rt": "R2", "view": "Create", "menu": "Options"},
+    "deck": {"lb": "L1", "rb": "R1", "lt": "L2", "rt": "R2", "view": "View", "menu": "Menu"},
 }
+
+
+HOME_LABELS = {"xbox": ("X", 26), "ps": ("PS", 18), "deck": ("STEAM", 10)}
 
 
 def font(size):
@@ -54,6 +60,9 @@ def ring(draw):
 
 def face_button(draw, kind, name):
     ring(draw)
+    if kind == "deck":
+        centered_text(draw, name.upper(), 30 * SCALE, CREAM, (0, 0, BIG, BIG))
+        return
     if kind == "xbox":
         centered_text(draw, name.upper(), 30 * SCALE, XBOX[name], (0, 0, BIG, BIG))
         return
@@ -105,7 +114,8 @@ def dpad(draw, lit):
 
 def home(draw, kind):
     ring(draw)
-    centered_text(draw, "PS" if kind == "ps" else "X", (18 if kind == "ps" else 26) * SCALE, CREAM, (0, 0, BIG, BIG))
+    label, size = HOME_LABELS[kind]
+    centered_text(draw, label, size * SCALE, CREAM, (0, 0, BIG, BIG))
 
 
 def draw_glyph(kind, name):

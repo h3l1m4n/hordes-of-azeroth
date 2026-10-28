@@ -78,7 +78,7 @@ LINES = {
     201: "Your cat fights for you",
     211: "A spirit wolf that empowers your pets",
     7: "Shoots the nearest enemy",
-    37: "3 arrows in a cone",
+    37: "6 arrows in a cone",
     137: "Rains arrows on the largest group",
     203: "A shot that pierces a whole line",
     205: "Marked enemies take more damage",

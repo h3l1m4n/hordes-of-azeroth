@@ -3,30 +3,41 @@ local UI = VanillaBonkUI
 VanillaBonkRunMaster = {}
 local RunMaster = VanillaBonkRunMaster
 
-local LEFT_X = 38
-local LIST_TOP = 166
-local ROW_HEIGHT = 36
-local ROW_STEP = 38
-local ROW_WIDTH = 312
-local ROW_ICON = 28
-local BADGE_SIZE = 14
-local CHALLENGE_TOP = 498
-local CHALLENGE_ICON = 28
-local CHALLENGE_STEP = 36
-local PREVIEW_X = 372
-local PREVIEW_WIDTH = 476
-local PREVIEW_HEIGHT = 268
-local ART_WIDTH = 196
-local ART_HEIGHT = 244
-local PREVIEW_TEXT_X = 222
-local PREVIEW_TEXT_WIDTH = PREVIEW_WIDTH - PREVIEW_TEXT_X - 14
-local ROUTE_ICON = 26
-local ROUTE_STEP = 46
+local W, H = 920, 600
+local LEFT_X, LEFT_WIDTH = 22, 214
+local PLAQUE_TOP, PLAQUE_HEIGHT, PLAQUE_STEP = 56, 48, 56
+local MID_X, LIST_WIDTH = 256, 290
+local PANEL_TOP = 124
+local RIGHT_X = MID_X + LIST_WIDTH + 14
+local RIGHT_WIDTH = W - 22 - RIGHT_X
+local BANNER_TOP, BANNER_HEIGHT = 100, 100
+local PREVIEW_TOP = 212
+local SLIDER_Y = PREVIEW_TOP + 92
+local SLIDER_INSET = 14
+local ROW_HEIGHT, ROW_STEP, ROW_ICON = 34, 36, 26
+local STAT_STEP = 15
+local MAX_FLOORS = 20
+local KNOB_TEXTURE = "Interface\\AddOns\\HordesOfAzeroth\\Textures\\SliderKnob"
 local RANDOM_ICON = "INV_Misc_QuestionMark"
+local SOFT = { 0.78, 0.75, 0.7 }
+local MUTED = { 0.51, 0.49, 0.44 }
+local HAIR = { 0.47, 0.39, 0.24 }
 local INVADED_COLOR = { 1, 0.6, 0.24 }
 local CHALLENGE_RISK = "Enemies have 30% more health and deal 20% more damage."
 local DUNGEON_REWARD = "Enemies drop 50% more gold, and loot is one quality higher."
 local INVASION_REWARD = "More enemies come at once. They drop 25% more gold, and loot has a 50% chance to be one quality higher."
+local TIER_LOOKS = {
+    normal = { color = { 1, 0.82, 0 }, emblem = "Ability_Warrior_DefensiveStance" },
+    heroic = { color = { 0.38, 0.65, 1 }, emblem = "INV_Shield_05" },
+    mythic = { color = { 0.77, 0.4, 1 }, emblem = "INV_Misc_Bone_HumanSkull_01" },
+}
+local DEFAULT_LOOK = TIER_LOOKS.normal
+local BANDS = {
+    { name = "Climb", color = { 0.91, 0.77, 0.41 } },
+    { name = "Push", color = { 0.94, 0.59, 0.24 } },
+    { name = "Peak", color = { 0.9, 0.31, 0.25 } },
+}
+local MILESTONE_ICONS = { affix = "Ability_Warrior_Challange", veteran = "INV_Helmet_03" }
 local CONTINENT_ART = {
     ["0"] = "Interface\\Glues\\LoadingScreens\\LoadScreenEasternKingdom",
     ["1"] = "Interface\\Glues\\LoadingScreens\\LoadScreenKalimdor",
@@ -41,23 +52,46 @@ local WORLD_MAP_PATH = "Interface\\WorldMap\\"
 local ZONE_MAP_WIDTH, ZONE_MAP_HEIGHT = 1002, 668
 local MAP_TILE = 256
 local MAP_TILE_COLUMNS, MAP_TILE_ROWS = 4, 3
-local MAP_CROP = 0.42
+local MAP_CROP = 0.62
 local INVASION_TINT = {
     moltencore = { 1, 0.42, 0.28 },
     zulgurub = { 0.55, 0.85, 0.45 },
     ruinsaq = { 1, 0.82, 0.45 },
 }
 local DEFAULT_TINT = { 1, 0.6, 0.45 }
+local MODES = { "zones", "dungeon", "invasion" }
+local MODE_LABELS = { zones = "Zones", dungeon = "Dungeon", invasion = "Invasion" }
+local STAT_ROWS = {
+    { group = "Enemies" },
+    { label = "Health", key = "health", format = "+%s%%", rising = true },
+    { label = "Damage", key = "damage", format = "+%s%%", rising = true },
+    { label = "Veterans", key = "veterans", format = "%s%%", rising = true },
+    { label = "Elite affixes", key = "affixes", format = "%s", rising = true },
+    { behavior = true },
+    { group = "Rewards", rewards = true },
+    { label = "Gold and Tickets per kill", key = "gold", format = "+%s%%", rewards = true },
+    { label = "Boss legendary drop chance", key = "legendary", format = "%s%%", rewards = true },
+}
 
-local state = { zone = {}, dungeon = {}, invade = {} }
+local state = { zone = {}, dungeon = {}, mode = {}, floor = {} }
 local mapInfo = {}
+local floorInfo = {}
+local tierInfo = {}
+local BEHAVIOR_CELLS = { { "Caster aim", "aim" }, { "Boss attacks", "boss" }, { "Max enemies", "crowd" } }
 local zoneOverlays, overlaySeen = {}, {}
-local arena, content, tier
-local rows, challengeSlots = {}, {}
-local preview, challenge
+local arena, content, tier, onTierClick
+local head, ladder, list, banner, preview
 
 local function Icon(name)
     return UI.ICON_PATH .. ((name and name ~= "") and name or RANDOM_ICON)
+end
+
+local function Look(shown)
+    return TIER_LOOKS[shown and shown.key or ""] or DEFAULT_LOOK
+end
+
+local function Hex(color)
+    return format("|cff%02x%02x%02x", floor(color[1] * 255), floor(color[2] * 255), floor(color[3] * 255))
 end
 
 local function Multiplier(percent)
@@ -70,8 +104,38 @@ local function Info(key)
     return mapInfo[key or ""] or {}
 end
 
-local function Colored(text, r, g, b)
-    return format("|cff%02x%02x%02x%s|r", floor(r * 255), floor(g * 255), floor(b * 255), text)
+local function Floors(count)
+    return count .. (count == 1 and " floor" or " floors")
+end
+
+local function FloorRow(shown, index)
+    return (floorInfo[shown.id] or {})[index]
+end
+
+local function Clamp(value, low, high)
+    return max(low, min(high, value))
+end
+
+local function Flat(parent, layer, r, g, b, a)
+    local texture = parent:CreateTexture(nil, layer or "ARTWORK")
+    texture:SetTexture(UI.FLAT)
+    texture:SetVertexColor(r or 1, g or 1, b or 1, a or 1)
+    return texture
+end
+
+local function Hairline(parent, width)
+    local line = UI.Divider(parent, width)
+    line.left:SetVertexColor(HAIR[1], HAIR[2], HAIR[3])
+    line.right:SetVertexColor(HAIR[1], HAIR[2], HAIR[3])
+    return line
+end
+
+local function Mode()
+    local mode = state.mode[tier.id] or "zones"
+    if mode ~= "zones" and table.getn(tier.dungeons or {}) == 0 then
+        return "zones"
+    end
+    return mode
 end
 
 local function ChosenZone()
@@ -85,48 +149,219 @@ local function ChosenZone()
 end
 
 local function ChosenDungeon()
+    if Mode() == "zones" then
+        return nil
+    end
     local key = state.dungeon[tier.id]
     for _, dungeon in ipairs(tier.dungeons or {}) do
         if dungeon.key == key and dungeon.open then
             return dungeon
         end
     end
-    state.dungeon[tier.id] = nil
 end
 
-local function IsInvasion()
-    return ChosenDungeon() ~= nil and state.invade[tier.id] == true
-end
-
-local function IsDungeonMode()
-    return ChosenDungeon() ~= nil and not state.invade[tier.id]
-end
-
-local function Badge(parent, anchor)
-    local badge = parent:CreateTexture(nil, "OVERLAY")
-    badge:SetWidth(BADGE_SIZE)
-    badge:SetHeight(BADGE_SIZE)
-    badge:SetPoint("BOTTOMRIGHT", anchor, "BOTTOMRIGHT", 4, -4)
-    badge:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-    badge:Hide()
-    return badge
-end
-
-local function SetBadge(badge, dungeon)
-    if dungeon then
-        badge:SetTexture(Icon(dungeon.icon))
-        badge:Show()
-    else
-        badge:Hide()
+local function FirstOpenDungeon()
+    for _, dungeon in ipairs(tier.dungeons or {}) do
+        if dungeon.open then
+            return dungeon
+        end
     end
 end
 
-local function RowTooltip(row)
+local function Plaque(index)
+    local plaque = ladder[index]
+    if plaque then
+        return plaque
+    end
+    plaque = CreateFrame("Button", nil, content)
+    plaque:SetWidth(LEFT_WIDTH)
+    plaque:SetHeight(PLAQUE_HEIGHT)
+    plaque:SetPoint("TOPLEFT", arena, "TOPLEFT", LEFT_X, -(PLAQUE_TOP + (index - 1) * PLAQUE_STEP))
+    plaque:SetBackdrop({ bgFile = UI.FLAT, edgeFile = UI.FLAT, edgeSize = 1, insets = { left = 1, right = 1, top = 1, bottom = 1 } })
+    plaque.wash = plaque:CreateTexture(nil, "BORDER")
+    plaque.wash:SetPoint("TOPLEFT", plaque, "TOPLEFT", 1, -1)
+    plaque.wash:SetPoint("BOTTOMRIGHT", plaque, "BOTTOMRIGHT", -1, 1)
+    plaque.bar = Flat(plaque, "ARTWORK")
+    plaque.bar:SetPoint("TOPLEFT", plaque, "TOPLEFT", 0, 0)
+    plaque.bar:SetPoint("BOTTOMLEFT", plaque, "BOTTOMLEFT", 0, 0)
+    plaque.bar:SetWidth(3)
+    plaque.icon = plaque:CreateTexture(nil, "ARTWORK")
+    plaque.icon:SetWidth(30)
+    plaque.icon:SetHeight(30)
+    plaque.icon:SetPoint("LEFT", plaque, "LEFT", 12, 0)
+    UI.CropIcon(plaque.icon)
+    plaque.shade = Flat(plaque, "OVERLAY", 0, 0, 0, 0.45)
+    plaque.shade:SetAllPoints(plaque.icon)
+    plaque.name = UI.Text(plaque, 18, UI.TITLE_FONT)
+    plaque.name:SetPoint("TOPLEFT", plaque, "TOPLEFT", 52, -6)
+    plaque.state = UI.Text(plaque, 10)
+    plaque.state:SetPoint("TOPLEFT", plaque, "TOPLEFT", 53, -29)
+    plaque:SetScript("OnClick", function()
+        if this.tier and this.tier ~= tier and onTierClick then
+            PlaySound("igCharacterInfoTab")
+            onTierClick(this.tier)
+        end
+    end)
+    plaque:SetScript("OnEnter", function()
+        local shown = this.tier
+        if not shown then
+            return
+        end
+        GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+        local color = Look(shown).color
+        GameTooltip:AddLine(shown.name, color[1], color[2], color[3])
+        for _, line in ipairs(shown.details ~= "" and UI.Split(shown.details, "^") or {}) do
+            GameTooltip:AddLine(line, 1, 1, 1, 1)
+        end
+        if not shown.unlocked and shown.hint ~= "" then
+            GameTooltip:AddLine(shown.hint, 1, 0.3, 0.3, 1)
+        end
+        GameTooltip:Show()
+    end)
+    plaque:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    ladder[index] = plaque
+    return plaque
+end
+
+local function Progress(shown)
+    if not shown.unlocked then
+        return "Locked"
+    end
+    local stages = shown.stages or 1
+    if shown.best > stages then
+        return "Cleared"
+    elseif shown.best > 0 then
+        return "best " .. shown.best
+    end
+    return "new"
+end
+
+local function FillPlaque(plaque, shown, selected)
+    local color = Look(shown).color
+    plaque.tier = shown
+    plaque.icon:SetTexture(Icon(Look(shown).emblem))
+    plaque.name:SetText(shown.name)
+    plaque.state:SetText(Floors(shown.stages or 1) .. "  ·  " .. Progress(shown))
+    SetDesaturation(plaque.icon, not selected or not shown.unlocked)
+    if selected then
+        plaque:SetBackdropColor(0, 0, 0, 0.47)
+        plaque:SetBackdropBorderColor(color[1] * 0.7, color[2] * 0.7, color[3] * 0.7, 1)
+        UI.Gradient(plaque.wash, "HORIZONTAL", color[1], color[2], color[3], 0.18, 0)
+        plaque.wash:Show()
+        plaque.bar:SetVertexColor(color[1], color[2], color[3], 1)
+        plaque.bar:Show()
+        plaque.shade:Hide()
+        plaque.name:SetTextColor(color[1], color[2], color[3])
+        plaque.state:SetTextColor(SOFT[1], SOFT[2], SOFT[3])
+    else
+        plaque:SetBackdropColor(0, 0, 0, 0.27)
+        plaque:SetBackdropBorderColor(0.22, 0.2, 0.16, 1)
+        plaque.wash:Hide()
+        plaque.bar:Hide()
+        plaque.shade:Show()
+        plaque.name:SetTextColor(color[1] * 0.55, color[2] * 0.55, color[3] * 0.55)
+        plaque.state:SetTextColor(MUTED[1], MUTED[2], MUTED[3])
+    end
+    plaque:Show()
+end
+
+local function ShowHead()
+    local color = Look(tier).color
+    head.name:SetText(tier.name)
+    head.name:SetTextColor(color[1], color[2], color[3])
+    head.description:SetText(tier.description or "")
+    head.description:SetWidth(W - 60 - MID_X - head.name:GetStringWidth() - 16)
+    UI.Gradient(head.tint, "VERTICAL", color[1], color[2], color[3], 0, 0.12)
+    head.art:SetTexture(tier.art ~= "" and tier.art or "Interface\\Glues\\LoadingScreens\\LoadScreenEnviroment")
+    UI.LoadingScreenCoords(head.art, W - 22, 160, 0.4)
+    SetDesaturation(head.art, not tier.unlocked)
+end
+
+local function ListRow(index)
+    local row = list.rows[index]
+    if row then
+        return row
+    end
+    row = CreateFrame("Button", nil, list.child)
+    row:SetWidth(LIST_WIDTH - 36)
+    row:SetHeight(ROW_HEIGHT)
+    row:SetPoint("TOPLEFT", list.child, "TOPLEFT", 0, -(index - 1) * ROW_STEP)
+    row.back = Flat(row, "BACKGROUND", 0, 0, 0, 0.35)
+    row.back:SetAllPoints(row)
+    row.wash = row:CreateTexture(nil, "BORDER")
+    row.wash:SetAllPoints(row)
+    row.bar = Flat(row, "ARTWORK")
+    row.bar:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 0)
+    row.bar:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 0)
+    row.bar:SetWidth(2)
+    row:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
+    row.icon = row:CreateTexture(nil, "ARTWORK")
+    row.icon:SetWidth(ROW_ICON)
+    row.icon:SetHeight(ROW_ICON)
+    row.icon:SetPoint("LEFT", row, "LEFT", 8, 0)
+    UI.CropIcon(row.icon)
+    row.name = UI.Text(row, 12)
+    row.name:SetPoint("TOPLEFT", row, "TOPLEFT", ROW_ICON + 16, -4)
+    row.name:SetJustifyH("LEFT")
+    row.summary = UI.Text(row, 9)
+    row.summary:SetPoint("TOPLEFT", row.name, "BOTTOMLEFT", 0, -3)
+    row.summary:SetWidth(LIST_WIDTH - 36 - ROW_ICON - 22)
+    row.summary:SetJustifyH("LEFT")
+    row.tag = UI.Text(row, 9)
+    row.tag:SetPoint("TOPRIGHT", row, "TOPRIGHT", -6, -5)
+    row:SetScript("OnClick", function()
+        if not tier.unlocked or not this.pick then
+            return
+        end
+        PlaySound("igMainMenuOptionCheckBoxOn")
+        this.pick()
+        RunMaster.Refresh()
+    end)
+    row:SetScript("OnEnter", function()
+        if this.tooltip then
+            this.tooltip(this)
+        end
+    end)
+    row:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    list.rows[index] = row
+    return row
+end
+
+local function FillRow(row, icon, name, summary, chosen, dimmed, tag)
+    local color = Look(tier).color
+    row.icon:SetTexture(Icon(icon))
+    SetDesaturation(row.icon, dimmed)
+    row.name:SetText(name)
+    row.summary:SetText(summary or "")
+    row.tag:SetText(tag or "")
+    if chosen then
+        UI.Gradient(row.wash, "HORIZONTAL", color[1], color[2], color[3], 0.24, 0)
+        row.wash:Show()
+        row.bar:SetVertexColor(color[1], color[2], color[3], 1)
+        row.bar:Show()
+        row.back:Show()
+        row.name:SetTextColor(1, 1, 1)
+        row.summary:SetTextColor(SOFT[1], SOFT[2], SOFT[3])
+    else
+        row.wash:Hide()
+        row.bar:Hide()
+        row.back:Hide()
+        if dimmed then
+            row.name:SetTextColor(0.5, 0.5, 0.5)
+        else
+            row.name:SetTextColor(0.92, 0.78, 0.35)
+        end
+        row.summary:SetTextColor(MUTED[1], MUTED[2], MUTED[3])
+    end
+    row:Show()
+end
+
+local function ZoneTooltip(row)
     local map = row.map
     GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
     if not map then
         GameTooltip:AddLine("Random zone", 1, 0.82, 0)
-        GameTooltip:AddLine("Stage 1 takes you to any zone of " .. tier.name .. ".", 1, 1, 1, 1)
+        GameTooltip:AddLine("Floor 1 takes you to any " .. tier.name .. " zone.", 1, 1, 1, 1)
     else
         GameTooltip:AddLine(map.name, 1, 0.82, 0)
         if MAP_TYPES[map.type] then
@@ -140,196 +375,80 @@ local function RowTooltip(row)
             GameTooltip:AddLine("Pays " .. Multiplier(map.reward) .. "x gold, Darkmoon Tickets and Mastery experience.", 0.25, 1, 0.25, 1)
         end
     end
-    if IsDungeonMode() then
-        GameTooltip:AddLine("Dungeon mode plays every stage inside " .. ChosenDungeon().name .. ".", 1, 0.3, 0.3, 1)
-    elseif tier.stages and tier.stages > 1 then
-        GameTooltip:AddLine("Your run starts here. Later stages are random.", 1, 0.82, 0, 1)
+    GameTooltip:Show()
+end
+
+local function DungeonTooltip(row)
+    local dungeon = row.dungeon
+    GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
+    GameTooltip:AddLine(dungeon.name, dungeon.open and 1 or 0.6, dungeon.open and 0.82 or 0.6, dungeon.open and 0 or 0.6)
+    local info = Info(dungeon.key)
+    if info.description and info.description ~= "" then
+        GameTooltip:AddLine(info.description, 1, 1, 1, 1)
+    end
+    GameTooltip:AddLine(CHALLENGE_RISK, 1, 0.5, 0.5, 1)
+    GameTooltip:AddLine(Mode() == "invasion" and INVASION_REWARD or DUNGEON_REWARD, 0.25, 1, 0.25, 1)
+    if not dungeon.open then
+        GameTooltip:AddLine("Clear " .. tier.name .. " first.", 1, 0.3, 0.3, 1)
     end
     GameTooltip:Show()
 end
 
-local function MakeRow(index)
-    local row = CreateFrame("Button", nil, content)
-    row:SetWidth(ROW_WIDTH)
-    row:SetHeight(ROW_HEIGHT)
-    row:SetPoint("TOPLEFT", arena, "TOPLEFT", LEFT_X - 4, -(LIST_TOP + 22 + (index - 1) * ROW_STEP))
-    row:SetBackdrop({ bgFile = UI.FLAT, edgeFile = UI.FLAT, edgeSize = 1, insets = { left = 1, right = 1, top = 1, bottom = 1 } })
-    row:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
-    row.icon = row:CreateTexture(nil, "ARTWORK")
-    row.icon:SetWidth(ROW_ICON)
-    row.icon:SetHeight(ROW_ICON)
-    row.icon:SetPoint("LEFT", row, "LEFT", 5, 0)
-    row.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
-    row.badge = Badge(row, row.icon)
-    row.name = UI.Text(row, 13)
-    row.name:SetPoint("TOPLEFT", row.icon, "TOPRIGHT", 9, 1)
-    row.name:SetJustifyH("LEFT")
-    row.summary = UI.Text(row, 10)
-    row.summary:SetPoint("TOPLEFT", row.name, "BOTTOMLEFT", 0, -2)
-    row.summary:SetWidth(ROW_WIDTH - ROW_ICON - 22)
-    row.summary:SetJustifyH("LEFT")
-    row.summary:SetTextColor(0.8, 0.8, 0.8)
-    row:SetScript("OnClick", function()
-        if IsDungeonMode() or not tier.unlocked then
-            return
-        end
-        PlaySound("igMainMenuOptionCheckBoxOn")
-        state.zone[tier.id] = this.map and this.map.key or nil
-        RunMaster.Show(tier)
-    end)
-    row:SetScript("OnEnter", function() RowTooltip(this) end)
-    row:SetScript("OnLeave", function() GameTooltip:Hide() end)
-    rows[index] = row
-    return row
-end
-
-local function FillRow(row, map, chosen, invader, dimmed)
-    row.map = map
-    row.icon:SetTexture(Icon(map and map.icon))
-    row.name:SetText(map and map.name or "Random zone")
-    row.summary:SetText(map and (Info(map.key).summary or "") or ("Any " .. tier.name .. " zone, picked when the run starts"))
-    SetBadge(row.badge, map and invader or nil)
-    SetDesaturation(row.icon, dimmed)
-    local lit = chosen and not dimmed
-    UI.SetStripHighlight(row, lit)
-    if dimmed then
-        row.name:SetTextColor(0.5, 0.5, 0.5)
-    elseif lit then
-        row.name:SetTextColor(1, 1, 1)
-    else
-        row.name:SetTextColor(1, 0.82, 0)
+local function ShowList()
+    local mode = Mode()
+    local labels = { MODE_LABELS.zones }
+    if table.getn(tier.dungeons or {}) > 0 then
+        tinsert(labels, MODE_LABELS.dungeon)
+        tinsert(labels, MODE_LABELS.invasion)
     end
-    row:Show()
-end
-
-local function ShowRows()
-    local zone = ChosenZone()
-    local invader = IsInvasion() and ChosenDungeon() or nil
-    local dimmed = IsDungeonMode() or not tier.unlocked
-    for _, row in ipairs(rows) do
+    list.tabs:SetTabs(labels)
+    for index, key in ipairs(MODES) do
+        if key == mode then
+            list.tabs:Select(index, Look(tier).color)
+        end
+    end
+    for _, row in ipairs(list.rows) do
         row:Hide()
     end
-    FillRow(rows[1] or MakeRow(1), nil, zone == nil, nil, dimmed)
-    for index, map in ipairs(tier.maps) do
-        FillRow(rows[index + 1] or MakeRow(index + 1), map, zone == map, invader, dimmed)
-    end
-end
-
-local function ChallengeTooltip(slot)
-    local dungeon = slot.dungeon
-    GameTooltip:SetOwner(slot, "ANCHOR_RIGHT")
-    GameTooltip:AddLine(dungeon.name, dungeon.open and 1 or 0.6, dungeon.open and 0.82 or 0.6, dungeon.open and 0 or 0.6)
-    GameTooltip:AddLine("Challenge mode", 0.7, 0.7, 0.7)
-    GameTooltip:AddLine(CHALLENGE_RISK, 1, 0.5, 0.5, 1)
-    GameTooltip:AddLine("Dungeon: every stage takes place inside " .. dungeon.name .. ".", 1, 1, 1, 1)
-    GameTooltip:AddLine(DUNGEON_REWARD, 0.25, 1, 0.25, 1)
-    GameTooltip:AddLine("Invasion: " .. dungeon.name .. "'s enemies and lords fill the zone you pick.", 1, 1, 1, 1)
-    GameTooltip:AddLine(INVASION_REWARD, 0.25, 1, 0.25, 1)
-    if not dungeon.open then
-        GameTooltip:AddLine("Clear " .. tier.name .. " first.", 1, 0.3, 0.3)
-    elseif state.dungeon[tier.id] == dungeon.key then
-        GameTooltip:AddLine("Click again to turn it off.", 1, 0.82, 0, 1)
-    end
-    GameTooltip:Show()
-end
-
-local function MakeChallengeSlot(index)
-    local slot = UI.Slot(content, CHALLENGE_ICON)
-    slot:SetPoint("TOPLEFT", arena, "TOPLEFT", LEFT_X + 2 + (index - 1) * CHALLENGE_STEP, -(CHALLENGE_TOP + 22))
-    slot.glow = slot:CreateTexture(nil, "OVERLAY")
-    slot.glow:SetTexture("Interface\\Buttons\\UI-ActionButton-Border")
-    slot.glow:SetBlendMode("ADD")
-    slot.glow:SetVertexColor(1, 0.82, 0)
-    slot.glow:SetWidth(CHALLENGE_ICON * 1.8)
-    slot.glow:SetHeight(CHALLENGE_ICON * 1.8)
-    slot.glow:SetPoint("CENTER", slot, "CENTER", 0, 0)
-    slot:SetScript("OnClick", function()
-        local dungeon = this.dungeon
-        if not dungeon or not dungeon.open or not tier.unlocked then
-            return
+    local dimmed = not tier.unlocked
+    local count = 0
+    if mode == "zones" then
+        local zone = ChosenZone()
+        count = 1
+        local row = ListRow(1)
+        row.map, row.dungeon, row.tooltip = nil, nil, ZoneTooltip
+        row.pick = function() state.zone[tier.id] = nil end
+        FillRow(row, RANDOM_ICON, "Random zone", "Any " .. tier.name .. " zone, picked when the run starts", zone == nil, dimmed)
+        for _, map in ipairs(tier.maps) do
+            count = count + 1
+            row = ListRow(count)
+            row.map, row.dungeon, row.tooltip = map, nil, ZoneTooltip
+            local key = map.key
+            row.pick = function() state.zone[tier.id] = key end
+            local tag = map.reward and map.reward ~= 100 and ("|cff40ff40" .. Multiplier(map.reward) .. "x gold|r") or nil
+            FillRow(row, map.icon, map.name, Info(map.key).summary, zone == map, dimmed, tag)
         end
-        if state.dungeon[tier.id] == dungeon.key then
-            PlaySound("igMainMenuOptionCheckBoxOff")
-            state.dungeon[tier.id] = nil
-        else
-            PlaySound("igMainMenuOptionCheckBoxOn")
-            state.dungeon[tier.id] = dungeon.key
-        end
-        RunMaster.Show(tier)
-    end)
-    slot:SetScript("OnEnter", function() ChallengeTooltip(this) end)
-    slot:SetScript("OnLeave", function() GameTooltip:Hide() end)
-    challengeSlots[index] = slot
-    return slot
-end
-
-local function SetMode(invade)
-    if not ChosenDungeon() or state.invade[tier.id] == invade then
-        return
-    end
-    PlaySound("igMainMenuOptionCheckBoxOn")
-    state.invade[tier.id] = invade
-    RunMaster.Show(tier)
-end
-
-local function StyleToggle(button, on, enabled)
-    if on and enabled then
-        button:LockHighlight()
-        button:SetTextColor(1, 1, 1)
     else
-        button:UnlockHighlight()
-        if enabled then
-            button:SetTextColor(1, 0.82, 0)
-        else
-            button:SetTextColor(0.5, 0.5, 0.5)
+        local chosen = ChosenDungeon()
+        for _, dungeon in ipairs(tier.dungeons or {}) do
+            count = count + 1
+            local row = ListRow(count)
+            row.map, row.dungeon, row.tooltip = nil, dungeon, DungeonTooltip
+            local key, open = dungeon.key, dungeon.open
+            row.pick = open and function() state.dungeon[tier.id] = key end or nil
+            FillRow(row, dungeon.icon, dungeon.name, Info(dungeon.key).summary, chosen == dungeon, dimmed or not open,
+                not open and "|cffff6060Locked|r" or nil)
         end
     end
-end
-
-local function ShowChallenges()
-    local dungeons = tier.dungeons or {}
-    for _, slot in ipairs(challengeSlots) do
-        slot:Hide()
-    end
-    if table.getn(dungeons) == 0 then
-        challenge.label:Hide()
-        challenge.dungeon:Hide()
-        challenge.invasion:Hide()
-        challenge.hint:SetText("")
-        return
-    end
-    challenge.label:Show()
-    local chosen = ChosenDungeon()
-    for index, dungeon in ipairs(dungeons) do
-        local slot = challengeSlots[index] or MakeChallengeSlot(index)
-        slot.dungeon = dungeon
-        slot.icon:SetTexture(Icon(dungeon.icon))
-        SetDesaturation(slot.icon, not dungeon.open or not tier.unlocked)
-        if chosen == dungeon then
-            slot.glow:Show()
-        else
-            slot.glow:Hide()
-        end
-        slot:Show()
-    end
-    local left = LEFT_X + 10 + table.getn(dungeons) * CHALLENGE_STEP
-    challenge.dungeon:ClearAllPoints()
-    challenge.dungeon:SetPoint("TOPLEFT", arena, "TOPLEFT", left, -(CHALLENGE_TOP + 20))
-    challenge.dungeon:Show()
-    challenge.invasion:Show()
-    StyleToggle(challenge.dungeon, chosen and not IsInvasion(), chosen ~= nil)
-    StyleToggle(challenge.invasion, IsInvasion(), chosen ~= nil)
-    if chosen then
-        challenge.hint:SetText("|cff9d9d9dClick the lit icon again to turn it off.|r")
-    elseif dungeons[1] and not dungeons[1].open then
-        challenge.hint:SetText("|cff9d9d9dClear " .. tier.name .. " to unlock challenges.|r")
-    else
-        challenge.hint:SetText("|cff9d9d9dPick a dungeon to make the run harder and richer.|r")
+    list.child:SetHeight(max(1, count * ROW_STEP))
+    list.scroll:UpdateScrollChildRect()
+    if count * ROW_STEP <= list.scroll:GetHeight() then
+        list.scroll:SetVerticalScroll(0)
     end
 end
 
 local function MapTexture(index, layer)
-    local canvas = preview.map.canvas
+    local canvas = banner.map.canvas
     local texture = canvas.textures[index]
     if not texture then
         texture = canvas:CreateTexture(nil, layer)
@@ -346,7 +465,7 @@ local function PlaceMapTexture(index, layer, path, x, y, width, height, fileWidt
     texture:SetTexCoord(0, width / fileWidth, 0, height / fileHeight)
     texture:SetWidth(width * scale)
     texture:SetHeight(height * scale)
-    texture:SetPoint("TOPLEFT", preview.map.canvas, "TOPLEFT", x * scale, -y * scale)
+    texture:SetPoint("TOPLEFT", banner.map.canvas, "TOPLEFT", x * scale, -y * scale)
     texture:Show()
     return index + 1
 end
@@ -388,12 +507,12 @@ local function PlaceOverlay(index, file, overlay, scale)
 end
 
 local function DrawZoneMap(file)
-    local map = preview.map
+    local map = banner.map
     if map.file == file then
         return
     end
     map.file = file
-    local scale = ART_WIDTH / (ZONE_MAP_WIDTH * MAP_CROP)
+    local scale = RIGHT_WIDTH / (ZONE_MAP_WIDTH * MAP_CROP)
     map.scale = scale
     map.canvas:SetWidth(ZONE_MAP_WIDTH * scale)
     map.canvas:SetHeight(ZONE_MAP_HEIGHT * scale)
@@ -410,16 +529,12 @@ local function DrawZoneMap(file)
     end
 end
 
-local function Clamp(value, low, high)
-    return max(low, min(high, value))
-end
-
 local function ShowZoneMap(info, tint, locked)
-    local map = preview.map
+    local map = banner.map
     DrawZoneMap(info.file)
     local scale = map.scale
-    local x = Clamp((info.u or 0.5) * ZONE_MAP_WIDTH * scale - ART_WIDTH / 2, 0, ZONE_MAP_WIDTH * scale - ART_WIDTH)
-    local y = Clamp((info.v or 0.5) * ZONE_MAP_HEIGHT * scale - ART_HEIGHT / 2, 0, ZONE_MAP_HEIGHT * scale - ART_HEIGHT)
+    local x = Clamp((info.u or 0.5) * ZONE_MAP_WIDTH * scale - RIGHT_WIDTH / 2, 0, ZONE_MAP_WIDTH * scale - RIGHT_WIDTH)
+    local y = Clamp((info.v or 0.5) * ZONE_MAP_HEIGHT * scale - BANNER_HEIGHT / 2, 0, ZONE_MAP_HEIGHT * scale - BANNER_HEIGHT)
     map:SetHorizontalScroll(-x)
     map:SetVerticalScroll(y)
     local r, g, b = 1, 1, 1
@@ -430,85 +545,42 @@ local function ShowZoneMap(info, tint, locked)
         texture:SetVertexColor(r, g, b)
         SetDesaturation(texture, locked)
     end
-    preview.art:Hide()
+    banner.art:Hide()
     map:Show()
 end
 
 local function SetArt(path, invaded, locked)
-    preview.map:Hide()
-    preview.art:Show()
-    preview.art:SetTexture(path)
-    UI.LoadingScreenCoords(preview.art, ART_WIDTH, ART_HEIGHT, 0.5)
+    banner.map:Hide()
+    banner.art:Show()
+    banner.art:SetTexture(path)
+    UI.LoadingScreenCoords(banner.art, RIGHT_WIDTH, BANNER_HEIGHT, 0.5)
     if invaded then
-        preview.art:SetVertexColor(1, 0.7, 0.5)
+        banner.art:SetVertexColor(1, 0.7, 0.5)
     else
-        preview.art:SetVertexColor(1, 1, 1)
+        banner.art:SetVertexColor(1, 1, 1)
     end
-    SetDesaturation(preview.art, locked)
+    SetDesaturation(banner.art, locked)
 end
 
-local function RouteIcon(index)
-    local slot = preview.route[index]
-    if slot then
-        return slot
-    end
-    slot = UI.Slot(preview, ROUTE_ICON, "Frame")
-    slot.badge = Badge(slot, slot)
-    slot.arrow = UI.Text(preview, 14)
-    slot.arrow:SetTextColor(1, 0.82, 0)
-    slot.arrow:SetText(">")
-    preview.route[index] = slot
-    return slot
-end
-
-local function StageWord(count)
-    if count == 1 then
-        return "stage 2"
-    elseif count == 2 then
-        return "stages 2 and 3"
-    end
-    return "stages 2 to " .. (count + 1)
-end
-
-local function ShowRoute(firstIcon, laterIcon, badge, caption)
-    local stages = tier.stages or 1
-    for _, slot in ipairs(preview.route) do
-        slot:Hide()
-        slot.arrow:Hide()
-    end
-    for index = 1, stages do
-        local slot = RouteIcon(index)
-        slot:ClearAllPoints()
-        slot:SetPoint("TOPLEFT", preview.routeLabel, "BOTTOMLEFT", 2 + (index - 1) * ROUTE_STEP, -8)
-        slot.icon:SetTexture(Icon(index == 1 and firstIcon or laterIcon))
-        SetBadge(slot.badge, badge)
-        slot:Show()
-        if index > 1 then
-            slot.arrow:ClearAllPoints()
-            slot.arrow:SetPoint("RIGHT", slot, "LEFT", -7, 0)
-            slot.arrow:Show()
-        end
-    end
-    preview.endless:ClearAllPoints()
-    preview.endless:SetPoint("LEFT", RouteIcon(stages), "RIGHT", 10, 0)
-    preview.endless:SetText(tier.endless and "|cff9d9d9dthen Endless|r" or "")
-    preview.caption:SetText(caption)
-end
-
-local function ShowPreview()
+local function ShowBanner()
     local zone = ChosenZone()
     local dungeon = ChosenDungeon()
-    local stages = tier.stages or 1
-    local later = stages > 1 and ("|cff9d9d9d, " .. StageWord(stages - 1) .. " random|r") or ""
+    local mode = Mode()
     local locked = not tier.unlocked
-    if IsDungeonMode() then
+    banner.risk = nil
+    if mode == "dungeon" and dungeon then
         SetArt(DUNGEON_ART[dungeon.key] or tier.art, false, locked)
-        preview.name:SetText(dungeon.name)
-        preview.subtitle:SetText(Colored("Dungeon challenge", unpack(INVADED_COLOR)))
-        preview.description:SetText(Info(dungeon.key).description or "")
-        ShowRoute(dungeon.icon, dungeon.icon, nil, "|cffffffffEvery stage inside " .. dungeon.name .. ".|r")
+        banner.tag:SetText(Hex(INVADED_COLOR) .. "Dungeon challenge  ·  every floor inside|r")
+        banner.name:SetText(dungeon.name)
+        banner.description:SetText(Info(dungeon.key).summary or "")
+        banner.risk = DUNGEON_REWARD
+    elseif mode ~= "zones" and not dungeon then
+        SetArt(tier.art, false, true)
+        banner.tag:SetText("")
+        banner.name:SetText(mode == "dungeon" and "Dungeon" or "Invasion")
+        banner.description:SetText("Clear " .. tier.name .. " to unlock challenges.")
     else
-        local invader = IsInvasion() and dungeon or nil
+        local invader = mode == "invasion" and dungeon or nil
         local info = Info(zone and zone.key)
         if zone and info.file and info.file ~= "" then
             ShowZoneMap(info, invader and (INVASION_TINT[invader.key] or DEFAULT_TINT), locked)
@@ -516,119 +588,769 @@ local function ShowPreview()
             local art = zone and CONTINENT_ART[info.continent or ""] or tier.art
             SetArt(art ~= "" and art or CONTINENT_ART["0"], invader ~= nil, locked)
         end
-        preview.name:SetText(zone and zone.name or "Random zone")
-        local place = zone and zone.name or "the zone"
+        banner.name:SetText(zone and zone.name or "Random zone")
         if invader then
-            preview.subtitle:SetText(Colored("Invaded by " .. invader.name, unpack(INVADED_COLOR)))
-            local summary = Info(invader.key).summary or "Its enemies"
-            preview.description:SetText(summary .. " roam " .. place .. ". " .. invader.name .. "'s lords lead every stage.")
+            banner.tag:SetText(Hex(INVADED_COLOR) .. "Invaded by " .. invader.name .. "|r")
+            banner.description:SetText((Info(invader.key).summary or "Its enemies") .. " roam the zone.")
+            banner.risk = INVASION_REWARD
         else
-            preview.subtitle:SetText("")
-            preview.description:SetText(zone and (info.description or "") or ("Stage 1 takes you to any zone of " .. tier.name .. "."))
+            if zone and zone.reward and zone.reward ~= 100 then
+                banner.tag:SetText("|cff40ff40Pays " .. Multiplier(zone.reward) .. "x gold, Tickets and Mastery|r")
+            else
+                banner.tag:SetText("")
+            end
+            banner.description:SetText(zone and (info.description or "") or ("Floor 1 takes you to any " .. tier.name .. " zone."))
         end
-        local first = zone and "|cffffffffStage 1 here|r" or "|cffffffffEvery stage random|r"
-        ShowRoute(zone and zone.icon or RANDOM_ICON, RANDOM_ICON, invader, zone and (first .. later) or first)
     end
-    if dungeon then
-        preview.odds:SetText(Colored(CHALLENGE_RISK, 1, 0.5, 0.5) .. "\n" .. Colored(IsInvasion() and INVASION_REWARD or DUNGEON_REWARD, 0.25, 1, 0.25))
-    elseif zone and zone.reward and zone.reward ~= 100 then
-        preview.odds:SetText(Colored("Pays " .. Multiplier(zone.reward) .. "x gold, Darkmoon Tickets and Mastery experience.", 0.25, 1, 0.25))
+end
+
+local function FloorCount()
+    return min(MAX_FLOORS, tier.stages or 1)
+end
+
+local function BandOf(row)
+    return BANDS[tonumber(row and row.band or "") or 1] or BANDS[1]
+end
+
+local function SliderX(floorNumber)
+    local count = FloorCount()
+    if count <= 1 then
+        return 0
+    end
+    return (floorNumber - 1) / (count - 1) * preview.bar:GetWidth()
+end
+
+local function SetFloor(value, quiet)
+    value = Clamp(value, 1, FloorCount())
+    if value ~= state.floor[tier.id] then
+        state.floor[tier.id] = value
+        if not quiet then
+            PlaySound("igMainMenuOptionCheckBoxOn")
+        end
+        RunMaster.Refresh()
+    end
+end
+
+local function FloorAtCursor(bar)
+    local x = GetCursorPosition() / bar:GetEffectiveScale() - bar:GetLeft()
+    local count = FloorCount()
+    return floor(Clamp(x / bar:GetWidth(), 0, 1) * (count - 1) + 1.5)
+end
+
+local function Pooled(pool, index, make)
+    if not pool[index] then
+        pool[index] = make()
+    end
+    return pool[index]
+end
+
+local function MakeSegment()
+    local segment = {}
+    segment.back = preview.bar:CreateTexture(nil, "BORDER")
+    segment.back:SetHeight(6)
+    segment.fill = preview.bar:CreateTexture(nil, "ARTWORK")
+    segment.fill:SetHeight(6)
+    segment.label = UI.Text(preview.bar, 9)
+    segment.edge = Flat(preview.bar, "OVERLAY", 0.59, 0.51, 0.35, 1)
+    segment.edge:SetWidth(1)
+    segment.edge:SetHeight(13)
+    return segment
+end
+
+local function MakeNotch()
+    local notch = {}
+    notch.groove = preview.bar:CreateTexture(nil, "OVERLAY")
+    notch.groove:SetWidth(1)
+    notch.groove:SetHeight(6)
+    UI.Gradient(notch.groove, "VERTICAL", 0, 0, 0, 0.67, 0.24)
+    notch.shine = preview.bar:CreateTexture(nil, "OVERLAY")
+    notch.shine:SetWidth(1)
+    notch.shine:SetHeight(6)
+    UI.Gradient(notch.shine, "VERTICAL", 1, 0.94, 0.82, 0.04, 0.2)
+    notch.tick = preview.bar:CreateTexture(nil, "ARTWORK")
+    notch.tick:SetWidth(1)
+    notch.tick:SetHeight(4)
+    return notch
+end
+
+local function MakePin()
+    local pin = CreateFrame("Button", nil, preview)
+    pin:SetWidth(16)
+    pin:SetHeight(16)
+    pin:SetFrameLevel(preview:GetFrameLevel() + 3)
+    pin.frame = Flat(pin, "BACKGROUND")
+    pin.frame:SetPoint("TOPLEFT", pin, "TOPLEFT", -1, 1)
+    pin.frame:SetPoint("BOTTOMRIGHT", pin, "BOTTOMRIGHT", 1, -1)
+    pin.icon = pin:CreateTexture(nil, "ARTWORK")
+    pin.icon:SetAllPoints(pin)
+    UI.CropIcon(pin.icon)
+    pin.shade = Flat(pin, "OVERLAY", 0, 0, 0, 0.45)
+    pin.shade:SetAllPoints(pin)
+    pin.glow = pin:CreateTexture(nil, "BACKGROUND")
+    pin.glow:SetTexture("Interface\\Buttons\\UI-ActionButton-Border")
+    pin.glow:SetBlendMode("ADD")
+    pin.glow:SetVertexColor(1, 0.78, 0.35)
+    pin.glow:SetWidth(30)
+    pin.glow:SetHeight(30)
+    pin.glow:SetPoint("CENTER", pin, "CENTER", 0, 0)
+    pin.stem = Flat(preview, "ARTWORK")
+    pin.stem:SetWidth(1)
+    pin:SetScript("OnClick", function() SetFloor(this.floor) end)
+    pin:SetScript("OnEnter", function()
+        local row = FloorRow(tier, this.floor)
+        if not row then
+            return
+        end
+        GameTooltip:SetOwner(this, "ANCHOR_TOP")
+        GameTooltip:AddLine("Floor " .. this.floor .. " milestone", 1, 0.82, 0)
+        GameTooltip:AddLine(row.change, 1, 1, 1, 1)
+        if row.reward ~= "" then
+            GameTooltip:AddLine("First clear: " .. row.reward .. ".", 0.25, 1, 0.25, 1)
+        end
+        GameTooltip:Show()
+    end)
+    pin:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    return pin
+end
+
+local function Bands(count)
+    local ranges = {}
+    for floorNumber = 1, count do
+        local band = tonumber((FloorRow(tier, floorNumber) or {}).band or "") or 1
+        local last = ranges[table.getn(ranges)]
+        if last and last.band == band then
+            last.last = floorNumber
+        else
+            tinsert(ranges, { band = band, first = floorNumber, last = floorNumber })
+        end
+    end
+    return ranges
+end
+
+local function ShowSlider(count, current)
+    for _, segment in ipairs(preview.segments) do
+        segment.back:Hide()
+        segment.fill:Hide()
+        segment.label:Hide()
+        segment.edge:Hide()
+    end
+    for _, notch in ipairs(preview.notches) do
+        notch.groove:Hide()
+        notch.shine:Hide()
+        notch.tick:Hide()
+    end
+    for _, pin in ipairs(preview.pins) do
+        pin:Hide()
+        pin.stem:Hide()
+    end
+    if count <= 1 then
+        preview.slider:Hide()
+        return
+    end
+    preview.slider:Show()
+    local ranges = Bands(count)
+    local multi = table.getn(ranges) > 1
+    for index, range in ipairs(ranges) do
+        local segment = Pooled(preview.segments, index, MakeSegment)
+        local band = BANDS[range.band] or BANDS[1]
+        local color = multi and band.color or Look(tier).color
+        local left = range.first == 1 and 0 or SliderX(range.first - 1)
+        local right = SliderX(range.last)
+        segment.back:ClearAllPoints()
+        segment.back:SetPoint("LEFT", preview.bar, "LEFT", left, 0)
+        segment.back:SetWidth(max(1, right - left))
+        UI.Gradient(segment.back, "VERTICAL", color[1] * 0.42, color[2] * 0.42, color[3] * 0.42, 1, 0.8)
+        segment.back:Show()
+        local filled = min(right, SliderX(current)) - left
+        if filled > 0 then
+            segment.fill:ClearAllPoints()
+            segment.fill:SetPoint("LEFT", preview.bar, "LEFT", left, 0)
+            segment.fill:SetWidth(filled)
+            UI.Gradient(segment.fill, "VERTICAL", color[1] * 0.75, color[2] * 0.75, color[3] * 0.75, 1, 1)
+            segment.fill:SetVertexColor(color[1], color[2], color[3], 1)
+            segment.fill:Show()
+        end
+        if multi then
+            segment.label:ClearAllPoints()
+            segment.label:SetPoint("TOP", preview.bar, "BOTTOMLEFT", (left + right) / 2, -14)
+            segment.label:SetText(band.name .. "  " .. range.first .. "-" .. range.last)
+            segment.label:SetTextColor(color[1], color[2], color[3])
+            segment.label:Show()
+            if index > 1 then
+                segment.edge:ClearAllPoints()
+                segment.edge:SetPoint("CENTER", preview.bar, "LEFT", left, 0)
+                segment.edge:Show()
+            end
+        end
+    end
+    preview.shine:SetWidth(max(1, SliderX(current)))
+    local edges = {}
+    for _, range in ipairs(ranges) do
+        edges[range.last] = true
+    end
+    local pins = 0
+    for floorNumber = 1, count do
+        local row = FloorRow(tier, floorNumber)
+        local color = multi and BandOf(row).color or Look(tier).color
+        local notch = Pooled(preview.notches, floorNumber, MakeNotch)
+        local x = SliderX(floorNumber)
+        if floorNumber > 1 and floorNumber < count and not edges[floorNumber] then
+            notch.groove:ClearAllPoints()
+            notch.groove:SetPoint("CENTER", preview.bar, "LEFT", x - 0.5, 0)
+            notch.groove:Show()
+            notch.shine:ClearAllPoints()
+            notch.shine:SetPoint("CENTER", preview.bar, "LEFT", x + 0.5, 0)
+            notch.shine:Show()
+        end
+        notch.tick:ClearAllPoints()
+        notch.tick:SetPoint("TOP", preview.bar, "BOTTOMLEFT", x, -3)
+        notch.tick:SetTexture(UI.FLAT)
+        notch.tick:SetVertexColor(color[1], color[2], color[3], floorNumber <= current and 0.8 or 0.3)
+        notch.tick:Show()
+        local kind = row and row.kind or ""
+        if MILESTONE_ICONS[kind] then
+            pins = pins + 1
+            local pin = Pooled(preview.pins, pins, MakePin)
+            pin.floor = floorNumber
+            pin.icon:SetTexture(Icon(MILESTONE_ICONS[kind]))
+            pin:ClearAllPoints()
+            pin:SetPoint("BOTTOM", preview.bar, "TOPLEFT", x, 14)
+            pin.stem:ClearAllPoints()
+            pin.stem:SetPoint("TOP", pin, "BOTTOM", 0, -1)
+            pin.stem:SetPoint("BOTTOM", preview.bar, "TOP", 0, 2)
+            pin.stem:SetPoint("LEFT", preview.bar, "LEFT", x, 0)
+            if floorNumber == current then
+                pin.frame:SetVertexColor(1, 0.84, 0.43, 1)
+                pin.stem:SetVertexColor(1, 0.84, 0.43, 1)
+                pin.glow:Show()
+                pin.shade:Hide()
+                SetDesaturation(pin.icon, false)
+            elseif floorNumber < current then
+                pin.frame:SetVertexColor(0.75, 0.63, 0.35, 1)
+                pin.stem:SetVertexColor(0.75, 0.63, 0.35, 1)
+                pin.glow:Hide()
+                pin.shade:Hide()
+                SetDesaturation(pin.icon, false)
+            else
+                pin.frame:SetVertexColor(0.35, 0.32, 0.26, 1)
+                pin.stem:SetVertexColor(0.35, 0.32, 0.26, 1)
+                pin.glow:Hide()
+                pin.shade:Show()
+                SetDesaturation(pin.icon, true)
+            end
+            pin:Show()
+            pin.stem:Show()
+        end
+    end
+    local tone = multi and BandOf(FloorRow(tier, current)).color or Look(tier).color
+    local knobX = SliderX(current)
+    preview.knob:ClearAllPoints()
+    preview.knob:SetPoint("CENTER", preview.bar, "LEFT", knobX, 0)
+    preview.knob:SetVertexColor(tone[1], tone[2], tone[3])
+    local onPin = MILESTONE_ICONS[(FloorRow(tier, current) or {}).kind or ""]
+    if onPin then
+        preview.badge:Hide()
+        preview.badgeStem:Hide()
     else
-        preview.odds:SetText("")
+        preview.badge:ClearAllPoints()
+        preview.badge:SetPoint("BOTTOM", preview.bar, "TOPLEFT", knobX, 36)
+        preview.badge:SetBackdropColor(tone[1] * 0.18, tone[2] * 0.18, tone[3] * 0.18, 0.95)
+        preview.badge:SetBackdropBorderColor(tone[1], tone[2], tone[3], 1)
+        preview.badge.text:SetText(current)
+        preview.badge.text:SetTextColor(tone[1], tone[2], tone[3])
+        preview.badge:Show()
+        preview.badgeStem:ClearAllPoints()
+        preview.badgeStem:SetPoint("TOP", preview.badge, "BOTTOM", 0, 0)
+        preview.badgeStem:SetPoint("BOTTOM", preview.bar, "TOP", 0, 4)
+        preview.badgeStem:SetPoint("LEFT", preview.bar, "LEFT", knobX, 0)
+        preview.badgeStem:SetVertexColor(tone[1] * 0.6, tone[2] * 0.6, tone[3] * 0.6, 1)
+        preview.badgeStem:Show()
     end
+end
+
+local function StatValue(row, spec)
+    local value = row and row[spec.key]
+    if not value or value == "" then
+        return "-"
+    end
+    return format(spec.format, value)
+end
+
+local function ShowStats(current, count)
+    local row = FloorRow(tier, current)
+    local first = FloorRow(tier, 1)
+    local showRewards = count > 2
+    local y = 0
+    for index, spec in ipairs(STAT_ROWS) do
+        local line = preview.stats[index]
+        if spec.behavior then
+            local info = tierInfo[tier.id]
+            if info then
+                line:ClearAllPoints()
+                line:SetPoint("TOPLEFT", preview.stats, "TOPLEFT", 0, -(y + 3))
+                line:SetPoint("TOPRIGHT", preview.stats, "TOPRIGHT", 0, -(y + 3))
+                for cell, def in ipairs(BEHAVIOR_CELLS) do
+                    line.values[cell]:SetText(info[def[2]] or "")
+                end
+                line:Show()
+                y = y + 33
+            else
+                line:Hide()
+            end
+        elseif spec.rewards and not showRewards then
+            line.label:Hide()
+            if line.base then
+                line.base:Hide()
+                line.arrow:Hide()
+                line.value:Hide()
+            end
+        else
+            line.label:ClearAllPoints()
+            line.label:SetPoint("TOPLEFT", preview.stats, "TOPLEFT", 0, -y)
+            line.label:Show()
+            if spec.group then
+                y = y + (index > 1 and 4 or 0)
+                line.label:ClearAllPoints()
+                line.label:SetPoint("TOPLEFT", preview.stats, "TOPLEFT", 0, -y)
+                y = y + 16
+            else
+                local value = StatValue(row, spec)
+                local base = StatValue(first, spec)
+                line.value:ClearAllPoints()
+                line.value:SetPoint("TOPRIGHT", preview.stats, "TOPRIGHT", 0, -y)
+                line.value:SetText(value)
+                line.value:Show()
+                if current > 1 then
+                    line.base:ClearAllPoints()
+                    line.base:SetPoint("TOPRIGHT", preview.stats, "TOPRIGHT", -72, -y - 1)
+                    line.base:SetText(base)
+                    line.base:Show()
+                    line.arrow:ClearAllPoints()
+                    line.arrow:SetPoint("TOP", preview.stats, "TOPRIGHT", -62, -y - 1)
+                    line.arrow:Show()
+                else
+                    line.base:Hide()
+                    line.arrow:Hide()
+                end
+                if spec.rewards then
+                    line.value:SetTextColor(0.25, 1, 0.25)
+                elseif value ~= base then
+                    line.value:SetTextColor(1, 0.55, 0.47)
+                else
+                    line.value:SetTextColor(1, 1, 1)
+                end
+                y = y + STAT_STEP
+            end
+        end
+    end
+    return y
+end
+
+local function NextMilestone(current, count)
+    for floorNumber = current + 1, count do
+        local row = FloorRow(tier, floorNumber)
+        if row and MILESTONE_ICONS[row.kind or ""] then
+            return floorNumber, row
+        end
+    end
+end
+
+local function LowerFirst(text)
+    return strlower(strsub(text, 1, 1)) .. strsub(text, 2)
+end
+
+local HARDER = "|cffff8a78"
+
+local function ShowMilestone(current, count, y)
+    local footer = preview.milestone
+    footer:ClearAllPoints()
+    footer:SetPoint("TOPLEFT", preview.stats, "TOPLEFT", 0, -(y + 4))
+    footer:SetPoint("TOPRIGHT", preview.stats, "TOPRIGHT", 0, -(y + 4))
+    local row = FloorRow(tier, current)
+    local reward = row and row.reward or ""
+    local done = row and row.cleared == "1"
+    local rewardLine = reward ~= "" and ((done and "|cff9d9d9dFirst clear (done): " or "|cff40ff40First clear: ") .. reward .. ".|r") or ""
+    local onMilestone = row and MILESTONE_ICONS[row.kind or ""]
+    local nextFloor, nextRow = NextMilestone(current, count)
+    local harder = ""
+    if onMilestone then
+        harder = HARDER .. "From here on: " .. LowerFirst(row.change) .. "|r"
+    elseif nextFloor then
+        harder = Hex(MUTED) .. "Floor " .. nextFloor .. ":|r " .. HARDER .. LowerFirst(nextRow.change) .. "|r"
+    end
+    if rewardLine == "" and harder == "" then
+        footer:Hide()
+        return
+    end
+    local kind = onMilestone and row.kind or (nextRow and nextRow.kind)
+    footer.icon:SetTexture(Icon(MILESTONE_ICONS[kind or ""] or "INV_Misc_Note_01"))
+    SetDesaturation(footer.icon, not onMilestone)
+    if onMilestone then
+        footer.shade:Hide()
+        footer.glow:Show()
+    else
+        footer.shade:Show()
+        footer.glow:Hide()
+    end
+    footer.top:SetText(rewardLine ~= "" and rewardLine or harder)
+    footer.bottom:SetText(rewardLine ~= "" and harder or "")
+    footer:Show()
+end
+
+local function ShowPreview()
+    local count = FloorCount()
+    local sliding = count > 2
+    local current = sliding and Clamp(state.floor[tier.id] or 1, 1, count) or count
+    state.floor[tier.id] = current
+    if sliding then
+        preview.title:SetText("Floor difficulty preview")
+        preview.note:SetText("Every run starts on floor 1. Drag the slider to see any floor.")
+    else
+        preview.title:SetText("Floor difficulty")
+        preview.note:SetText(count == 2 and "Floor 2 compared with floor 1." or "")
+    end
+    ShowSlider(sliding and count or 1, current)
+    local top = sliding and SLIDER_Y + 30 or PREVIEW_TOP + 40
+    preview.stats:ClearAllPoints()
+    preview.stats:SetPoint("TOPLEFT", arena, "TOPLEFT", RIGHT_X + 2, -top)
+    preview.stats:SetPoint("TOPRIGHT", arena, "TOPLEFT", RIGHT_X + RIGHT_WIDTH - 2, -top)
+    local y = ShowStats(current, count)
+    ShowMilestone(current, count, y)
+end
+
+local function BuildHead()
+    head = {}
+    head.art = arena:CreateTexture(nil, "BACKGROUND")
+    head.art:SetPoint("TOPLEFT", arena, "TOPLEFT", 11, -11)
+    head.art:SetPoint("TOPRIGHT", arena, "TOPRIGHT", -11, -11)
+    head.art:SetHeight(160)
+    head.art:SetVertexColor(0.27, 0.25, 0.27)
+    head.fade = arena:CreateTexture(nil, "BORDER")
+    head.fade:SetPoint("BOTTOMLEFT", head.art, "BOTTOMLEFT", 0, 0)
+    head.fade:SetPoint("BOTTOMRIGHT", head.art, "BOTTOMRIGHT", 0, 0)
+    head.fade:SetHeight(100)
+    UI.Gradient(head.fade, "VERTICAL", UI.WINDOW_BG[1], UI.WINDOW_BG[2], UI.WINDOW_BG[3], 1, 0)
+    head.tint = arena:CreateTexture(nil, "BORDER")
+    head.tint:SetPoint("TOPLEFT", head.art, "TOPLEFT", 0, 0)
+    head.tint:SetPoint("TOPRIGHT", head.art, "TOPRIGHT", 0, 0)
+    head.tint:SetHeight(70)
+    head.label = UI.Text(content, 11)
+    head.label:SetPoint("TOPLEFT", arena, "TOPLEFT", LEFT_X, -38)
+    head.label:SetTextColor(1, 0.82, 0)
+    head.label:SetText("Difficulty")
+    head.name = UI.Text(content, 30, UI.TITLE_FONT)
+    head.name:SetPoint("TOPLEFT", arena, "TOPLEFT", MID_X, -34)
+    head.description = UI.Text(content, 10)
+    head.description:SetPoint("LEFT", head.name, "RIGHT", 16, -2)
+    head.description:SetJustifyH("LEFT")
+    head.description:SetTextColor(SOFT[1], SOFT[2], SOFT[3])
+    head.line = Hairline(content, W - 22 - MID_X)
+    head.line:SetPoint("TOPLEFT", arena, "TOPLEFT", MID_X, -86)
+end
+
+local function BuildList()
+    list = { rows = {} }
+    list.panel = UI.Panel(content)
+    list.panel:SetPoint("TOPLEFT", arena, "TOPLEFT", MID_X, -PANEL_TOP)
+    list.panel:SetWidth(LIST_WIDTH)
+    list.panel:SetHeight(H - 20 - PANEL_TOP)
+    list.scroll = CreateFrame("ScrollFrame", "VanillaBonkRunMasterScroll", list.panel, "UIPanelScrollFrameTemplate")
+    list.scroll:SetPoint("TOPLEFT", list.panel, "TOPLEFT", 6, -8)
+    list.scroll:SetPoint("BOTTOMRIGHT", list.panel, "BOTTOMRIGHT", -28, 8)
+    list.child = CreateFrame("Frame", nil, list.scroll)
+    list.child:SetWidth(LIST_WIDTH - 36)
+    list.child:SetHeight(1)
+    list.scroll:SetScrollChild(list.child)
+    list.tabs = UI.PanelTabs(list.panel, 8, function(index)
+        local mode = MODES[index]
+        state.mode[tier.id] = mode
+        if mode ~= "zones" and not ChosenDungeon() then
+            local first = FirstOpenDungeon()
+            state.dungeon[tier.id] = first and first.key or nil
+        end
+        list.scroll:SetVerticalScroll(0)
+        RunMaster.Refresh()
+    end)
+end
+
+local function BuildBanner()
+    banner = CreateFrame("Frame", nil, content)
+    banner:SetPoint("TOPLEFT", arena, "TOPLEFT", RIGHT_X, -BANNER_TOP)
+    banner:SetWidth(RIGHT_WIDTH)
+    banner:SetHeight(BANNER_HEIGHT)
+    banner:SetBackdrop({ edgeFile = UI.FLAT, edgeSize = 1 })
+    banner:SetBackdropBorderColor(0.27, 0.24, 0.17, 1)
+    banner:EnableMouse(true)
+    banner.art = banner:CreateTexture(nil, "BACKGROUND")
+    banner.art:SetAllPoints(banner)
+    banner.map = CreateFrame("ScrollFrame", nil, banner)
+    banner.map:SetAllPoints(banner)
+    banner.map.canvas = CreateFrame("Frame", nil, banner.map)
+    banner.map.canvas.textures = {}
+    banner.map.canvas:SetWidth(ZONE_MAP_WIDTH)
+    banner.map.canvas:SetHeight(ZONE_MAP_HEIGHT)
+    banner.map:SetScrollChild(banner.map.canvas)
+    banner.map:Hide()
+    local overlay = CreateFrame("Frame", nil, banner)
+    overlay:SetAllPoints(banner)
+    overlay:SetFrameLevel(banner.map:GetFrameLevel() + 3)
+    banner.fade = overlay:CreateTexture(nil, "BACKGROUND")
+    banner.fade:SetPoint("BOTTOMLEFT", banner, "BOTTOMLEFT", 1, 1)
+    banner.fade:SetPoint("BOTTOMRIGHT", banner, "BOTTOMRIGHT", -1, 1)
+    banner.fade:SetHeight(76)
+    UI.Gradient(banner.fade, "VERTICAL", 0.04, 0.035, 0.045, 0.96, 0)
+    banner.description = UI.Text(overlay, 10)
+    banner.description:SetPoint("BOTTOMLEFT", banner, "BOTTOMLEFT", 13, 9)
+    banner.description:SetWidth(RIGHT_WIDTH - 26)
+    banner.description:SetJustifyH("LEFT")
+    banner.description:SetTextColor(SOFT[1], SOFT[2], SOFT[3])
+    banner.name = UI.Text(overlay, 22, UI.TITLE_FONT)
+    banner.name:SetPoint("BOTTOMLEFT", banner.description, "TOPLEFT", -1, 3)
+    banner.name:SetTextColor(1, 0.82, 0)
+    banner.tag = UI.Text(overlay, 9)
+    banner.tag:SetPoint("BOTTOMLEFT", banner.name, "TOPLEFT", 1, 2)
+    banner:SetScript("OnEnter", function()
+        if not this.risk then
+            return
+        end
+        GameTooltip:SetOwner(this, "ANCHOR_TOP")
+        GameTooltip:AddLine(CHALLENGE_RISK, 1, 0.5, 0.5, 1)
+        GameTooltip:AddLine(this.risk, 0.25, 1, 0.25, 1)
+        GameTooltip:Show()
+    end)
+    banner:SetScript("OnLeave", function() GameTooltip:Hide() end)
+end
+
+local function BuildPreview()
+    preview = CreateFrame("Frame", nil, content)
+    preview:SetPoint("TOPLEFT", arena, "TOPLEFT", RIGHT_X, -PREVIEW_TOP)
+    preview:SetWidth(RIGHT_WIDTH)
+    preview:SetHeight(300)
+    preview:EnableMouseWheel(true)
+    preview:SetScript("OnMouseWheel", function()
+        SetFloor((state.floor[tier.id] or 1) + (arg1 > 0 and 1 or -1))
+    end)
+    preview.title = UI.Text(preview, 13)
+    preview.title:SetPoint("TOPLEFT", preview, "TOPLEFT", 2, 0)
+    preview.title:SetTextColor(1, 0.82, 0)
+    preview.note = UI.Text(preview, 9)
+    preview.note:SetPoint("TOPLEFT", preview.title, "BOTTOMLEFT", 0, -4)
+    preview.note:SetTextColor(MUTED[1], MUTED[2], MUTED[3])
+
+    preview.slider = CreateFrame("Frame", nil, preview)
+    preview.slider:SetAllPoints(preview)
+    preview.bar = CreateFrame("Button", nil, preview.slider)
+    preview.bar:SetPoint("TOPLEFT", arena, "TOPLEFT", RIGHT_X + SLIDER_INSET, -(SLIDER_Y - 3))
+    preview.bar:SetWidth(RIGHT_WIDTH - 2 * SLIDER_INSET)
+    preview.bar:SetHeight(6)
+    preview.bar:SetHitRectInsets(-6, -6, -10, -10)
+    preview.bar:SetBackdrop({ edgeFile = UI.FLAT, edgeSize = 1 })
+    preview.bar:SetBackdropBorderColor(0.05, 0.045, 0.04, 1)
+    preview.well = preview.bar:CreateTexture(nil, "BACKGROUND")
+    preview.well:SetPoint("TOPLEFT", preview.bar, "TOPLEFT", -3, 3)
+    preview.well:SetPoint("BOTTOMRIGHT", preview.bar, "BOTTOMRIGHT", 3, -3)
+    UI.Gradient(preview.well, "VERTICAL", 0.045, 0.04, 0.05, 1, 1)
+    preview.wellTop = Flat(preview.bar, "BACKGROUND", 0, 0, 0, 0.5)
+    preview.wellTop:SetPoint("TOPLEFT", preview.well, "TOPLEFT", 0, 0)
+    preview.wellTop:SetPoint("TOPRIGHT", preview.well, "TOPRIGHT", 0, 0)
+    preview.wellTop:SetHeight(1)
+    preview.wellBottom = Flat(preview.bar, "BACKGROUND", 1, 0.9, 0.7, 0.06)
+    preview.wellBottom:SetPoint("BOTTOMLEFT", preview.well, "BOTTOMLEFT", 0, 0)
+    preview.wellBottom:SetPoint("BOTTOMRIGHT", preview.well, "BOTTOMRIGHT", 0, 0)
+    preview.wellBottom:SetHeight(1)
+    preview.shine = preview.bar:CreateTexture(nil, "OVERLAY")
+    preview.shine:SetPoint("TOPLEFT", preview.bar, "TOPLEFT", 0, 0)
+    preview.shine:SetHeight(3)
+    UI.Gradient(preview.shine, "VERTICAL", 1, 1, 1, 0, 0.3)
+    preview.segments, preview.notches, preview.pins = {}, {}, {}
+    preview.knobFrame = CreateFrame("Frame", nil, preview.bar)
+    preview.knobFrame:SetAllPoints(preview.bar)
+    preview.knobFrame:SetFrameLevel(preview.bar:GetFrameLevel() + 4)
+    preview.knob = preview.knobFrame:CreateTexture(nil, "OVERLAY")
+    preview.knob:SetTexture(KNOB_TEXTURE)
+    preview.knob:SetWidth(18)
+    preview.knob:SetHeight(18)
+    preview.bar:RegisterForClicks("LeftButtonDown", "LeftButtonUp")
+    preview.bar:SetScript("OnMouseDown", function()
+        this.dragging = true
+        SetFloor(FloorAtCursor(this))
+    end)
+    preview.bar:SetScript("OnMouseUp", function() this.dragging = nil end)
+    preview.bar:SetScript("OnUpdate", function()
+        if this.dragging then
+            SetFloor(FloorAtCursor(this), true)
+        end
+    end)
+    preview.badge = CreateFrame("Frame", nil, preview.slider)
+    preview.badge:SetWidth(26)
+    preview.badge:SetHeight(16)
+    preview.badge:SetBackdrop({ bgFile = UI.FLAT, edgeFile = UI.FLAT, edgeSize = 1, insets = { left = 1, right = 1, top = 1, bottom = 1 } })
+    preview.badge.text = UI.Text(preview.badge, 10)
+    preview.badge.text:SetPoint("CENTER", preview.badge, "CENTER", 0, 0)
+    preview.badgeStem = Flat(preview.slider, "ARTWORK")
+    preview.badgeStem:SetWidth(1)
+
+    preview.stats = CreateFrame("Frame", nil, preview)
+    preview.stats:SetHeight(1)
+    for index, spec in ipairs(STAT_ROWS) do
+        local line = {}
+        if spec.behavior then
+            line = CreateFrame("Frame", nil, preview.stats)
+            line:SetHeight(30)
+            line.values = {}
+            for cell, def in ipairs(BEHAVIOR_CELLS) do
+                local label = UI.Text(line, 10)
+                local column = mod(cell - 1, 2)
+                local rowIndex = floor((cell - 1) / 2)
+                label:SetPoint("TOPLEFT", line, "TOPLEFT", column * (RIGHT_WIDTH / 2), -rowIndex * 15)
+                label:SetTextColor(MUTED[1], MUTED[2], MUTED[3])
+                label:SetText(def[1])
+                local value = UI.Text(line, 10)
+                value:SetPoint("TOPRIGHT", line, "TOPLEFT", column * (RIGHT_WIDTH / 2) + RIGHT_WIDTH / 2 - (column == 0 and 14 or 4), -rowIndex * 15)
+                value:SetTextColor(SOFT[1], SOFT[2], SOFT[3])
+                line.values[cell] = value
+            end
+        elseif spec.group then
+            line.label = UI.Text(preview.stats, 10)
+            line.label:SetTextColor(MUTED[1], MUTED[2], MUTED[3])
+            line.label:SetText(spec.group)
+        else
+            line.label = UI.Text(preview.stats, 11)
+            line.label:SetTextColor(SOFT[1], SOFT[2], SOFT[3])
+            line.label:SetText(spec.label)
+            line.base = UI.Text(preview.stats, 10)
+            line.base:SetTextColor(MUTED[1], MUTED[2], MUTED[3])
+            line.arrow = UI.Text(preview.stats, 10, UI.NUMBER_FONT)
+            line.arrow:SetTextColor(MUTED[1], MUTED[2], MUTED[3])
+            line.arrow:SetText("->")
+            line.value = UI.Text(preview.stats, 11)
+        end
+        preview.stats[index] = line
+    end
+
+    local footer = CreateFrame("Frame", nil, preview)
+    footer:SetHeight(40)
+    footer.line = Hairline(footer, RIGHT_WIDTH)
+    footer.line:SetPoint("TOPLEFT", footer, "TOPLEFT", 0, 0)
+    footer.glow = footer:CreateTexture(nil, "BACKGROUND")
+    footer.glow:SetTexture("Interface\\Buttons\\UI-ActionButton-Border")
+    footer.glow:SetBlendMode("ADD")
+    footer.glow:SetVertexColor(1, 0.78, 0.35)
+    footer.glow:SetWidth(44)
+    footer.glow:SetHeight(44)
+    footer.icon = footer:CreateTexture(nil, "ARTWORK")
+    footer.icon:SetWidth(24)
+    footer.icon:SetHeight(24)
+    footer.icon:SetPoint("TOPLEFT", footer, "TOPLEFT", 0, -7)
+    UI.CropIcon(footer.icon)
+    footer.glow:SetPoint("CENTER", footer.icon, "CENTER", 0, 0)
+    footer.shade = Flat(footer, "OVERLAY", 0, 0, 0, 0.4)
+    footer.shade:SetAllPoints(footer.icon)
+    footer.top = UI.Text(footer, 10)
+    footer.top:SetPoint("TOPLEFT", footer.icon, "TOPRIGHT", 8, 1)
+    footer.top:SetWidth(RIGHT_WIDTH - 34)
+    footer.top:SetJustifyH("LEFT")
+    footer.bottom = UI.Text(footer, 10)
+    footer.bottom:SetPoint("TOPLEFT", footer.top, "BOTTOMLEFT", 0, -3)
+    footer.bottom:SetWidth(RIGHT_WIDTH - 34)
+    footer.bottom:SetJustifyH("LEFT")
+    preview.milestone = footer
 end
 
 local function Build()
     arena = VanillaBonkArena
     content = arena.content
+    ladder = {}
+    BuildHead()
+    BuildList()
+    BuildBanner()
+    BuildPreview()
+end
 
-    rows.label = UI.Text(content, 13)
-    rows.label:SetPoint("TOPLEFT", arena, "TOPLEFT", LEFT_X, -LIST_TOP)
-    rows.label:SetTextColor(1, 0.82, 0)
-    rows.label:SetText("Starting zone")
+function RunMaster.SetTiers(tiers, selectedId, onClick)
+    if not head then
+        Build()
+    end
+    onTierClick = onClick
+    for _, plaque in ipairs(ladder) do
+        plaque:Hide()
+    end
+    for index, shown in ipairs(tiers) do
+        FillPlaque(Plaque(index), shown, shown.id == selectedId)
+    end
+end
 
-    challenge = {}
-    challenge.label = UI.Text(content, 13)
-    challenge.label:SetPoint("TOPLEFT", arena, "TOPLEFT", LEFT_X, -CHALLENGE_TOP)
-    challenge.label:SetTextColor(1, 0.82, 0)
-    challenge.label:SetText("Challenge mode")
-    challenge.dungeon = UI.Button(content, 78, "Dungeon", function() SetMode(false) end)
-    challenge.invasion = UI.Button(content, 78, "Invasion", function() SetMode(true) end)
-    challenge.invasion:SetPoint("LEFT", challenge.dungeon, "RIGHT", 4, 0)
-    challenge.hint = UI.Text(content, 10)
-    challenge.hint:SetPoint("TOPLEFT", challenge.dungeon, "BOTTOMLEFT", 0, -4)
-    challenge.hint:SetWidth(200)
-    challenge.hint:SetJustifyH("LEFT")
+function RunMaster.Caption()
+    if not tier then
+        return ""
+    end
+    local mode = Mode()
+    local dungeon = ChosenDungeon()
+    local zone = ChosenZone()
+    local place = zone and zone.name or "Random zone"
+    if mode == "dungeon" and dungeon then
+        place = dungeon.name
+    elseif mode == "invasion" and dungeon then
+        place = place .. ", invaded"
+    end
+    return tier.name .. "  ·  " .. place
+end
 
-    preview = UI.Strip(content)
-    preview:SetPoint("TOPLEFT", arena, "TOPLEFT", PREVIEW_X, -LIST_TOP)
-    preview:SetWidth(PREVIEW_WIDTH)
-    preview:SetHeight(PREVIEW_HEIGHT)
-    preview.art = preview:CreateTexture(nil, "ARTWORK")
-    preview.art:SetWidth(ART_WIDTH)
-    preview.art:SetHeight(ART_HEIGHT)
-    preview.art:SetPoint("TOPLEFT", preview, "TOPLEFT", 12, -12)
-    preview.map = CreateFrame("ScrollFrame", nil, preview)
-    preview.map:SetWidth(ART_WIDTH)
-    preview.map:SetHeight(ART_HEIGHT)
-    preview.map:SetPoint("TOPLEFT", preview, "TOPLEFT", 12, -12)
-    preview.map.canvas = CreateFrame("Frame", nil, preview.map)
-    preview.map.canvas.textures = {}
-    preview.map.canvas:SetWidth(ZONE_MAP_WIDTH)
-    preview.map.canvas:SetHeight(ZONE_MAP_HEIGHT)
-    preview.map:SetScrollChild(preview.map.canvas)
-    preview.map:Hide()
-    preview.name = preview:CreateFontString(nil, "OVERLAY")
-    preview.name:SetFont(UI.TITLE_FONT, 22, "OUTLINE")
-    preview.name:SetTextColor(1, 0.82, 0)
-    preview.name:SetPoint("TOPLEFT", preview, "TOPLEFT", PREVIEW_TEXT_X, -14)
-    preview.name:SetWidth(PREVIEW_TEXT_WIDTH)
-    preview.name:SetJustifyH("LEFT")
-    preview.subtitle = UI.Text(preview, 12)
-    preview.subtitle:SetPoint("TOPLEFT", preview.name, "BOTTOMLEFT", 0, -3)
-    preview.description = UI.Text(preview, 11)
-    preview.description:SetPoint("TOPLEFT", preview, "TOPLEFT", PREVIEW_TEXT_X, -62)
-    preview.description:SetWidth(PREVIEW_TEXT_WIDTH)
-    preview.description:SetJustifyH("LEFT")
-    preview.routeLabel = UI.Text(preview, 12)
-    preview.routeLabel:SetPoint("TOPLEFT", preview, "TOPLEFT", PREVIEW_TEXT_X, -120)
-    preview.routeLabel:SetTextColor(1, 0.82, 0)
-    preview.routeLabel:SetText("Your route")
-    preview.route = {}
-    preview.endless = UI.Text(preview, 10)
-    preview.caption = UI.Text(preview, 11)
-    preview.caption:SetPoint("TOPLEFT", preview.routeLabel, "BOTTOMLEFT", 0, -40)
-    preview.caption:SetWidth(PREVIEW_TEXT_WIDTH)
-    preview.caption:SetJustifyH("LEFT")
-    preview.odds = UI.Text(preview, 10)
-    preview.odds:SetPoint("TOPLEFT", preview.caption, "BOTTOMLEFT", 0, -5)
-    preview.odds:SetWidth(PREVIEW_TEXT_WIDTH)
-    preview.odds:SetJustifyH("LEFT")
+function RunMaster.Refresh()
+    if not tier then
+        return
+    end
+    ShowHead()
+    ShowList()
+    ShowBanner()
+    ShowPreview()
+    if arena.tier == tier and arena.button then
+        if tier.unlocked and RunMaster.CanStart(tier) then
+            arena.button:Enable()
+        else
+            arena.button:Disable()
+        end
+        if arena.button.caption then
+            arena.button.caption:SetText(RunMaster.Caption())
+        end
+    end
 end
 
 function RunMaster.Show(shownTier)
-    if not preview then
+    if not head then
         Build()
     end
     tier = shownTier
-    ShowRows()
-    ShowChallenges()
-    ShowPreview()
+    RunMaster.Refresh()
+end
+
+function RunMaster.CanStart(startTier)
+    local previous = tier
+    tier = startTier
+    local ok = Mode() == "zones" or ChosenDungeon() ~= nil
+    tier = previous
+    return ok
 end
 
 function RunMaster.StartArgs(startTier)
     tier = startTier
     local args = tier.key
+    local mode = Mode()
     local dungeon = ChosenDungeon()
     local zone = ChosenZone()
-    if zone and not IsDungeonMode() then
+    if zone and mode ~= "dungeon" then
         args = args .. " " .. zone.key
     end
     if dungeon then
-        args = args .. " " .. dungeon.key .. (IsInvasion() and " invade" or "")
+        args = args .. " " .. dungeon.key .. (mode == "invasion" and " invade" or "")
     end
     return args
 end
+
+RunMaster.LEFT_X, RunMaster.LEFT_WIDTH = LEFT_X, LEFT_WIDTH
+RunMaster.RIGHT_X, RunMaster.RIGHT_WIDTH = RIGHT_X, RIGHT_WIDTH
+RunMaster.Hairline = Hairline
+RunMaster.SOFT, RunMaster.MUTED = SOFT, MUTED
 
 UI.Listen({
     mapinfo = function(f)
@@ -636,6 +1358,22 @@ UI.Listen({
             mapInfo[f[2]] = { continent = f[3] or "", summary = f[4] or "", description = f[5] or "",
                 file = f[6] or "", u = tonumber(f[7] or ""), v = tonumber(f[8] or "") }
         end
+    end,
+    tierinfo = function(f)
+        if f[2] then
+            tierInfo[f[2]] = { aim = f[3] or "", boss = f[4] or "", charge = (f[5] and f[5] ~= "") and ("every " .. f[5] .. " sec") or "",
+                crowd = f[6] or "" }
+        end
+    end,
+    floor = function(f)
+        local tierId, floorNumber = f[2], tonumber(f[3] or "")
+        if not tierId or not floorNumber then
+            return
+        end
+        floorInfo[tierId] = floorInfo[tierId] or {}
+        floorInfo[tierId][floorNumber] = { health = f[4] or "", damage = f[5] or "", veterans = f[6] or "", affixes = f[7] or "",
+            gold = f[8] or "", legendary = f[9] or "", change = f[10] or "", reward = f[11] or "", cleared = f[12] or "0",
+            band = f[13] or "1", kind = f[14] or "" }
     end,
     zoneart = function(f)
         local file, texture = f[2], f[3]
@@ -646,8 +1384,8 @@ UI.Listen({
         zoneOverlays[file] = zoneOverlays[file] or {}
         tinsert(zoneOverlays[file], { texture = texture, width = tonumber(f[4]) or 0, height = tonumber(f[5]) or 0,
             x = tonumber(f[6]) or 0, y = tonumber(f[7]) or 0 })
-        if preview then
-            preview.map.file = nil
+        if banner then
+            banner.map.file = nil
         end
     end,
 })

@@ -4,7 +4,8 @@ using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
-using System.Net;
+using System.Net.Http;
+using BonkTelegraphs;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
@@ -44,11 +45,11 @@ namespace HordesOfAzeroth.Launcher
         const string LauncherPackage = "launcher";
         const string WorldPackage = "world-db";
         const string SpellEffectsPackage = "telegraphkit";
+        const string SpellEffectsApplied = "spell-effects";
         const string VersionEntry = "VERSION";
 
         static readonly string[] SpellEffectFiles =
         {
-            Path.Combine("Data", "patch-3.MPQ"),
             Path.Combine("Interface", "AddOns", "HordesOfAzeroth", "Textures", "ClassCrests.tga"),
             Path.Combine("Interface", "AddOns", "HordesOfAzeroth", "Textures", "PlayerFrameNoPower.tga"),
         };
@@ -63,7 +64,7 @@ namespace HordesOfAzeroth.Launcher
         public static readonly string[] Steps =
         {
             "Download the game files",
-            "Patch the game",
+            "Set up the game",
             "Read the maps",
             "Build the spell effects",
             "Set up the database",
@@ -96,13 +97,20 @@ namespace HordesOfAzeroth.Launcher
         }
 
         public HashSet<string> CompletedSteps =>
-            new HashSet<string>(File.Exists(StateFile) ? File.ReadAllLines(StateFile) : new string[0]);
+            new HashSet<string>((File.Exists(StateFile) ? File.ReadAllLines(StateFile) : new string[0]).Select(CurrentStepName));
+
+        static readonly Dictionary<string, string> RenamedSteps = new Dictionary<string, string>
+        {
+            { "Patch the game", "Set up the game" },
+        };
+
+        static string CurrentStepName(string step) => RenamedSteps.TryGetValue(step, out string renamed) ? renamed : step;
 
         public bool IsComplete => Steps.All(CompletedSteps.Contains);
 
         public static bool IsStockClient(GameFolder folder)
         {
-            string exe = Path.Combine(folder.Root, "WoW.exe");
+            string exe = folder.WowExe;
             if (!File.Exists(exe))
                 return false;
             using (MD5 md5 = MD5.Create())
@@ -114,7 +122,7 @@ namespace HordesOfAzeroth.Launcher
         {
             "Back up your characters",
             "Download the update",
-            "Patch the game",
+            "Set up the game",
             "Rebuild the spell effects",
             "Update the database",
         };
@@ -123,7 +131,7 @@ namespace HordesOfAzeroth.Launcher
         {
             "Check the game files",
             "Download the missing files",
-            "Patch the game",
+            "Set up the game",
             "Read the maps",
             "Rebuild the spell effects",
             "Check the database",
@@ -135,7 +143,7 @@ namespace HordesOfAzeroth.Launcher
             { "Download the missing files", "Downloading the missing files" },
             { "Check the database", "Checking the database" },
             { "Download the game files", "Downloading the game files" },
-            { "Patch the game", "Patching the game" },
+            { "Set up the game", "Setting up the game" },
             { "Read the maps", "Reading the maps" },
             { "Build the spell effects", "Building the spell effects" },
             { "Set up the database", "Setting up the database" },
@@ -173,7 +181,7 @@ namespace HordesOfAzeroth.Launcher
                 await DownloadAsync(await PackagesToFetchAsync(manifest, true, false, _ => { }), MissingThirdParty(manifest), progress, UpdateSteps[1], cancel);
 
                 progress.Report(new InstallProgress { Step = UpdateSteps[2] });
-                Patch(manifest);
+                SetUpGame(manifest);
 
                 progress.Report(new InstallProgress { Step = UpdateSteps[3] });
                 if (!SpellEffectsBuilt())
@@ -210,7 +218,7 @@ namespace HordesOfAzeroth.Launcher
             }
 
             progress.Report(new InstallProgress { Step = RepairSteps[2] });
-            Patch(manifest);
+            SetUpGame(manifest);
 
             bool mapsMissing = !MapsRead;
             if (mapsMissing)
@@ -271,7 +279,7 @@ namespace HordesOfAzeroth.Launcher
                     switch (Array.IndexOf(Steps, step))
                     {
                         case 0: await DownloadAsync(await PackagesToFetchAsync(manifest, true, false, _ => { }), MissingThirdParty(manifest), progress, step, cancel); break;
-                        case 1: Patch(manifest); break;
+                        case 1: SetUpGame(manifest); break;
                         case 2: await ReadMapsAsync(progress, step, cancel); break;
                         case 3: await BuildSpellEffectsAsync(cancel); break;
                         case 4: await EnsureDatabaseAsync(manifest, false, progress, step, cancel); break;
@@ -360,8 +368,11 @@ namespace HordesOfAzeroth.Launcher
                 string file = await FetchAsync(item.Url, item.Sha256, report, cancel);
                 if (item.CopyTo != null)
                     File.Copy(file, Path.Combine(m_folder.Root, item.CopyTo), true);
+                else if (Platform.IsTarball(file))
+                    await Task.Run(() => Platform.ExtractTarball(file, Path.Combine(m_folder.Root, item.UnzipTo ?? "."), item.StripTopFolder), cancel);
                 else
                     Unzip(file, Path.Combine(m_folder.Root, item.UnzipTo ?? "."), item.StripTopFolder, null);
+                File.Delete(file);
                 finished += item.Size;
             }
             foreach (PackageEntry package in packages)
@@ -415,9 +426,7 @@ namespace HordesOfAzeroth.Launcher
             if (item.CopyTo != null)
                 return File.Exists(Path.Combine(m_folder.Root, item.CopyTo));
             if (item.Name == "MariaDB")
-                return File.Exists(Path.Combine(m_folder.MariaDb, "bin", "mariadbd.exe"));
-            if (item.Name == "VanillaFixes")
-                return File.Exists(Path.Combine(m_folder.Root, "VanillaFixes.exe"));
+                return File.Exists(Path.Combine(m_folder.MariaDb, "bin", Platform.Exe("mariadbd")));
             return false;
         }
 
@@ -436,22 +445,15 @@ namespace HordesOfAzeroth.Launcher
             }
             else
             {
-                ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12;
-                using (WebClient client = new WebClient())
-                using (cancel.Register(client.CancelAsync))
+                try
                 {
-                    client.Headers[HttpRequestHeader.UserAgent] = "HordesOfAzerothLauncher";
-                    client.DownloadProgressChanged += (s, e) => report(e.BytesReceived);
-                    try
-                    {
-                        await client.DownloadFileTaskAsync(new Uri(url), target);
-                    }
-                    catch (WebException e) when (!cancel.IsCancellationRequested)
-                    {
-                        if (File.Exists(target))
-                            File.Delete(target);
-                        throw new InvalidOperationException($"Couldn't download {name} ({e.Message.TrimEnd('.')}). Check your connection and try again.");
-                    }
+                    await Web.DownloadAsync(url, target, report, cancel);
+                }
+                catch (Exception e) when (Web.IsProblem(e) && !cancel.IsCancellationRequested)
+                {
+                    if (File.Exists(target))
+                        File.Delete(target);
+                    throw new InvalidOperationException($"Couldn't download {name} ({e.Message.TrimEnd('.')}). Check your connection and try again.");
                 }
             }
             if (Sha256(target) != sha256)
@@ -469,10 +471,10 @@ namespace HordesOfAzeroth.Launcher
                 return BitConverter.ToString(sha.ComputeHash(stream)).Replace("-", "").ToLowerInvariant();
         }
 
-        static readonly string RunningExe = Path.GetFullPath(Process.GetCurrentProcess().MainModule.FileName);
+        static readonly string RunningExe = Path.GetFullPath(Environment.ProcessPath);
 
-        public const string LauncherFileName = "HoALauncher.exe";
-        static readonly string[] RetiredLauncherNames = { "HordesOfAzerothLauncher.exe" };
+        public static readonly string LauncherFileName = Platform.Exe("HoALauncher");
+        static readonly string[] RetiredLauncherNames = Platform.IsWindows ? new[] { "HordesOfAzerothLauncher.exe" } : new string[0];
 
         public static void RemoveOldLauncher()
         {
@@ -528,56 +530,110 @@ namespace HordesOfAzeroth.Launcher
                         File.Move(target, old);
                     }
                     entry.ExtractToFile(target, true);
+                    Platform.MarkExecutableIfProgram(target);
                 }
         }
 
-        void Patch(Manifest manifest)
+        void SetUpGame(Manifest manifest)
         {
-            ClientPatcher.Apply(m_folder);
-            File.WriteAllText(Path.Combine(m_folder.Root, "realmlist.wtf"), "set realmlist 127.0.0.1\r\n");
-            string dllsTxt = Path.Combine(m_folder.Root, "dlls.txt");
-            List<string> lines = File.Exists(dllsTxt) ? File.ReadAllLines(dllsTxt).ToList() : new List<string>();
-            foreach (string dll in manifest.ClientDlls)
-                if (!lines.Contains(dll))
-                    lines.Add(dll);
-            File.WriteAllLines(dllsTxt, lines);
             GameConfig.EnsureDefaults(m_folder, manifest.RealmName);
+            RemoveRetiredClientFiles();
+        }
+
+        static readonly string[] RetiredClientFiles =
+        {
+            "VanillaFixes.exe", "VfPatcher.dll", "dlls.txt", "dlls.txt.cache", "d3d9.dll", "dxvk.conf",
+            "HordesOfAzeroth.dxvk-cache", "HordesOfAzeroth_d3d9.log", "VanillaFixes_d3d9.log",
+            "ClassicAPI.dll", "HordesOfAzerothClientFix.dll", "HordesOfAzerothClientFix.dll.old", "vcruntime140.dll",
+            "config/client-patches.json", "Logs/HordesOfAzerothClientFix.log",
+        };
+        static readonly string[] RetiredClientFolders = { "mods/wow_turbo" };
+        static readonly string[] RetiredPackages = { "client-fix", "client-runtime", "wow-turbo" };
+
+        void RemoveRetiredClientFiles()
+        {
+            if (m_folder.IsDevelopmentTree || !Platform.IsWindows)
+                return;
+            foreach (string file in RetiredClientFiles)
+                TryDelete(() => File.Delete(Path.Combine(m_folder.Root, file.Replace('/', Path.DirectorySeparatorChar))));
+            foreach (string folder in RetiredClientFolders)
+            {
+                string path = Path.Combine(m_folder.Root, folder.Replace('/', Path.DirectorySeparatorChar));
+                if (Directory.Exists(path))
+                    TryDelete(() => Directory.Delete(path, true));
+            }
+            string mods = Path.Combine(m_folder.Root, "mods");
+            if (Directory.Exists(mods) && !Directory.EnumerateFileSystemEntries(mods).Any())
+                TryDelete(() => Directory.Delete(mods));
+
+            Dictionary<string, string> installed = InstalledPackages();
+            if (RetiredPackages.Count(installed.Remove) > 0)
+                WritePairs(PackagesFile, installed);
+            foreach (string package in RetiredPackages)
+                ForgetApplied(package);
+        }
+
+        static void TryDelete(Action delete)
+        {
+            try
+            {
+                delete();
+            }
+            catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
+            {
+            }
+        }
+
+        void GiveExtractorsTheirDataFolder()
+        {
+            string expected = Path.Combine(m_folder.Root, "Data");
+            if (Platform.IsWindows || Directory.Exists(expected) || !Directory.Exists(m_folder.Data))
+                return;
+            Directory.CreateSymbolicLink(expected, Path.GetFileName(m_folder.Data));
         }
 
         async Task ReadMapsAsync(IProgress<InstallProgress> progress, string step, CancellationToken cancel)
         {
+            GiveExtractorsTheirDataFolder();
             string extractors = Path.Combine(m_folder.ServerRun, "Extractors");
             Directory.CreateDirectory(Path.Combine(DataDir, "vmaps"));
 
             progress.Report(new InstallProgress { Step = step, Detail = "terrain and areas", Fraction = 0.05 });
-            await RunToolAsync(Path.Combine(extractors, "MapExtractor.exe"), DataDir, cancel, "-i", Quote(m_folder.Root), "--silent");
+            await RunToolAsync(Path.Combine(extractors, Platform.Exe("MapExtractor")), DataDir, cancel, "-i", Quote(m_folder.Root), "--silent");
             string dbcTarget = Path.Combine(DataDir, "5875", "dbc");
             Directory.CreateDirectory(Path.GetDirectoryName(dbcTarget));
             await Folders.MoveAsync(Path.Combine(DataDir, "dbc"), dbcTarget, cancel);
 
             progress.Report(new InstallProgress { Step = step, Detail = "buildings and trees", Fraction = 0.4 });
-            await RunToolAsync(Path.Combine(extractors, "VMapExtractor.exe"), DataDir, cancel, "-d", Quote(m_folder.Data), "--silent");
+            await RunToolAsync(Path.Combine(extractors, Platform.Exe("VMapExtractor")), DataDir, cancel, "-d", Quote(m_folder.Data), "--silent");
             progress.Report(new InstallProgress { Step = step, Detail = "line of sight", Fraction = 0.8 });
-            await RunToolAsync(Path.Combine(extractors, "VMapAssembler.exe"), DataDir, cancel, "Buildings", "vmaps", "--silent");
+            await RunToolAsync(Path.Combine(extractors, Platform.Exe("VMapAssembler")), DataDir, cancel, "Buildings", "vmaps", "--silent");
             await Folders.DeleteAsync(Path.Combine(DataDir, "Buildings"), cancel);
         }
 
         async Task BuildSpellEffectsAsync(CancellationToken cancel)
         {
-            await RunToolAsync(Path.Combine(m_folder.Root, "tools", "TelegraphKit.exe"), m_folder.Root, cancel, "build", Quote(m_folder.Root));
-            MarkApplied(SpellEffectsPackage);
+            string root = m_folder.Root;
+            await Task.Run(() => Kit.Build(root), cancel);
+            MarkSpellEffectsBuilt();
+        }
+
+        string SpellEffectsKey => InstalledHash(LauncherPackage) + "+" + InstalledHash(SpellEffectsPackage);
+
+        void MarkSpellEffectsBuilt()
+        {
+            Dictionary<string, string> applied = AppliedPackages();
+            applied[SpellEffectsApplied] = SpellEffectsKey;
+            WritePairs(AppliedFile, applied);
         }
 
         bool SpellEffectsBuilt()
         {
-            if (!SpellEffectFiles.All(f => File.Exists(Path.Combine(m_folder.Root, f))))
+            if (!File.Exists(Path.Combine(m_folder.Data, Kit.PatchName)) || !SpellEffectFiles.All(f => File.Exists(Path.Combine(m_folder.Root, f))))
                 return false;
-            if (AppliedPackages().TryGetValue(SpellEffectsPackage, out string built))
-                return built == InstalledHash(SpellEffectsPackage);
-            if (File.Exists(PendingVersion))
-                return false;
-            MarkApplied(SpellEffectsPackage);
-            return true;
+            if (AppliedPackages().TryGetValue(SpellEffectsApplied, out string built))
+                return built == SpellEffectsKey;
+            return false;
         }
 
         bool MapsRead =>

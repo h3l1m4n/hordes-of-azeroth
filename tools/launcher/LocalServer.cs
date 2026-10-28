@@ -25,7 +25,9 @@ namespace HordesOfAzeroth.Launcher
         const int DatabasePort = 3306;
         const int LoginPort = 3724;
         const int WorldPort = 8085;
-        static readonly string[] DatabaseLogin = { "-h", Host, "-P", DatabasePort.ToString(), "-u", "root", "-proot" };
+        static readonly string[] DatabaseLogin = { "-h", Host, "-P", DatabasePort.ToString(), "-u", "root", "-proot", "--skip-ssl" };
+        static readonly TimeSpan DatabaseCreationLimit = TimeSpan.FromMinutes(3);
+        const string RootPasswordSql = "UPDATE mysql.global_priv SET priv = JSON_SET(priv, '$.plugin', 'mysql_native_password', '$.authentication_string', PASSWORD('root')) WHERE User = 'root';";
 
         readonly GameFolder m_folder;
         Process m_world;
@@ -51,7 +53,7 @@ namespace HordesOfAzeroth.Launcher
             if (!IsPortOpen(DatabasePort))
             {
                 progress.Report("Starting the database");
-                m_database = StartHidden(Path.Combine(m_folder.MariaDb, "bin", "mariadbd.exe"), m_folder.MariaDb,
+                m_database = StartHidden(MariaDbProgram("mariadbd"), m_folder.MariaDb,
                     $"\"--defaults-file={Path.Combine(m_folder.Config, "mariadb.ini")}\"",
                     $"\"--basedir={m_folder.MariaDb}\"",
                     $"\"--datadir={m_folder.MariaDbData}\"");
@@ -61,7 +63,7 @@ namespace HordesOfAzeroth.Launcher
             if (!IsPortOpen(LoginPort))
             {
                 progress.Report("Starting the login server");
-                m_login = StartHidden(Path.Combine(m_folder.ServerRun, "realmd.exe"), m_folder.ServerRun);
+                m_login = StartHidden(Path.Combine(m_folder.ServerRun, Platform.Exe("realmd")), m_folder.ServerRun, "-c", "realmd.conf");
                 await WaitForPortAsync(LoginPort, m_login, TimeSpan.FromSeconds(30), "the login server", cancel);
             }
 
@@ -69,7 +71,7 @@ namespace HordesOfAzeroth.Launcher
             {
                 progress.Report("Loading the world");
                 DateTime started = DateTime.UtcNow;
-                m_world = StartHidden(Path.Combine(m_folder.ServerRun, "mangosd.exe"), m_folder.ServerRun, redirectInput: true);
+                m_world = StartHidden(Path.Combine(m_folder.ServerRun, Platform.Exe("mangosd")), m_folder.ServerRun, true, "-c", "mangosd.conf");
                 try
                 {
                     await WaitForPortAsync(WorldPort, m_world, TimeSpan.FromMinutes(5), "the world server", cancel);
@@ -107,6 +109,7 @@ namespace HordesOfAzeroth.Launcher
                 {
                     m_world.StandardInput.WriteLine("server shutdown 0");
                     m_world.StandardInput.Flush();
+                    m_world.StandardInput.Close();
                 }
                 catch (IOException)
                 {
@@ -117,7 +120,7 @@ namespace HordesOfAzeroth.Launcher
                 KillQuietly(m_login);
             if (m_database != null && !m_database.HasExited)
             {
-                string admin = Path.Combine(m_folder.MariaDb, "bin", "mariadb-admin.exe");
+                string admin = MariaDbProgram("mariadb-admin");
                 Process shutdown = StartHidden(admin, m_folder.MariaDb, DatabaseLogin.Concat(new[] { "shutdown" }).ToArray());
                 await WaitForExitAsync(shutdown, TimeSpan.FromSeconds(30));
                 await WaitForExitAsync(m_database, TimeSpan.FromSeconds(30));
@@ -134,7 +137,7 @@ namespace HordesOfAzeroth.Launcher
                 KillQuietly(login);
             if (OwnProcesses("mariadbd").Any())
             {
-                string admin = Path.Combine(m_folder.MariaDb, "bin", "mariadb-admin.exe");
+                string admin = MariaDbProgram("mariadb-admin");
                 if (File.Exists(admin))
                 {
                     Process shutdown = StartHidden(admin, m_folder.MariaDb, DatabaseLogin.Concat(new[] { "shutdown" }).ToArray());
@@ -144,6 +147,8 @@ namespace HordesOfAzeroth.Launcher
                     await WaitForExitAsync(database, TimeSpan.FromSeconds(30));
             }
         }
+
+        string MariaDbProgram(string name) => Path.Combine(m_folder.MariaDb, "bin", Platform.Exe(name));
 
         IEnumerable<Process> OwnProcesses(string name)
         {
@@ -161,7 +166,7 @@ namespace HordesOfAzeroth.Launcher
                 catch (InvalidOperationException)
                 {
                 }
-                if (path != null && path.StartsWith(root, StringComparison.OrdinalIgnoreCase))
+                if (path != null && path.StartsWith(root, Platform.IsWindows ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
                     yield return process;
             }
         }
@@ -183,8 +188,12 @@ namespace HordesOfAzeroth.Launcher
             Directory.CreateDirectory(m_folder.MariaDbData);
             try
             {
-                await RunToEndAsync(Path.Combine(m_folder.MariaDb, "bin", "mariadb-install-db.exe"), m_folder.MariaDb,
-                    $"\"--datadir={m_folder.MariaDbData}\"", "--password=root");
+                if (Platform.IsWindows)
+                    await RunToEndAsync(MariaDbProgram("mariadb-install-db"), m_folder.MariaDb, DatabaseCreationLimit,
+                        $"\"--datadir={m_folder.MariaDbData}\"", "--password=root",
+                        $"\"--config={Path.Combine(m_folder.Config, "mariadb.ini")}\"", "--verbose-bootstrap");
+                else
+                    await CreateLinuxDatabaseFilesAsync();
             }
             catch (InvalidOperationException failure)
             {
@@ -200,6 +209,24 @@ namespace HordesOfAzeroth.Launcher
                 {
                 }
                 throw serverLog == null ? failure : new InvalidOperationException($"{failure.Message} Database log: {serverLog}", failure);
+            }
+        }
+
+        async Task CreateLinuxDatabaseFilesAsync()
+        {
+            string rootPassword = Path.Combine(m_folder.LauncherData, "root-password.sql");
+            Directory.CreateDirectory(m_folder.LauncherData);
+            File.WriteAllText(rootPassword, RootPasswordSql);
+            try
+            {
+                await RunToEndAsync(Path.Combine(m_folder.MariaDb, "scripts", "mariadb-install-db"), m_folder.MariaDb, DatabaseCreationLimit,
+                    $"\"--defaults-file={Path.Combine(m_folder.Config, "mariadb.ini")}\"",
+                    $"\"--basedir={m_folder.MariaDb}\"", $"\"--datadir={m_folder.MariaDbData}\"",
+                    "--auth-root-authentication-method=normal", $"\"--extra-file={rootPassword}\"");
+            }
+            finally
+            {
+                File.Delete(rootPassword);
             }
         }
 
@@ -221,7 +248,7 @@ namespace HordesOfAzeroth.Launcher
             ThrowIfPortTaken(DatabasePort, "its database");
             if (IsPortOpen(DatabasePort))
                 return;
-            m_database = StartHidden(Path.Combine(m_folder.MariaDb, "bin", "mariadbd.exe"), m_folder.MariaDb,
+            m_database = StartHidden(MariaDbProgram("mariadbd"), m_folder.MariaDb,
                 $"\"--defaults-file={Path.Combine(m_folder.Config, "mariadb.ini")}\"",
                 $"\"--basedir={m_folder.MariaDb}\"",
                 $"\"--datadir={m_folder.MariaDbData}\"");
@@ -236,21 +263,14 @@ namespace HordesOfAzeroth.Launcher
                 arguments.Add(database);
             arguments.Add("-e");
             arguments.Add("\"" + source + "\"");
-            return RunToEndAsync(Path.Combine(m_folder.MariaDb, "bin", "mariadb.exe"), m_folder.MariaDb, arguments.ToArray());
-        }
-
-        public async Task RemovePlayerGameMasterAsync()
-        {
-            if (m_folder.IsDevelopmentTree)
-                return;
-            await QueryAsync("realmd", "DELETE FROM account_access WHERE id IN (SELECT id FROM account WHERE username = 'PLAYER')");
+            return RunToEndAsync(MariaDbProgram("mariadb"), m_folder.MariaDb, arguments.ToArray());
         }
 
         public async Task<string> QueryAsync(string database, string sql)
         {
             List<string> arguments = DatabaseLogin.ToList();
             arguments.AddRange(new[] { "-N", "-B", database, "-e", "\"" + sql.Replace("\"", "\\\"") + "\"" });
-            return await RunToEndAsync(Path.Combine(m_folder.MariaDb, "bin", "mariadb.exe"), m_folder.MariaDb, arguments.ToArray());
+            return await RunToEndAsync(MariaDbProgram("mariadb"), m_folder.MariaDb, arguments.ToArray());
         }
 
         public Task BackUpAsync(string file, params string[] databases)
@@ -258,7 +278,7 @@ namespace HordesOfAzeroth.Launcher
             List<string> arguments = DatabaseLogin.ToList();
             arguments.AddRange(new[] { "--single-transaction", $"\"--result-file={file}\"", "--databases" });
             arguments.AddRange(databases);
-            return RunToEndAsync(Path.Combine(m_folder.MariaDb, "bin", "mariadb-dump.exe"), m_folder.MariaDb, arguments.ToArray());
+            return RunToEndAsync(MariaDbProgram("mariadb-dump"), m_folder.MariaDb, arguments.ToArray());
         }
 
         public async Task RunConsoleAsync(string command)
@@ -270,7 +290,10 @@ namespace HordesOfAzeroth.Launcher
             await Task.Delay(1500);
         }
 
-        async Task<string> RunToEndAsync(string exe, string workingDirectory, params string[] arguments)
+        Task<string> RunToEndAsync(string exe, string workingDirectory, params string[] arguments) =>
+            RunToEndAsync(exe, workingDirectory, Timeout.InfiniteTimeSpan, arguments);
+
+        async Task<string> RunToEndAsync(string exe, string workingDirectory, TimeSpan limit, params string[] arguments)
         {
             ProcessStartInfo info = new ProcessStartInfo(exe, string.Join(" ", arguments))
             {
@@ -284,19 +307,33 @@ namespace HordesOfAzeroth.Launcher
             {
                 Task<string> output = process.StandardOutput.ReadToEndAsync();
                 Task<string> error = process.StandardError.ReadToEndAsync();
+                Stopwatch clock = Stopwatch.StartNew();
                 while (!process.HasExited)
+                {
+                    if (limit != Timeout.InfiniteTimeSpan && clock.Elapsed > limit)
+                    {
+                        process.Kill();
+                        process.WaitForExit(5000);
+                        string stuck = $"{Path.GetFileName(exe)} did not finish within {limit.TotalMinutes:0} minutes";
+                        LogOutput(stuck, await error, await output);
+                        throw new InvalidOperationException($"{stuck}. Its output is in the launcher log.");
+                    }
                     await Task.Delay(100);
+                }
                 string text = await output;
                 string problem = await error;
                 if (process.ExitCode != 0)
                 {
                     string failure = $"{Path.GetFileName(exe)} failed (exit code 0x{process.ExitCode:X})";
-                    LauncherLog.Write(m_folder, $"{failure}{Environment.NewLine}stderr:{Environment.NewLine}{problem}{Environment.NewLine}stdout (end):{Environment.NewLine}{string.Join(Environment.NewLine, Lines(text).Reverse().Take(20).Reverse())}");
+                    LogOutput(failure, problem, text);
                     throw new InvalidOperationException($"{failure}: {Details(problem, text)}");
                 }
                 return text;
             }
         }
+
+        void LogOutput(string what, string problem, string text) =>
+            LauncherLog.Write(m_folder, $"{what}{Environment.NewLine}stderr:{Environment.NewLine}{problem}{Environment.NewLine}stdout (end):{Environment.NewLine}{string.Join(Environment.NewLine, Lines(text).Reverse().Take(20).Reverse())}");
 
         static string Details(string error, string output)
         {

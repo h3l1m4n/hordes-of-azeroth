@@ -152,6 +152,23 @@ local function Panel(frame)
     end
 end
 
+function UI.ShowClientSettings(page)
+    if not BenillaOptionsFrame or not BenillaOptionsFrame_SelectCategory then
+        return false
+    end
+    ShowUIPanel(BenillaOptionsFrame)
+    BenillaOptionsFrame_SelectCategory(page)
+    return true
+end
+
+local function VideoSettings()
+    PlaySound("igMainMenuOption")
+    Close()
+    if not UI.ShowClientSettings("Graphics") then
+        ShowUIPanel(OptionsFrame)
+    end
+end
+
 menuCard.resume = Button("Resume", 28, function()
     PlaySound("igMainMenuContinue")
     Close()
@@ -160,7 +177,7 @@ menuCard.endRun = Button("|cffff5a4aEnd Run|r", 22, function()
     PlaySound("igMainMenuOption")
     confirm:Show()
 end)
-menuCard.video = Button("Video", 22, Panel(OptionsFrame))
+menuCard.video = Button("Video", 22, VideoSettings)
 menuCard.sound = Button("Sound", 22, Panel(SoundOptionsFrame))
 menuCard.interface = Button("Interface", 22, Panel(UIOptionsFrame))
 menuCard.bindings = Button("Key Bindings", 22, function()
@@ -363,7 +380,7 @@ local function Refresh()
     if run.inRun then
         menu.title:SetText("Paused")
         local difficulty = run.difficulty ~= "" and ("  |cff9d9d9d·|r  |cff" .. (DIFFICULTY_COLORS[run.difficulty] or "ffffff") .. run.difficulty .. "|r") or ""
-        menu.subtitle:SetText("|cffffd100Stage " .. run.stage .. "|r" .. difficulty .. "  |cff9d9d9d·|r  |cffffffff" .. UI.FormatTime(run.elapsed) .. "|r")
+        menu.subtitle:SetText("|cffffd100" .. "Floor " .. run.stage .. "|r" .. difficulty .. "  |cff9d9d9d·|r  |cffffffff" .. UI.FormatTime(run.elapsed) .. "|r")
         levelRow.value:SetText(run.level or "-")
         killsRow.value:SetText(run.kills or 0)
         valorRow.value:SetText("|cffffe873" .. (run.valor or 0) .. "|r")
@@ -405,7 +422,7 @@ local function StillOpen()
             return true
         end
     end
-    for _, frame in ipairs({ OptionsFrame, SoundOptionsFrame, UIOptionsFrame, KeyBindingFrame }) do
+    for _, frame in ipairs({ OptionsFrame, SoundOptionsFrame, UIOptionsFrame, KeyBindingFrame, BenillaOptionsFrame }) do
         if frame and frame:IsShown() then
             return true
         end
@@ -467,6 +484,10 @@ function ToggleGameMenu(clicked)
             OptionsFrameCancel:Click()
             return
         end
+        if BenillaOptionsFrame and BenillaOptionsFrame:IsVisible() then
+            BenillaOptionsFrameCloseButton:Click()
+            return
+        end
         if CloseMenus() or SpellStopCasting() or SpellStopTargeting() or CloseAllWindows() then
             return
         end
@@ -492,6 +513,7 @@ handlers["start"] = function(f)
     run.inRun = true
     run.difficulty = f[3] or ""
     run.stage = tonumber(f[5] or "") or 1
+    run.floors = f[8] == "1"
     run.elapsed = 0
     run.level, run.kills, run.gold, run.valor, run.shards = nil, 0, 0, 0, 0
 end

@@ -109,13 +109,27 @@ end
 local function TintKind(plate)
     local color = not plate.vbFriendly and KIND_COLORS[plate.vbKind]
     if color then
-        plate.vbHealth:SetStatusBarColor(color[1], color[2], color[3])
+        local r, g, b = plate.vbHealth:GetStatusBarColor()
+        if abs(r - color[1]) + abs(g - color[2]) + abs(b - color[3]) > 0.01 then
+            plate.vbHealth:SetStatusBarColor(color[1], color[2], color[3])
+        end
         plate.vbTinted = true
     elseif plate.vbTinted then
         plate.vbTinted = nil
         local base = plate.vbFriendly and COLOR_FRIENDLY or COLOR_HOSTILE
         plate.vbHealth:SetStatusBarColor(base[1], base[2], base[3])
     end
+end
+
+local function KeepColor(plate)
+    local r, g, b = plate.vbHealth:GetStatusBarColor()
+    if plate.vbColorR == r and plate.vbColorG == g and plate.vbColorB == b and plate.vbColorKind == plate.vbKind then
+        return
+    end
+    Recolor(plate)
+    TintKind(plate)
+    plate.vbColorR, plate.vbColorG, plate.vbColorB = plate.vbHealth:GetStatusBarColor()
+    plate.vbColorKind = plate.vbKind
 end
 
 local function PlaceHealth(plate, lift)
@@ -413,6 +427,7 @@ local function Style(plate)
     plate:SetScript("OnShow", function()
         this.vbKind = nil
         this.vbFriendly = nil
+        this.vbColorR = nil
         this.vbLift, this.vbTargetLift, this.vbPlaced = 0, 0, nil
         stackSoon = true
         Refresh(this)
@@ -435,8 +450,7 @@ local function Style(plate)
             end
         end
         if this.vbHealth then
-            Recolor(this)
-            TintKind(this)
+            KeepColor(this)
         end
         this.vbTimer = this.vbTimer + arg1
         if this.vbTimer >= REFRESH then
@@ -454,6 +468,10 @@ local function Style(plate)
     plate:SetWidth(1)
     plate:SetHeight(1)
     plate.vbLift, plate.vbTargetLift, plate.vbShownLift = 0, 0, 0
+    if plate.vbPendingGuid then
+        plate.vbGuid, plate.vbUnit = plate.vbPendingGuid, plate.vbPendingUnit
+        plate.vbPendingGuid, plate.vbPendingUnit = nil, nil
+    end
     tinsert(stackPlates, plate)
     Refresh(plate)
 end
@@ -665,6 +683,9 @@ local function OnPlateUnit(token, guid)
         plate.vbUnit = guid and token
         plate.vbKind = nil
         Refresh(plate)
+    else
+        plate.vbPendingGuid = guid
+        plate.vbPendingUnit = guid and token
     end
 end
 

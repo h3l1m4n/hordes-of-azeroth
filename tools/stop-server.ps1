@@ -11,6 +11,13 @@ foreach ($name in 'mangosd', 'realmd') {
     }
 }
 
+$runArchive = Join-Path $PSScriptRoot 'run-archive.py'
+$python = Get-Command python -ErrorAction SilentlyContinue
+if ($python -and (Test-Path $runArchive)) {
+    & $python.Source $runArchive save
+    if ($LASTEXITCODE -ne 0) { Write-Host "Saving runs to data\runs failed with exit code $LASTEXITCODE" }
+}
+
 if (Test-DbUp) {
     Write-Host 'Stopping MariaDB...'
     & (Join-Path $MariaDir 'bin\mariadb-admin.exe') @DbRootArgs shutdown

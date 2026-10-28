@@ -3,10 +3,11 @@
   "productName": "Hordes of Azeroth",
   "minLauncherVersion": "0.1.0",
   "realmName": "Hordes of Azeroth",
-  "clientDlls": ["ClassicAPI.dll", "HordesOfAzerothClientFix.dll"],
+  "clientDlls": [],
   "thirdParty": [
     {
       "name": "MariaDB",
+      "os": "windows",
       "version": "11.4.13",
       "licence": "GPL-2.0",
       "url": "https://archive.mariadb.org/mariadb-11.4.13/winx64-packages/mariadb-11.4.13-winx64.zip",
@@ -14,37 +15,25 @@
       "install": { "unzipTo": "server/mariadb", "stripTopFolder": true }
     },
     {
-      "name": "VanillaFixes",
-      "version": "1.5.3",
-      "licence": "MIT",
-      "url": "https://github.com/hannesmann/vanillafixes/releases/download/v1.5.3/vanillafixes-1.5.3-dxvk.zip",
-      "install": { "unzipTo": ".", "stripTopFolder": false }
-    },
-    {
-      "name": "ClassicAPI",
-      "version": "1.15.16",
-      "licence": "GPL-3.0",
-      "url": "https://github.com/brues-code/ClassicAPI/releases/download/v1.15.16/ClassicAPI.dll",
-      "install": { "copyTo": "ClassicAPI.dll" }
+      "name": "MariaDB",
+      "os": "linux",
+      "version": "11.4.13",
+      "licence": "GPL-2.0",
+      "url": "https://archive.mariadb.org/mariadb-11.4.13/bintar-linux-systemd-x86_64/mariadb-11.4.13-linux-systemd-x86_64.tar.gz",
+      "install": { "unzipTo": "server/mariadb", "stripTopFolder": true }
     }
   ],
   "packages": [
-    { "name": "launcher", "build": "launcher", "changesWith": "tools/launcher/*.*", "files": [{ "from": "release/build/launcher/HoALauncher.exe", "to": "HoALauncher.exe" }] },
+    { "name": "launcher", "os": "windows", "build": "launcher", "changesWith": "tools/launcher/*.*", "files": [{ "from": "release/build/launcher/HoALauncher.exe", "to": "HoALauncher.exe" }] },
     { "name": "addon", "git": ["Interface/AddOns/HordesOfAzeroth"] },
     { "name": "glue", "git": ["Interface/GlueXML"] },
-    { "name": "client-fix", "files": [{ "from": "HordesOfAzerothClientFix.dll" }] },
-    { "name": "client-runtime", "build": "client-runtime", "files": [{ "from": "release/build/client-runtime/vcruntime140.dll", "to": "vcruntime140.dll" }] },
-    {
-      "name": "wow-turbo",
-      "files": [
-        { "from": "mods/wow_turbo/avx/wow_turbo.dll" },
-        { "from": "mods/wow_turbo/sse/wow_turbo.dll" },
-        { "from": "mods/wow_turbo/LICENSE" }
-      ]
-    },
-    { "name": "telegraphkit", "build": "telegraphkit", "changesWith": "tools/telegraphs/*.cs", "files": [{ "from": "release/build/TelegraphKit.exe", "to": "tools/TelegraphKit.exe" }] },
+    { "name": "launcher", "os": "linux", "build": "linux-launcher", "changesWith": "tools/launcher/*.*", "files": [{ "from": "release/build/linux/launcher/HoALauncher", "to": "HoALauncher" }] },
+    { "name": "client", "os": "windows", "build": "client", "files": [{ "from": "release/build/client/HordesOfAzeroth.exe", "to": "HordesOfAzeroth.exe" }, { "from": "release/build/client/CLIENT-LICENSES.md", "to": "CLIENT-LICENSES.md" }, { "from": "THIRD-PARTY-NOTICES.md" }] },
+    { "name": "client", "os": "linux", "build": "linux-client", "files": [{ "from": "release/build/linux/client/HordesOfAzeroth", "to": "HordesOfAzeroth.x86_64" }, { "from": "release/build/client/CLIENT-LICENSES.md", "to": "CLIENT-LICENSES.md" }, { "from": "THIRD-PARTY-NOTICES.md" }] },
+    { "name": "telegraphkit", "os": "windows", "build": "telegraphkit", "changesWith": "tools/telegraphs/*.cs", "files": [{ "from": "release/build/TelegraphKit.exe", "to": "tools/TelegraphKit.exe" }] },
     {
       "name": "server",
+      "os": "windows",
       "build": "server",
       "files": [
         { "from": "release/build/server-install/mangosd.exe", "to": "server/run/mangosd.exe" },
@@ -60,12 +49,38 @@
     },
     {
       "name": "extractors",
+      "os": "windows",
       "build": "server",
       "files": [
         { "from": "release/build/server-install/Extractors/*.exe", "to": "server/run/Extractors" },
         { "from": "release/build/server-install/Extractors/*.dll", "to": "server/run/Extractors" },
         { "from": "release/build/server-install/Extractors/config.json", "to": "server/run/Extractors/config.json" },
         { "from": "release/build/server-install/Extractors/offmesh.txt", "to": "server/run/Extractors/offmesh.txt" }
+      ]
+    },
+    {
+      "name": "server",
+      "os": "linux",
+      "build": "linux-server",
+      "files": [
+        { "from": "release/build/linux/server/bin/mangosd", "to": "server/run/mangosd" },
+        { "from": "release/build/linux/server/bin/realmd", "to": "server/run/realmd" },
+        { "from": "release/build/linux/server/bin/libmariadb.so.3", "to": "server/run/libmariadb.so.3" },
+        { "from": "release/build/linux/server/etc/mangosd.conf.dist", "to": "server/run/mangosd.conf.dist" },
+        { "from": "release/build/linux/server/etc/realmd.conf.dist", "to": "server/run/realmd.conf.dist" }
+      ]
+    },
+    {
+      "name": "extractors",
+      "os": "linux",
+      "build": "linux-server",
+      "files": [
+        { "from": "release/build/linux/server/bin/Extractors/MapExtractor", "to": "server/run/Extractors/MapExtractor" },
+        { "from": "release/build/linux/server/bin/Extractors/VMapExtractor", "to": "server/run/Extractors/VMapExtractor" },
+        { "from": "release/build/linux/server/bin/Extractors/VMapAssembler", "to": "server/run/Extractors/VMapAssembler" },
+        { "from": "release/build/linux/server/bin/Extractors/MoveMapGenerator", "to": "server/run/Extractors/MoveMapGenerator" },
+        { "from": "release/build/linux/server/bin/Extractors/config.json", "to": "server/run/Extractors/config.json" },
+        { "from": "release/build/linux/server/bin/Extractors/offmesh.txt", "to": "server/run/Extractors/offmesh.txt" }
       ]
     },
     {
@@ -76,7 +91,6 @@
         { "from": "config/mariadb.ini" },
         { "from": "config/create-databases.sql" },
         { "from": "config/navtiles.json" },
-        { "from": "config/client-patches.json" },
         { "from": "release/build/VERSION", "to": "VERSION" }
       ]
     },

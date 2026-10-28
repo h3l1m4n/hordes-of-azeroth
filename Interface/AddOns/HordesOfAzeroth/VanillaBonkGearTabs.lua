@@ -1,63 +1,3 @@
-local UI = VanillaBonkUI
-
-local TABS_LEFT, TABS_TOP = 70, -40
-
-local gear = { current = nil, tabs = {} }
-local buttons = {}
-local RefreshTabs
-
-local function Command(text)
-    SendChatMessage(".bonk gear " .. text, "SAY")
-end
-
-local function TabButton(index)
-    if buttons[index] then
-        return buttons[index]
-    end
-    local tab = CreateFrame("Button", "VanillaBonkGearTab" .. index, MerchantFrame, "TabButtonTemplate")
-    tab:SetScript("OnClick", function()
-        if this.group == gear.current then
-            return
-        end
-        PlaySound("igCharacterInfoTab")
-        gear.current = this.group
-        MerchantFrame.page = 1
-        Command("tab " .. this.group)
-        RefreshTabs()
-    end)
-    buttons[index] = tab
-    return tab
-end
-
-RefreshTabs = function()
-    for _, tab in ipairs(buttons) do
-        tab:Hide()
-    end
-    if not MerchantFrame:IsShown() or MerchantFrame.selectedTab ~= 1 or table.getn(gear.tabs) < 2 then
-        return
-    end
-    local previous
-    for index, entry in ipairs(gear.tabs) do
-        local tab = TabButton(index)
-        tab.group = entry.group
-        tab:SetText(entry.name)
-        PanelTemplates_TabResize(0, tab)
-        tab:ClearAllPoints()
-        if previous then
-            tab:SetPoint("LEFT", previous, "RIGHT", 0, 0)
-        else
-            tab:SetPoint("TOPLEFT", MerchantFrame, "TOPLEFT", TABS_LEFT, TABS_TOP)
-        end
-        if entry.group == gear.current then
-            PanelTemplates_SelectTab(tab)
-        else
-            PanelTemplates_DeselectTab(tab)
-        end
-        tab:Show()
-        previous = tab
-    end
-end
-
 local MERCHANT_SLOTS = 10
 local SLOT_SIZE = 37
 
@@ -118,47 +58,17 @@ end
 local BaseMerchantUpdate = MerchantFrame_Update
 function MerchantFrame_Update()
     BaseMerchantUpdate()
-    RefreshTabs()
     RefreshQualities()
 end
 
 local events = CreateFrame("Frame")
 events:RegisterEvent("MERCHANT_SHOW")
-events:RegisterEvent("MERCHANT_CLOSED")
 events:RegisterEvent("PLAYER_MONEY")
 local lastMoney = GetMoney()
 events:SetScript("OnEvent", function()
-    if event == "PLAYER_MONEY" then
-        local money = GetMoney()
-        if money > lastMoney and MerchantFrame:IsShown() then
-            PlaySound("LOOTWINDOWCOINSOUND")
-        end
-        lastMoney = money
-        return
+    local money = GetMoney()
+    if event == "PLAYER_MONEY" and money > lastMoney and (MerchantFrame:IsShown() or VanillaBonkQuartermasterFrame:IsShown()) then
+        PlaySound("LOOTWINDOWCOINSOUND")
     end
-    lastMoney = GetMoney()
-    if event == "MERCHANT_SHOW" then
-        if not gear.fresh then
-            gear.current = nil
-            gear.tabs = {}
-        end
-        gear.fresh = nil
-    end
-    RefreshTabs()
+    lastMoney = money
 end)
-
-local handlers = {}
-
-handlers["geartabs"] = function(f)
-    gear.fresh = true
-    gear.current = f[2]
-    gear.tabs = {}
-    local index = 3
-    while f[index] and f[index + 1] do
-        tinsert(gear.tabs, { group = f[index], name = f[index + 1] })
-        index = index + 2
-    end
-    RefreshTabs()
-end
-
-UI.Listen(handlers)

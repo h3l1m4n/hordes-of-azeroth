@@ -31,7 +31,7 @@ BONK_CLASS_INFO = {
 		},
 		specs = {
 			{ name = "Holy", icon = "Interface\\Icons\\Spell_Holy_HolyBolt", text = "Holy strikes from afar: Exorcism, falling hammers and light that heals with every strike.", spells = {
-				{ name = "Exorcism", icon = "Interface\\Icons\\Spell_Holy_Excorcism_02", line = "Heavy Holy strike on the strongest enemy", tip = "Strikes the strongest enemy within 30 yards for heavy Holy damage. Undead and Demons take triple damage, elites and bosses double. Another Paladin spell's critical strike makes it strike at once, at most once a sec." },
+				{ name = "Exorcism", icon = "Interface\\Icons\\Spell_Holy_Excorcism_02", line = "Heavy Holy strike on the strongest enemy", tip = "Strikes the strongest enemy within 30 yards for heavy Holy damage. Undead and Demons take triple damage, elites and bosses double. Critical strikes from your other Paladin spells reset its cooldown, at most once a sec." },
 				{ name = "Seal of Light", icon = "Interface\\Icons\\Spell_Holy_HealingAura", line = "Your strikes heal you", tip = "Every strike from your other Paladin spells heals you for 0.5% of your maximum health, at most 6 times a sec." },
 				{ name = "Light's Hammer", icon = "Interface\\Icons\\Spell_Holy_FistOfJustice", line = "Hammers of light fall on the pack", tip = "Hammers of light fall on 3 random enemies within 25 yards, each dealing Holy damage to every enemy within 5 yards." },
 			} },
@@ -58,13 +58,13 @@ BONK_CLASS_INFO = {
 		},
 		specs = {
 			{ name = "Beast Mastery", icon = "Interface\\Icons\\Ability_Hunter_BeastTaming", text = "Pets do the fighting: your cat bleeds the pack and the spirit wolf leads it.", spells = {
-				{ name = "Call Pet", icon = "Interface\\Icons\\Ability_Hunter_BeastCall", line = "Your cat fights for you", tip = "Summons your cat to fight for you. Its Claw applies Bleed." },
+				{ name = "Call Pet", icon = "Interface\\Icons\\Ability_Hunter_BeastCall", line = "Your cat fights for you", tip = "Summons your cat to fight for you. Its Claw applies Bleed, and its Swipe hits every enemy in front of it." },
 				{ name = "Pack Leader", icon = "Interface\\Icons\\Spell_Nature_SpiritWolf", line = "A spirit wolf that empowers your pets", tip = "A spirit wolf fights for you, biting for damage. Every 15 sec it howls, and your other pets deal double damage to all enemies in front for 6 sec." },
 			} },
 			{ name = "Marksmanship", icon = "Interface\\Icons\\Ability_Marksmanship", text = "Shots, volleys and piercing arrows, with Hunter's Mark on the biggest group.", spells = {
 				{ name = "Arcane Shot", icon = "Interface\\Icons\\Ability_ImpalingBolt", line = "Shoots the nearest enemy", tip = "Shoots the nearest enemy for Arcane damage." },
-				{ name = "Multi-Shot", icon = "Interface\\Icons\\Ability_UpgradeMoonGlaive", line = "3 arrows in a cone", tip = "Fires 3 arrows in a cone in front of you, dealing damage." },
-				{ name = "Volley", icon = "Interface\\Icons\\Ability_Marksmanship", line = "Rains arrows on the largest group", tip = "Rains arrows on the largest group of enemies for 3 sec, dealing damage, 5% more for each different debuff on the target." },
+				{ name = "Multi-Shot", icon = "Interface\\Icons\\Ability_UpgradeMoonGlaive", line = "6 arrows in a cone", tip = "Fires 6 arrows in a cone in front of you, dealing damage." },
+				{ name = "Volley", icon = "Interface\\Icons\\Ability_Marksmanship", line = "Rains arrows on the largest group", tip = "Rains arrows on the largest group of enemies for 4 sec, dealing damage, 5% more for each different debuff on the target." },
 				{ name = "Aimed Shot", icon = "Interface\\Icons\\INV_Spear_07", line = "A shot that pierces a whole line", tip = "Fires a shot that pierces every enemy in a line, dealing damage. Aims at the Marked group, or else the largest group." },
 				{ name = "Hunter's Mark", icon = "Interface\\Icons\\Ability_Hunter_SniperShot", line = "Marked enemies take more damage", tip = "Marks every enemy within 10 yards of the largest group for 8 sec. Marked enemies take 15% more damage." },
 			} },
@@ -103,7 +103,7 @@ BONK_CLASS_INFO = {
 	},
 	PRIEST = {
 		blurb = "Healing that overflows into damage, a ring of light that hits far, and Decay that spreads from mind to mind.",
-		starter = { name = "Smite", icon = "Interface\\Icons\\Spell_Holy_HolySmite", line = "Smites the 2 nearest enemies", tip = "Smites the 2 nearest enemies for Holy damage. Each Smite takes 1 sec off Holy Word: Chastise." },
+		starter = { name = "Smite", icon = "Interface\\Icons\\Spell_Holy_HolySmite", line = "Smites the 2 nearest enemies", tip = "Smites the 2 nearest enemies for Holy damage. Each Smite reduces the cooldown of Holy Word: Chastise by 1 sec." },
 		shared = {
 		},
 		specs = {
@@ -114,10 +114,10 @@ BONK_CLASS_INFO = {
 				{ name = "Shackle", icon = "Interface\\Icons\\Spell_Nature_Slow", line = "Binds the strongest enemy", tip = "Binds the strongest enemy nearby, elites first, for 2 sec. It takes Holy damage when bound and every sec while bound. Bosses and mini-bosses cannot be bound but still take the first hit." },
 			} },
 			{ name = "Holy", icon = "Interface\\Icons\\Spell_Holy_PrayerOfHealing02", text = "Heals that overflow into damage, and Holy Word strikes the strongest enemy.", spells = {
-				{ name = "Smite", icon = "Interface\\Icons\\Spell_Holy_HolySmite", line = "Smites the 2 nearest enemies", tip = "Smites the 2 nearest enemies for Holy damage. Each Smite takes 1 sec off Holy Word: Chastise." },
-				{ name = "Renew", icon = "Interface\\Icons\\Spell_Holy_Renew", line = "Heals you, then smites at full health", tip = "Heals you for 1% of your maximum health every sec. At full health, each tick smites the nearest enemy within 30 yards for Holy damage instead." },
-				{ name = "Halo", icon = "Interface\\Icons\\Spell_Holy_PrayerOfHealing02", line = "A ring of light that heals you", tip = "A ring of light hits every enemy within 16 yards of you for Holy damage and heals you for 0.5% of your maximum health per enemy hit, up to 2%." },
-				{ name = "Holy Word: Chastise", icon = "Interface\\Icons\\Spell_Holy_Excorcism_02", line = "Heavy Holy strike on the strongest enemy", tip = "The Light strikes the strongest enemy nearby, elites first, for heavy Holy damage. Each Smite or Halo cast takes 1 sec off its cooldown." },
+				{ name = "Smite", icon = "Interface\\Icons\\Spell_Holy_HolySmite", line = "Smites the 2 nearest enemies", tip = "Smites the 2 nearest enemies for Holy damage. Each Smite reduces the cooldown of Holy Word: Chastise by 1 sec." },
+				{ name = "Renew", icon = "Interface\\Icons\\Spell_Holy_Renew", line = "Heals you, then smites at full health", tip = "Heals you for 1% of your maximum health every sec. At full health, it smites the nearest enemy within 30 yards for Holy damage instead." },
+				{ name = "Halo", icon = "Interface\\Icons\\Spell_Holy_PrayerOfHealing02", line = "A ring of light that heals you", tip = "A ring of light hits every enemy within 12 yards of you for Holy damage and heals you for 0.5% of your maximum health per enemy hit, up to 2%." },
+				{ name = "Holy Word: Chastise", icon = "Interface\\Icons\\Spell_Holy_Excorcism_02", line = "Heavy Holy strike on the strongest enemy", tip = "The Light strikes the strongest enemy nearby, elites first, for heavy Holy damage. Each Smite or Halo reduces its cooldown by 1 sec." },
 			} },
 			{ name = "Shadow", icon = "Interface\\Icons\\Spell_Shadow_ShadowWordPain", text = "Plant Decay on the far edge of the horde and spread it from mind to mind.", spells = {
 				{ name = "Shadow Word: Pain", icon = "Interface\\Icons\\Spell_Shadow_ShadowWordPain", line = "Plants Decay on far enemies", tip = "Afflicts the 3 enemies farthest from you within 35 yards with 6 stacks of Decay." },
@@ -147,7 +147,7 @@ BONK_CLASS_INFO = {
 				{ name = "Feral Spirit", icon = "Interface\\Icons\\Spell_Nature_SpiritWolf", line = "2 spirit wolves fight for you", tip = "Summons 2 spirit wolves whose bites apply Static." },
 			} },
 			{ name = "Totemic", icon = "Interface\\Icons\\Spell_Nature_MagicImmunity", text = "Totems at your feet burn the pack and heal you while you hold the ground.", spells = {
-				{ name = "Searing Totem", icon = "Interface\\Icons\\Spell_Fire_SearingTotem", line = "A totem that hurls fire", tip = "Plants a Searing Totem at your feet that hurls fire at an enemy within 20 yards, applying Burning. It is replanted when you move away." },
+				{ name = "Searing Totem", icon = "Interface\\Icons\\Spell_Fire_SearingTotem", line = "A totem that hurls fire", tip = "Plants a Searing Totem at your feet that hurls fire at 2 enemies within 20 yards, applying Burning. It is replanted when you move away." },
 				{ name = "Magma Totem", icon = "Interface\\Icons\\Spell_Fire_SelfDestruct", line = "A totem that pulses fire around you", tip = "Plants a Magma Totem at your feet that pulses fire every 2 sec, dealing Fire damage and 1 stack of Burning to enemies within 8 yards." },
 				{ name = "Healing Stream Totem", icon = "Interface\\Icons\\INV_Spear_04", line = "A totem that heals you", tip = "Plants a Healing Stream Totem at your feet that heals you for 1% of your maximum health every sec while you stay within 15 yards." },
 			} },
@@ -161,7 +161,7 @@ BONK_CLASS_INFO = {
 		},
 		specs = {
 			{ name = "Arcane", icon = "Interface\\Icons\\Spell_Holy_MagicalSentry", text = "Blink through the horde. Every Blink sets off Arcane Explosion and Missiles.", spells = {
-				{ name = "Blink", icon = "Interface\\Icons\\Spell_Arcane_Blink", line = "Your dash teleports and explodes", tip = "Your dash becomes Blink, teleporting you, with 1 more charge and 30% faster recharge. Each Blink sets off an Arcane Explosion where you leave, dealing Arcane damage to enemies within 10 yards. Takes a spell slot." },
+				{ name = "Blink", icon = "Interface\\Icons\\Spell_Arcane_Blink", line = "Your dash teleports and explodes", tip = "Your dash becomes Blink, teleporting you, with 1 additional charge and a 30% shorter cooldown. Each Blink sets off an Arcane Explosion where you leave, dealing Arcane damage to enemies within 10 yards. Takes a spell slot." },
 				{ name = "Arcane Explosion", icon = "Interface\\Icons\\Spell_Nature_WispSplode", line = "Arcane blast around you", tip = "Blasts all enemies within 10 yards of you with arcane energy, dealing Arcane damage. Also goes off where you land after each Blink." },
 				{ name = "Arcane Missiles", icon = "Interface\\Icons\\Spell_Nature_StarFall", line = "5 missiles at the nearest enemy", tip = "Launches 5 Arcane Missiles at the nearest enemy over 1 sec, each dealing Arcane damage. After each Blink, it fires all 5 at once." },
 			} },
@@ -193,7 +193,7 @@ BONK_CLASS_INFO = {
 				{ name = "Imp", icon = "Interface\\Icons\\Spell_Shadow_SummonImp", line = "An Imp that hurls fire", tip = "Summons an Imp that hurls 2 Firebolts at a time at enemies within 30 yards, leaving them burning." },
 				{ name = "Voidwalker", icon = "Interface\\Icons\\Spell_Shadow_SummonVoidWalker", line = "A Voidwalker that bursts in a void nova", tip = "Summons a Voidwalker that consumes enemies dying near it. After 8 it bursts in a void nova that hits every enemy around it." },
 				{ name = "Succubus", icon = "Interface\\Icons\\Spell_Shadow_SummonSuccubus", line = "A Succubus that lashes a wide arc", tip = "Summons a Succubus whose Lash of Pain strikes all enemies in a wide arc in front of her and applies Shadow Vulnerability." },
-				{ name = "Felhunter", icon = "Interface\\Icons\\Spell_Shadow_SummonFelHunter", line = "A Felhunter that bites afflicted enemies", tip = "Summons a Felhunter whose Shadow Bite deals 10% more damage per affliction on the target and interrupts spells. Every 10 sec it removes a harmful effect from you." },
+				{ name = "Felhunter", icon = "Interface\\Icons\\Spell_Shadow_SummonFelHunter", line = "A Felhunter that bites afflicted enemies", tip = "Summons a Felhunter whose Shadow Bite deals 10% more damage per affliction on the target and interrupts spells, and whose Shadow Cleave hits every enemy in front of it. Every 10 sec it removes a harmful effect from you." },
 			} },
 			{ name = "Destruction", icon = "Interface\\Icons\\Spell_Shadow_RainOfFire", text = "Fel fire: Shadow Bolt, Immolate, Hellfire and Rain of Fire on the pack.", spells = {
 				{ name = "Shadow Bolt", icon = "Interface\\Icons\\Spell_Shadow_ShadowBolt", line = "Kills fire more Shadow Bolts", tip = "Fires a Shadow Bolt at the nearest enemy, dealing damage. Nightfall: enemies that die with your afflictions on them fire a free bolt, at most 1 a sec." },
@@ -205,27 +205,27 @@ BONK_CLASS_INFO = {
 	},
 	DRUID = {
 		blurb = "A shapeshifter that changes between Moonkin, Cat, Bear and Tree of Life. Every spell works in every form, and the right form makes it 30% stronger.",
-		starter = { name = "Shapeshift", icon = "Interface\\Icons\\Ability_Druid_CatForm", line = "Press 'R' to change form", tip = "Shapeshift (R) shifts you into your next form. Each form attacks on its own; Druid spells deal and heal 30% more in their own form.|n|n|cffffffffMoonkin Form:|r Hurls Wrath at the nearest enemy, splashing 45% on enemies within 5 yards. Every 3 sec, Starfall strikes 3 different enemies with Moonfire.|n|n|cffffffffCat Form:|r Claws the nearest enemy, splashing 40% on enemies within 5 yards, and applies 1 stack of Bleed. You move 15% faster, and your critical strikes apply 1 stack of Bleed.|n|n|cffffffffBear Form:|r Mauls the nearest enemy, splashing 10% on enemies within 5 yards. You take 35% less damage, and your spells of other forms deal 20% less. Swipe deals 8% more per enemy within 8 yards, up to 64%. Every 6 sec, a roar Dazes enemies within 10 yards; they deal 25% less damage for 4 sec.|n|n|cffffffffTree of Life:|r Vines lash 3 enemies, splashing 20% on enemies within 5 yards, and each hit heals you 0.3% of your maximum health. Calls 1 additional Treant, and Rejuvenation blooms 50% faster." },
+		starter = { name = "Shapeshift", icon = "Interface\\Icons\\Ability_Druid_CatForm", line = "Press 'R' to change form", tip = "Press R to shift into your next form. Druid spells deal and heal 30% more in their form.|n|n|cffffffffMoonkin Form:|r Wrath strikes the nearest enemy for Nature damage, splashing nearby enemies. Every 3 sec, Starfall strikes 3 enemies afflicted by Moonfire.|n|n|cffffffffCat Form:|r Claws the nearest enemy for Physical damage and causes Bleed. Movement speed increased by 15%. Critical strikes cause Bleed.|n|n|cffffffffBear Form:|r Mauls the nearest enemy for Physical damage. Damage taken reduced by 35%, but spells of other forms deal 20% less. Swipe deals 8% more per nearby enemy. Every 6 sec, roars to Daze nearby enemies and reduce their damage by 25%.|n|n|cffffffffTree of Life:|r Vines lash 3 enemies for Nature damage, each hit healing you for 0.3% of your maximum health. Calls 1 additional Treant. Rejuvenation blooms 50% faster." },
 		shared = {
 		},
 		specs = {
 			{ name = "Balance", icon = "Interface\\Icons\\Spell_Nature_StarFall", text = "Moonkin form. Starlight on the strongest enemy, Moonfire on the pack and storms on the crowd.", spells = {
-				{ name = "Starfire", icon = "Interface\\Icons\\Spell_Arcane_StarFire", line = "Starlight on the strongest enemy", tip = "Calls down starlight on the strongest enemy within 30 yards for heavy Arcane damage. Empowered in Moonkin Form." },
-				{ name = "Moonfire", icon = "Interface\\Icons\\Spell_Nature_StarFall", line = "Moonfire on the nearest enemies", tip = "Burns the 2 nearest enemies with moonlight for Arcane damage and 1 stack of Moonfire, choosing enemies without Moonfire first. Empowered in Moonkin Form." },
-				{ name = "Hurricane", icon = "Interface\\Icons\\Spell_Nature_Cyclone", line = "A storm on the largest group", tip = "A storm rages over the largest group of enemies for 4 sec, dealing Nature damage every sec to enemies within 8 yards and leaving them Dazed. Empowered in Moonkin Form." },
+				{ name = "Starfire", icon = "Interface\\Icons\\Spell_Arcane_StarFire", line = "Starlight on the strongest enemy", tip = "Calls down starlight on the strongest enemy for heavy Arcane damage. Empowered in Moonkin Form." },
+				{ name = "Moonfire", icon = "Interface\\Icons\\Spell_Nature_StarFall", line = "Moonfire on the nearest enemies", tip = "Burns the 2 nearest enemies for Arcane damage and applies 1 stack of Moonfire. Empowered in Moonkin Form." },
+				{ name = "Hurricane", icon = "Interface\\Icons\\Spell_Nature_Cyclone", line = "A storm on the largest group", tip = "A storm rages over the largest group of enemies for 4 sec, dealing Nature damage every sec and Dazing them. Empowered in Moonkin Form." },
 			} },
 			{ name = "Feral", icon = "Interface\\Icons\\Ability_Racial_BearForm", text = "Cat and Bear form. Bleed the pack, Shred the deepest bleeder, and shift to Bear when you are hurt.", spells = {
-				{ name = "Rake", icon = "Interface\\Icons\\Ability_Druid_Disembowel", line = "Makes the 3 nearest enemies Bleed", tip = "Rakes the 3 nearest enemies within 10 yards for damage and 2 stacks of Bleed. Empowered in Cat Form." },
-				{ name = "Shred", icon = "Interface\\Icons\\Spell_Shadow_VampiricAura", line = "Strikes the enemy with the most Bleed stacks", tip = "Shreds the enemy within 10 yards with the most stacks of Bleed for damage, 3% more per stack of Bleed on it, up to 30 stacks. Empowered in Cat Form." },
-				{ name = "Swipe", icon = "Interface\\Icons\\INV_Misc_MonsterClaw_03", line = "Hits every enemy within 10 yards", tip = "Swipes every enemy within 10 yards for damage. Empowered in Bear Form." },
-				{ name = "Frenzied Regeneration", icon = "Interface\\Icons\\Ability_BullRush", line = "Heals you for each enemy close by", tip = "Heals you for 0.25% of your maximum health per enemy within 8 yards, up to 5 enemies. Empowered in Bear Form." },
+				{ name = "Rake", icon = "Interface\\Icons\\Ability_Druid_Disembowel", line = "Makes the 3 nearest enemies Bleed", tip = "Rakes the 3 nearest enemies for damage and 2 stacks of Bleed. Empowered in Cat Form." },
+				{ name = "Shred", icon = "Interface\\Icons\\Spell_Shadow_VampiricAura", line = "Strikes the enemy with the most Bleed stacks", tip = "Shreds the most Bleeding enemy for damage, increased by 3% per stack of Bleed on it. Empowered in Cat Form." },
+				{ name = "Swipe", icon = "Interface\\Icons\\INV_Misc_MonsterClaw_03", line = "Hits every enemy within 10 yards", tip = "Swipes all nearby enemies for damage. Empowered in Bear Form." },
+				{ name = "Frenzied Regeneration", icon = "Interface\\Icons\\Ability_BullRush", line = "Heals you for each enemy close by", tip = "Every sec, heals you for 0.25% of your maximum health per nearby enemy, up to 5. Empowered in Bear Form." },
 			} },
 			{ name = "Restoration", icon = "Interface\\Icons\\Spell_Nature_HealingTouch", text = "Tree of Life. Heals that hurt, while Treants and roots hold the crowd.", spells = {
-				{ name = "Rejuvenation", icon = "Interface\\Icons\\Spell_Nature_Rejuvenation", line = "Heals you and lashes nearby enemies", tip = "Heals you for 0.3% of your maximum health, and its thorny bloom lashes the 3 nearest enemies within 10 yards for Nature damage. Empowered in Tree of Life." },
-				{ name = "Force of Nature", icon = "Interface\\Icons\\Spell_Nature_NatureTouchGrow", line = "2 Treants fight at your side", tip = "Summons 2 Treants that fight at your side. Their swings apply 1 stack of Moonfire, and every 6 sec a Treant's strike roots its target and normal enemies within 5 yards for 2 sec. Empowered in Tree of Life, which also calls 1 additional Treant." },
-				{ name = "Entangling Roots", icon = "Interface\\Icons\\Spell_Nature_StrangleVines", line = "Roots the 3 nearest enemies", tip = "Roots grasp the 3 nearest enemies within 25 yards for Nature damage and root normal enemies for 2 sec. Empowered in Tree of Life." },
-				{ name = "Tranquility", icon = "Interface\\Icons\\Spell_Nature_Tranquility", line = "Pulses that hurt enemies and heal you", tip = "Calms the air around you for 4 sec. Every sec, deals Nature damage to every enemy within 10 yards and heals you for 0.5% of your maximum health. Empowered in Tree of Life." },
-				{ name = "Thorns", icon = "Interface\\Icons\\Spell_Nature_Thorns", line = "Enemies that strike you take damage", tip = "Enemies that strike you take Nature damage, at most 5 times a sec. Empowered in Bear Form." },
+				{ name = "Rejuvenation", icon = "Interface\\Icons\\Spell_Nature_Rejuvenation", line = "Heals you and lashes nearby enemies", tip = "Heals you for 0.3% of your maximum health. Its thorny bloom lashes the 3 nearest enemies for Nature damage. Empowered in Tree of Life." },
+				{ name = "Force of Nature", icon = "Interface\\Icons\\Spell_Nature_NatureTouchGrow", line = "2 Treants fight at your side", tip = "Summons 2 Treants. Their attacks apply Moonfire, and every 6 sec they root their target and nearby enemies for 2 sec. Empowered in Tree of Life, which calls 1 additional Treant." },
+				{ name = "Entangling Roots", icon = "Interface\\Icons\\Spell_Nature_StrangleVines", line = "Roots the 3 nearest enemies", tip = "Roots grasp the 3 nearest enemies for Nature damage and root them for 2 sec. Empowered in Tree of Life." },
+				{ name = "Tranquility", icon = "Interface\\Icons\\Spell_Nature_Tranquility", line = "Pulses that hurt enemies and heal you", tip = "Calms the air for 4 sec. Every sec, deals Nature damage to nearby enemies and heals you for 0.5% of your maximum health. Empowered in Tree of Life." },
+				{ name = "Thorns", icon = "Interface\\Icons\\Spell_Nature_Thorns", line = "Enemies that strike you take damage", tip = "Enemies that strike you take Nature damage. Empowered in Bear Form." },
 			} },
 		},
 	},

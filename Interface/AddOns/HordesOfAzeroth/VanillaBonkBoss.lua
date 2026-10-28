@@ -14,7 +14,7 @@ local GOLD_BORDER = "Interface\\DialogFrame\\UI-DialogBox-Gold-Border"
 local STONE_BORDER = "Interface\\DialogFrame\\UI-DialogBox-Border"
 
 local LOOKS = {
-    boss = { fill = { 0.78, 0.12, 0.12 }, name = { 1, 0.82, 0 }, tag = "|cffff4b4bSTAGE BOSS|r", kind = "Stage boss", border = GOLD_BORDER, edge = { 1, 1, 1 } },
+    boss = { fill = { 0.78, 0.12, 0.12 }, name = { 1, 0.82, 0 }, tag = "|cffff4b4bFLOOR BOSS|r", kind = "Floor boss", border = GOLD_BORDER, edge = { 1, 1, 1 } },
     mini = { fill = { 0.9, 0.48, 0.1 }, name = { 1, 1, 1 }, tag = "|cffffa040MINI-BOSS|r", kind = "Mini-boss", border = STONE_BORDER, edge = { 0.85, 0.85, 0.85 } },
 }
 

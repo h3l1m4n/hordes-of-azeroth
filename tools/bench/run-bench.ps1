@@ -14,6 +14,8 @@ param(
     [int]$Rank = 0,
     [string[]]$Passives = @(),
     [int[]]$Glyphs = @(),
+    [int[]]$Items = @(),
+    [int]$Training = 0,
     [string[]]$Cards = @(),
     [string[]]$Talents = @(),
     [switch]$Mortal,
@@ -22,7 +24,8 @@ param(
     [int]$Minute = 5,
     [int]$Level = 20,
     [string]$Tag = '',
-    [int]$DummyCount = 10
+    [int]$DummyCount = 10,
+    [switch]$Benilla
 )
 . "$PSScriptRoot\..\common.ps1"
 $Builds = @($Builds | ForEach-Object { $_ -split ',' } | Where-Object { $_ })
@@ -43,9 +46,11 @@ $VitalsSeconds = 2
 
 $mariadb = Join-Path $MariaDir 'bin\mariadb.exe'
 $addonSource = Join-Path $PSScriptRoot 'BenchTest'
-$addonTarget = Join-Path $RepoRoot 'Interface\AddOns\BenchTest'
+$benillaRoot = Join-Path (Split-Path -Parent $RepoRoot) 'WoW Vanilla-benilla'
+$benillaClient = Join-Path $benillaRoot 'client'
+$addonTarget = if ($Benilla) { Join-Path $benillaClient 'benilla-config\AddOns\BenchTest' } else { Join-Path $RepoRoot 'Interface\AddOns\BenchTest' }
 $statsFile = Join-Path $RepoRoot 'Interface\GlueXML\BonkStats.lua'
-$chatLog = Join-Path $RepoRoot 'Logs\WoWChatLog.txt'
+$chatLog = if ($Benilla) { Join-Path $benillaClient 'benilla-config\Logs\WoWChatLog.txt' } else { Join-Path $RepoRoot 'Logs\WoWChatLog.txt' }
 $realmLog = Join-Path $LogDir 'Realmd.log'
 $manifestFile = Join-Path $env:TEMP "bench-$Class.json"
 
@@ -133,7 +138,7 @@ $DruidForms = @{ balance = 1; feral = 2; bear = 3; resto = 4; ssmoon = 1; sscat 
 $DruidCycles = @{ ssdance = 3000; ssurge = 3000; sspirit = 3000; hybrid2 = 3000; hybrid3 = 3000 }
 
 function Write-AddonBuilds([object[]]$BuildList, [hashtable]$Spells) {
-    $setupSteps = @('bench', "level $Level", 'quiet', "minute $Minute") + @(if ($Tier) { "tier $Tier $Stage" }) + @($Passives | ForEach-Object { "passive $($_ -replace ':', ' ')" }) + @($Glyphs | ForEach-Object { "glyph $_" }) + @($Cards | ForEach-Object { "card $($_ -replace ':', ' ')" }) + @($Talents | ForEach-Object { "talent $($_ -replace ':', ' ')" })
+    $setupSteps = @('bench', "level $Level", 'quiet', "minute $Minute") + @(if ($Tier) { "tier $Tier $Stage" }) + @($Passives | ForEach-Object { "passive $($_ -replace ':', ' ')" }) + @($Glyphs | ForEach-Object { "glyph $_" }) + @($Cards | ForEach-Object { "card $($_ -replace ':', ' ')" }) + @($Talents | ForEach-Object { "talent $($_ -replace ':', ' ')" }) + @(if ($Training) { "training $Training" }) + @($Items | ForEach-Object { "item $_" })
     if ($Dummies) { $setupSteps += 'deep' }
     if ($Crowd) { $setupSteps += 'unkillable' }
     $setup = ($setupSteps | ForEach-Object { '"' + $_ + '"' }) -join ', '
@@ -227,6 +232,28 @@ function Wait-BenchDone([System.Diagnostics.Process]$Game, [long]$ChatStart, [in
     }
 }
 
+function Enter-BenillaWorld([string]$HeroName) {
+    $realmStart = if (Test-Path $realmLog) { (Get-Item $realmLog).Length } else { 0 }
+    $env:WOW_USER = $Account.ToUpper()
+    $env:WOW_PASS = $Account.ToUpper()
+    $env:WOW_CHAR = $HeroName
+    $env:WOW_UNATTENDED = '1'
+    $env:WOW_ALLOW_ACCOUNT = '1'
+    $env:WOW_NOSOUND = '1'
+    $env:BENILLA_HOME = Join-Path $benillaClient 'benilla-config'
+    $exe = Join-Path $benillaClient 'target\release\HordesOfAzeroth.exe'
+    $log = Join-Path $benillaClient 'benilla-config\bench.log'
+    Start-Process $exe -WorkingDirectory $benillaClient -RedirectStandardOutput $log -RedirectStandardError "$log.err" | Out-Null
+    Wait-Until {
+        (Test-Path $realmLog) -and (Get-Item $realmLog).Length -gt $realmStart -and
+            ((Get-Content $realmLog -Tail 30 | Out-String) -match 'successfully authenticated')
+    } 90 'the client to log in'
+    Start-Sleep -Seconds ($EnterWaitSeconds + 8)
+    $client = Get-GameProcess | Select-Object -First 1
+    if (-not $client) { throw 'The benilla client closed before entering the world.' }
+    $client
+}
+
 function Enter-World([long]$ChatStart) {
     $realmStart = if (Test-Path $realmLog) { (Get-Item $realmLog).Length } else { 0 }
     & (Join-Path $RepoRoot 'tools\launch-client.ps1') -Account $Account -Password $Account | Out-Null
@@ -243,6 +270,7 @@ function Enter-World([long]$ChatStart) {
     $game
 }
 
+for ($wait = 0; $wait -lt 20 -and (Get-GameProcess); $wait++) { Start-Sleep -Seconds 1 }
 if (Get-GameProcess) { throw 'The game client is running. Close it (or wait for the session using it) first.' }
 if (-not (Get-Process mangosd -ErrorAction SilentlyContinue)) { throw 'mangosd is not running (tools\start-server.ps1).' }
 
@@ -261,9 +289,9 @@ try {
     if (Test-Path $addonTarget) { Remove-Item $addonTarget -Recurse -Force }
     Copy-Item $addonSource $addonTarget -Recurse
     Write-AddonBuilds $buildList $spells
-    $lastHero = Set-LastHero $hero
+    if (-not $Benilla) { $lastHero = Set-LastHero $hero }
     $chatStart = if (Test-Path $chatLog) { (Get-Item $chatLog).Length } else { 0 }
-    $game = Enter-World $chatStart
+    $game = if ($Benilla) { Enter-BenillaWorld $hero } else { Enter-World $chatStart }
     Wait-BenchDone $game $chatStart $(if ($Crowd) { 1 } else { $buildList.Count })
 } finally {
     Get-GameProcess | Stop-Process -Force -ErrorAction SilentlyContinue
@@ -288,6 +316,8 @@ $parseArgs = @((Join-Path $PSScriptRoot 'parse_bench.py'), $manifestFile)
 if ($Markdown) { $parseArgs += '--markdown' }
 $mode = if ($Dummies) { 'dummies' } elseif ($Melee) { 'melee' } elseif ($Waves) { 'waves' } else { 'pack' }
 if ($Tag) { $mode = "$mode-$Tag" }
+$parseArgs += @('--log', $chatLog)
 $parseArgs += @('--save', (Join-Path $PSScriptRoot 'results.json'), '--mode', $mode)
-& python @parseArgs
+$ErrorActionPreference = 'Continue'
+& python @parseArgs 2>&1 | ForEach-Object { "$_" }
 if ($Mortal) { Show-Vitals $chatStart }
