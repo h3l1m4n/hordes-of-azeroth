@@ -13,6 +13,9 @@ local MAX_PARTS = 4
 local BAR_BRIGHTNESS = 0.8
 local BORDER_TEXTURE = "Interface\\Tooltips\\UI-Tooltip-Border"
 local ARROW_TEXTURE = "Interface\\ChatFrame\\UI-ChatIcon-ScrollDown"
+local EYE_TEXTURE = "Interface\\Icons\\Ability_EyeOfTheOwl"
+local EYE_SIZE = 16
+local GLYPH_INDEX = 100
 local BAR_SPEED = 8
 local MODE_SPELLS, MODE_TYPES, MODE_HEALING = 1, 2, 3
 local MODES = {
@@ -80,6 +83,7 @@ meter.rule:SetPoint("TOPRIGHT", meter.header, "BOTTOMRIGHT", 0, 0)
 
 local mode = MODE_SPELLS
 local spells = {}
+local glyphs = {}
 local support = {}
 local seconds = 0
 local rows = {}
@@ -170,6 +174,50 @@ meter.total = UI.Text(meter, 12, UI.NUMBER_FONT)
 meter.total:SetPoint("RIGHT", meter.header, "RIGHT", -6, 0)
 meter.total:SetJustifyH("RIGHT")
 
+local function Hidden()
+    if type(VanillaBonkMeterHidden) ~= "table" then
+        VanillaBonkMeterHidden = {}
+    end
+    return VanillaBonkMeterHidden
+end
+
+local function HiddenCount()
+    local count = 0
+    for _ in pairs(Hidden()) do
+        count = count + 1
+    end
+    return count
+end
+
+meter.eye = CreateFrame("Button", nil, meter)
+meter.eye:SetWidth(EYE_SIZE)
+meter.eye:SetHeight(EYE_SIZE)
+meter.eye:SetPoint("RIGHT", meter.total, "LEFT", -6, 0)
+meter.eye.icon = meter.eye:CreateTexture(nil, "ARTWORK")
+meter.eye.icon:SetAllPoints(meter.eye)
+meter.eye.icon:SetTexture(EYE_TEXTURE)
+meter.eye.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+meter.eye.icon:SetVertexColor(0.55, 0.55, 0.55)
+meter.eye.slash = UI.Text(meter.eye, 14, UI.NUMBER_FONT, "OUTLINE")
+meter.eye.slash:SetPoint("CENTER", meter.eye, "CENTER", 0, 0)
+meter.eye.slash:SetTextColor(0.9, 0.15, 0.1)
+meter.eye.slash:SetText("/")
+meter.eye:Hide()
+meter.eye:SetScript("OnEnter", function()
+    GameTooltip:SetOwner(this, "ANCHOR_LEFT")
+    local count = HiddenCount()
+    GameTooltip:AddLine(count .. (count == 1 and " hidden entry" or " hidden entries"), 1, 1, 1)
+    GameTooltip:AddLine("Click to show everything again.", 0.75, 0.75, 0.75)
+    GameTooltip:Show()
+end)
+meter.eye:SetScript("OnLeave", function() GameTooltip:Hide() end)
+meter.eye:SetScript("OnClick", function()
+    VanillaBonkMeterHidden = {}
+    GameTooltip:Hide()
+    PlaySound("igMainMenuOptionCheckBoxOn")
+    Refresh()
+end)
+
 meter.empty = UI.Text(meter, 11)
 meter.empty:SetPoint("TOPLEFT", meter, "TOPLEFT", PAD + 4, -(HEADER + PAD + 4))
 meter.empty:SetTextColor(0.6, 0.6, 0.6)
@@ -191,6 +239,10 @@ local function SpellTooltip(entry, share)
     if getn(entry.parts) > 1 then
         AddPartLines(entry)
     end
+end
+
+local function AddHideHint()
+    GameTooltip:AddLine("Right-click to hide.", 0.6, 0.6, 0.6)
 end
 
 local function TypeTooltip(entry, share)
@@ -226,7 +278,19 @@ local function ShowRowTooltip()
     else
         SpellTooltip(entry, this.share or 0)
     end
+    AddHideHint()
     GameTooltip:Show()
+end
+
+local function HideRowEntry()
+    if arg1 ~= "RightButton" or not this.entry then
+        return
+    end
+    Hidden()[this.entry.hideKey] = true
+    GameTooltip:Hide()
+    this.glow:Hide()
+    PlaySound("igMainMenuOptionCheckBoxOff")
+    Refresh()
 end
 
 local function HideRowTooltip()
@@ -243,6 +307,7 @@ for index = 1, MAX_ROWS do
     row:EnableMouse(true)
     row:SetScript("OnEnter", ShowRowTooltip)
     row:SetScript("OnLeave", HideRowTooltip)
+    row:SetScript("OnMouseUp", HideRowEntry)
 
     row.frame = row:CreateTexture(nil, "BACKGROUND")
     row.frame:SetTexture(UI.FLAT)
@@ -319,15 +384,32 @@ local function DrawRow(row)
     end
 end
 
-local function SpellEntries()
-    local entries = {}
+local function Sources()
+    local sources = {}
     for _, spell in pairs(spells) do
         if spell.icon then
-            tinsert(entries, {
-                id = "s" .. spell.index, index = spell.index, icon = spell.icon, name = spell.name or "", damage = spell.damage,
-                kills = spell.kills, parts = UI.DamageParts(spell.types, spell.damage, spell.icon),
+            tinsert(sources, spell)
+        end
+    end
+    for _, glyph in ipairs(glyphs) do
+        local info = VanillaBonk_GlyphInfo and VanillaBonk_GlyphInfo(glyph.id)
+        if info then
+            tinsert(sources, {
+                id = "g" .. glyph.id, index = GLYPH_INDEX + glyph.order, icon = info.icon ~= "" and info.icon or "INV_Misc_QuestionMark",
+                name = info.name, damage = glyph.damage, kills = glyph.kills, types = glyph.types,
             })
         end
+    end
+    return sources
+end
+
+local function SpellEntries()
+    local entries = {}
+    for _, spell in ipairs(Sources()) do
+        tinsert(entries, {
+            id = spell.id or ("s" .. spell.index), hideKey = "s:" .. (spell.name or ""), index = spell.index, icon = spell.icon,
+            name = spell.name or "", damage = spell.damage, kills = spell.kills, parts = UI.DamageParts(spell.types, spell.damage, spell.icon),
+        })
     end
     return entries
 end
@@ -335,13 +417,14 @@ end
 local function TypeEntries()
     local byKey = {}
     local entries = {}
-    for _, spell in pairs(spells) do
+    for _, spell in ipairs(Sources()) do
         if spell.icon then
             for _, part in ipairs(UI.DamageParts(spell.types, spell.damage, spell.icon)) do
                 local entry = byKey[part.key]
                 if not entry then
                     local kind = UI.DamageType(part.key)
-                    entry = { id = "t" .. part.key, key = part.key, icon = kind.icon, name = kind.name, damage = 0, sources = {}, index = 0 }
+                    entry = { id = "t" .. part.key, hideKey = "t:" .. part.key, key = part.key, icon = kind.icon, name = kind.name, damage = 0,
+                        sources = {}, index = 0 }
                     byKey[part.key] = entry
                     tinsert(entries, entry)
                 end
@@ -363,7 +446,7 @@ local function HealEntries()
         local total = source.healed + source.absorbed
         if total > 0 then
             tinsert(entries, {
-                id = "h" .. source.name, index = index, icon = source.icon, name = source.name, damage = total,
+                id = "h" .. source.name, hideKey = "h:" .. source.name, index = index, icon = source.icon, name = source.name, damage = total,
                 healed = source.healed, absorbed = source.absorbed,
                 parts = { { color = HEAL_COLOR, damage = source.healed }, { color = ABSORB_COLOR, damage = source.absorbed } },
             })
@@ -377,13 +460,24 @@ local function MeterWidth()
     return max(MIN_WIDTH, min(MAX_WIDTH, room))
 end
 
-local function Entries()
+local function AllEntries()
     if mode == MODE_TYPES then
         return TypeEntries()
     elseif mode == MODE_HEALING then
         return HealEntries()
     end
     return SpellEntries()
+end
+
+local function Entries()
+    local hidden = Hidden()
+    local shown = {}
+    for _, entry in ipairs(AllEntries()) do
+        if not hidden[entry.hideKey] then
+            tinsert(shown, entry)
+        end
+    end
+    return shown
 end
 
 Refresh = function()
@@ -433,6 +527,11 @@ Refresh = function()
     end
     meter:SetHeight(HEADER + PAD * 2 + max(1, count) * (ROW + ROW_GAP) - ROW_GAP)
     meter.total:SetText(Short(total) .. " |cffa0a0a0(" .. Short(seconds > 0 and total / seconds or 0) .. "/s)|r")
+    if HiddenCount() > 0 then
+        meter.eye:Show()
+    else
+        meter.eye:Hide()
+    end
 end
 
 meter:SetScript("OnUpdate", function()
@@ -490,6 +589,7 @@ end
 
 handlers["start"] = function()
     spells = {}
+    glyphs = {}
     support = {}
     seconds = 0
     for _, row in ipairs(rows) do
@@ -521,6 +621,19 @@ handlers["state"] = function(f)
     end
     Refresh()
     ShowMeter()
+end
+
+handlers["gmeter"] = function(f)
+    glyphs = {}
+    for order, item in ipairs(UI.Split(f[2] or "", ",")) do
+        local _, _, id, damage, kills, types = strfind(item, "^(%d+):(%d+):(%d+):(.*)$")
+        if id then
+            tinsert(glyphs, { id = id, order = order, damage = tonumber(damage) or 0, kills = tonumber(kills) or 0, types = types })
+        end
+    end
+    if mode ~= MODE_HEALING then
+        Refresh()
+    end
 end
 
 handlers["support"] = function(f)

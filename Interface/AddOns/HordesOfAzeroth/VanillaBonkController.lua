@@ -36,7 +36,7 @@ end
 
 function Controller.Style()
     local forced = Controller.Setting("prompts")
-    if forced == "xbox" or forced == "ps" then
+    if forced == "xbox" or forced == "ps" or forced == "deck" then
         return forced
     end
     return Controller.kind or (HoAController_GetConnected and HoAController_GetConnected()) or "xbox"
@@ -264,6 +264,10 @@ local GLYPH_CELLS = {
     ps = {
         a = { 0, 1 }, b = { 1, 1 }, x = { 2, 1 }, y = { 3, 1 }, lb = { 4, 1 }, rb = { 5, 1 }, lt = { 6, 1 }, rt = { 7, 1 },
         view = { 0, 3 }, menu = { 1, 3 }, ls = { 2, 3 }, rs = { 3, 3 }, l3 = { 4, 3 }, r3 = { 5, 3 }, home = { 6, 3 },
+    },
+    deck = {
+        a = { 0, 5 }, b = { 1, 5 }, x = { 2, 5 }, y = { 3, 5 }, lb = { 4, 5 }, rb = { 5, 5 }, lt = { 6, 5 }, rt = { 7, 5 },
+        view = { 0, 6 }, menu = { 1, 6 }, ls = { 2, 6 }, rs = { 3, 6 }, l3 = { 4, 6 }, r3 = { 5, 6 }, home = { 6, 6 },
     },
     any = {
         dpad = { 0, 4 }, up = { 1, 4 }, down = { 2, 4 }, left = { 3, 4 }, right = { 4, 4 }, updown = { 5, 4 }, leftright = { 6, 4 },
@@ -900,6 +904,10 @@ local function NavFocus(button)
 end
 
 local function FirstIn(window)
+    local primary = window.navButtons and window.navButtons[1]
+    if primary and primary:IsVisible() and IsUsable(primary) then
+        return primary
+    end
     local buttons = Collect(window, {})
     local best, bestScore
     for _, button in ipairs(buttons) do
@@ -1071,6 +1079,53 @@ local function Activate(button)
         return
     end
     button:Click()
+end
+
+local promptFocus = { box = nil, index = 1 }
+
+local function ActivePrompt()
+    for _, box in ipairs(VanillaBonkUI.navPrompts or {}) do
+        local primary = box.navButtons[1]
+        if box:IsVisible() and primary and primary:IsVisible() then
+            return box
+        end
+    end
+end
+
+local function PromptButton(box)
+    if promptFocus.box ~= box then
+        promptFocus.box, promptFocus.index = box, 1
+    end
+    local button = box.navButtons[promptFocus.index]
+    if not button or not button:IsVisible() then
+        promptFocus.index = 1
+        button = box.navButtons[1]
+    end
+    return button
+end
+
+local function PromptPress(box, name)
+    if name == "a" then
+        Activate(PromptButton(box))
+        return true
+    end
+    if name == "left" or name == "right" then
+        local count = table.getn(box.navButtons)
+        promptFocus.index = math.mod(promptFocus.index, count) + 1
+        return true
+    end
+    return false
+end
+
+local function ShowPromptFocus()
+    local box = Controller.kind and ActivePrompt()
+    if not box then
+        return false
+    end
+    local button = PromptButton(box)
+    NavFocus(button)
+    Controller.ShowPrompts({ { "a", button:GetText() or "OK" } })
+    return true
 end
 
 local function TabWindow(windows, target)
@@ -1648,6 +1703,10 @@ function HoAController_OnButton(name, down)
     if table.getn(windows) > 0 and NavButton(name, windows) then
         return
     end
+    local prompt = table.getn(windows) == 0 and ActivePrompt()
+    if prompt and PromptPress(prompt, name) then
+        return
+    end
     local action = PLAY[name]
     if action then
         action()
@@ -1660,6 +1719,9 @@ function VanillaBonkUI.ShowBindings(forController)
         if KeyBindingFrame and KeyBindingFrame:IsShown() then
             HideUIPanel(KeyBindingFrame)
         end
+        if BenillaOptionsFrame and BenillaOptionsFrame:IsShown() then
+            HideUIPanel(BenillaOptionsFrame)
+        end
         panel.asBindings = true
         panel:Show()
         return
@@ -1668,13 +1730,18 @@ function VanillaBonkUI.ShowBindings(forController)
         panel:Hide()
     end
     panel.asBindings = nil
+    if VanillaBonkUI.ShowClientSettings("Keybindings") then
+        return
+    end
     KeyBindingFrame_LoadUI()
     ShowUIPanel(KeyBindingFrame)
 end
 
 function Controller.SwapBindings(kind)
     local panel = VanillaBonkControllerPanel
-    if kind and KeyBindingFrame and KeyBindingFrame:IsShown() then
+    local benillaKeys = BenillaOptionsFrame and BenillaOptionsFrame:IsShown()
+        and BenillaOptionsFrame.selectedCategory == "Keybindings"
+    if kind and (benillaKeys or KeyBindingFrame and KeyBindingFrame:IsShown()) then
         VanillaBonkUI.ShowBindings(true)
     elseif not kind and panel and panel:IsShown() and panel.asBindings then
         VanillaBonkUI.ShowBindings(false)
@@ -1687,10 +1754,19 @@ function HoAController_OnDevice(kind)
     Controller.SwapBindings(kind)
 end
 
+local KEYBOARD_REFRESH = 0.1
 local watcher = CreateFrame("Frame")
 watcher:SetScript("OnUpdate", function()
     if HoAController_Frame then
         HoAController_Frame()
+    end
+    if Controller.kind == nil and Controller.optionsPushed then
+        Controller.sinceRefresh = (Controller.sinceRefresh or 0) + arg1
+        if Controller.sinceRefresh < KEYBOARD_REFRESH and ChoiceWindow() == Controller.window and not Controller.restyled then
+            UpdateInteract(not Controller.captured)
+            return
+        end
+        Controller.sinceRefresh = 0
     end
     if not Controller.optionsPushed and HoAController_SetOption then
         Controller.optionsPushed = true
@@ -1731,7 +1807,7 @@ watcher:SetScript("OnUpdate", function()
     elseif table.getn(windows) > 0 then
         RestoreHint()
         UpdateWindows(windows)
-    else
+    elseif not ShowPromptFocus() then
         Unfocused()
         UpdatePrompts(nil)
     end

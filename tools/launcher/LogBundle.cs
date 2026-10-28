@@ -16,6 +16,8 @@ namespace HordesOfAzeroth.Launcher
         public static string Save(GameFolder folder)
         {
             string desktop = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+            if (string.IsNullOrEmpty(desktop) || !Directory.Exists(desktop))
+                desktop = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
             string zip = Path.Combine(desktop, $"Hordes of Azeroth logs {DateTime.Now:yyyy-MM-dd HH.mm}.zip");
             if (File.Exists(zip))
                 File.Delete(zip);
@@ -28,13 +30,11 @@ namespace HordesOfAzeroth.Launcher
                     AddTail(archive, "server/mariadb/" + Path.GetFileName(file), file);
                 foreach (string file in Logs(Path.Combine(folder.Root, "Logs"), "*.*"))
                     AddTail(archive, "client/" + Path.GetFileName(file), file);
-                foreach (string file in Logs(Path.Combine(folder.Root, "Logs", "wow_turbo"), "*.log").OrderByDescending(File.GetLastWriteTimeUtc).Take(1))
-                    AddTail(archive, "client/wow_turbo/" + Path.GetFileName(file), file);
                 foreach (string file in NewestCrashFiles(folder))
                     AddTail(archive, "crashes/" + Path.GetFileName(file), file);
                 foreach (string file in Logs(folder.LauncherData, "*.txt"))
                     AddTail(archive, "launcher/" + Path.GetFileName(file), file);
-                AddTail(archive, "launcher/Config.wtf", folder.ConfigWtf);
+                AddTail(archive, "client/config.toml", folder.ClientConfig);
             }
             return zip;
         }
@@ -68,10 +68,8 @@ namespace HordesOfAzeroth.Launcher
             StringBuilder text = new StringBuilder();
             text.AppendLine($"Launcher: {typeof(LogBundle).Assembly.GetName().Version}");
             text.AppendLine($"Installed: {folder.InstalledVersion?.ToString() ?? "unknown"}");
-            text.AppendLine($"Windows: {Environment.OSVersion.VersionString}, {(Environment.Is64BitOperatingSystem ? "64" : "32")}-bit");
+            text.AppendLine($"{Platform.SystemName}: {Environment.OSVersion.VersionString}, {(Environment.Is64BitOperatingSystem ? "64" : "32")}-bit");
             text.AppendLine($"Processors: {Environment.ProcessorCount}");
-            text.AppendLine($"wow_turbo: {TurboMod.Describe(folder)}");
-            text.AppendLine($"DXVK: {DxvkMod.Describe(folder)}");
             text.AppendLine($"Game folder: {HideUserName(folder.Root)}");
             text.AppendLine($"Saved: {DateTime.Now:yyyy-MM-dd HH:mm:ss zzz}");
             return text.ToString();
@@ -81,7 +79,7 @@ namespace HordesOfAzeroth.Launcher
         {
             string profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
             return profile.Length > 0 && path.StartsWith(profile, StringComparison.OrdinalIgnoreCase)
-                ? "%USERPROFILE%" + path.Substring(profile.Length)
+                ? (Platform.IsWindows ? "%USERPROFILE%" : "~") + path.Substring(profile.Length)
                 : path;
         }
 

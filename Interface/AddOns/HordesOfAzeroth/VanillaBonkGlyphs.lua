@@ -1,8 +1,8 @@
 local UI = VanillaBonkUI
 
 local SOCKET_SIZE = 26
-local SOCKETS = 3
-local ORDINALS = { "first", "second", "third" }
+local SOCKETS = 7
+local ORDINALS = { "first", "second", "third", "fourth", "fifth", "sixth", "seventh" }
 local FADE = 0.2
 local BAD = { 1, 0.25, 0.2 }
 local MAX_CARDS = 4
@@ -20,6 +20,7 @@ local info = {}
 VanillaBonkGlyphInfo = info
 local offer = { pick = 1, ids = {} }
 local taken = {}
+local counts = {}
 
 function VanillaBonk_GlyphsTaken()
     return taken
@@ -47,6 +48,10 @@ local function GlyphTooltip(owner, glyph)
         GameTooltip:AddLine(glyph.drawback, 1, 0.29, 0.23, 1)
     end
     GameTooltip:Show()
+end
+
+function VanillaBonk_GlyphInfo(id)
+    return info[id]
 end
 
 function VanillaBonk_GlyphTooltip(owner, id)
@@ -316,7 +321,7 @@ local function Fill()
         end
     end
     FillMine()
-    frame.hint:SetText("Click a Glyph or press 1-" .. max(1, count) .. " to take it.")
+    frame.hint:SetText("")
 end
 
 frame:SetScript("OnUpdate", function()
@@ -383,6 +388,8 @@ local function MakeSockets()
         socket.circle:SetWidth(SOCKET_SIZE * 1.08)
         socket.circle:SetHeight(SOCKET_SIZE * 1.08)
         socket.circle:SetPoint("CENTER", socket, "CENTER", 0, 0)
+        socket.count = UI.Text(socket, 11, UI.NUMBER_FONT, "OUTLINE", "OVERLAY")
+        socket.count:SetPoint("BOTTOMRIGHT", socket, "BOTTOMRIGHT", 2, -2)
         socket.index = index
         socket:EnableMouse(true)
         socket:SetScript("OnEnter", function()
@@ -410,6 +417,7 @@ local function RefreshSockets()
                 socket.circle:SetVertexColor(rarity.r, rarity.g, rarity.b)
             end
             socket.circle:Show()
+            socket.count:SetText(counts[taken[index]] or "")
             socket:Show()
         else
             socket:Hide()
@@ -458,8 +466,16 @@ handlers["glyphs"] = function(f)
     RefreshSockets()
 end
 
+handlers["glyphcount"] = function(f)
+    if f[2] and f[2] ~= "" then
+        counts[f[2]] = f[3] ~= "0" and f[3] or nil
+        RefreshSockets()
+    end
+end
+
 handlers["start"] = function()
     taken = {}
+    counts = {}
     RefreshSockets()
 end
 

@@ -24,9 +24,8 @@
 /Interface/AddOns/HordesOfAzeroth/Textures/ClassCrests.tga
 /Interface/AddOns/HordesOfAzeroth/Textures/PlayerFrameNoPower.tga
 
-# Our login and hero screens. Only HordesOfAzeroth.exe (tools/patch-client.ps1)
-# loads a modified GlueXML. BonkAccount.lua holds the local login and is
-# written by tools/launch-client.ps1; mangosd writes BonkStats.lua.
+# Our login and hero screens. BonkAccount.lua holds the local login;
+# mangosd writes BonkStats.lua.
 !/Interface/GlueXML/
 /Interface/GlueXML/BonkAccount.lua
 /Interface/GlueXML/BonkStats.lua
@@ -34,15 +33,11 @@
 # Local server tooling and settings.
 !/tools/
 /tools/telegraphs/bin/
-/tools/clientfix/build/
 /tools/launcher/bin/
 /tools/launcher/obj/
 !/config/
 !/play.bat
 
-# wow_turbo (MIT, github.com/athei/wow-mods): both builds ship with the release;
-# the launcher loads the one the CPU supports.
-!/mods/
 !/stop.bat
 
 # Under /server only the VMaNGOS fork (a submodule) is tracked. The build,
@@ -51,6 +46,9 @@
 !/server/
 /server/*
 !/server/core
+
+# The benilla client fork (a submodule).
+!/client
 
 # To track a new top-level project folder, add a line like:
 # !/addon-src/

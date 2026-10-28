@@ -147,7 +147,7 @@ namespace HordesOfAzeroth.Launcher
                 "--offMeshInput", Quote(Path.Combine(Extractors, "offmesh.txt")),
                 "--configInputPath", Quote(Path.Combine(Extractors, "config.json")),
             };
-            ProcessStartInfo info = new ProcessStartInfo(Path.Combine(Extractors, "MoveMapGenerator.exe"), string.Join(" ", arguments.Concat(options)))
+            ProcessStartInfo info = new ProcessStartInfo(Path.Combine(Extractors, Platform.Exe("MoveMapGenerator")), string.Join(" ", arguments.Concat(options)))
             {
                 WorkingDirectory = DataDir,
                 UseShellExecute = false,

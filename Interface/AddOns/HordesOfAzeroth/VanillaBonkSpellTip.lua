@@ -21,7 +21,6 @@ local SCHOOL_COLORS = {
     Shadow = { 0.69, 0.5, 1 },
     Arcane = { 1, 0.5, 1 },
 }
-local AOE_COLOR = { 1, 0.83, 0.3 }
 local LEGENDARY_BORDER = { 1, 0.5, 0 }
 
 Tip.GOLD = { 1, 0.82, 0 }
@@ -77,9 +76,7 @@ local function MakeChip()
 end
 
 local function Clear()
-    for index = 1, getn(rows) do
-        rows[index] = nil
-    end
+    rows = {}
     for _, text in ipairs(texts) do
         text:Hide()
     end
@@ -127,17 +124,6 @@ function Tip:Title(text, color, tags)
     tinsert(rows, { kind = "title", text = text, color = color or Tip.WHITE, tags = tags or {} })
 end
 
-function Tip:SpellTags(school, aoe)
-    local tags = {}
-    if SCHOOL_COLORS[school or ""] then
-        tinsert(tags, { text = school, color = SCHOOL_COLORS[school], plain = true })
-    end
-    if aoe then
-        tinsert(tags, { text = "AoE", color = AOE_COLOR })
-    end
-    return tags
-end
-
 function Tip:SetLegendary(on)
     legendary = on
 end
@@ -162,6 +148,50 @@ end
 
 function Tip:AddSmallLine(text, color)
     tinsert(rows, { kind = "text", text = text, color = color or Tip.GREY, size = SMALL_SIZE })
+end
+
+function Tip.Yards(value)
+    local tenths = floor(value * 10 + 0.5)
+    if mod(tenths, 10) == 0 then
+        return format("%d", tenths / 10) .. " yd"
+    end
+    return format("%.1f", tenths / 10) .. " yd"
+end
+
+local function Grown(base, current, word)
+    current = tonumber(current) or 0
+    if current > 0 and abs(current - base) >= 0.05 then
+        return (current > base and "|cff21ff21" or "|cffff2020") .. Tip.Yards(current) .. " " .. word .. "|r"
+    end
+    return Tip.Yards(base) .. " " .. word
+end
+
+function Tip.ReachText(radius, range, current, currentRange)
+    radius = tonumber(radius) or 0
+    range = tonumber(range) or 0
+    if radius > 0 then
+        return Grown(radius, current, "radius")
+    elseif range > 0 then
+        return Grown(range, currentRange, "range")
+    end
+    return ""
+end
+
+function Tip:AddReach(radius, range)
+    local text = Tip.ReachText(radius, range)
+    if text ~= "" then
+        self:AddLine(text, 1, 1, 1)
+    end
+end
+
+function Tip:AddFooter(spec, school, aoe)
+    local text = (spec and spec ~= "") and spec or (school or "")
+    if aoe then
+        text = text ~= "" and (text .. "  ·  AoE") or "AoE"
+    end
+    if text ~= "" then
+        self:AddSmallLine(text, Tip.GREY)
+    end
 end
 
 function Tip:AddDoubleLine(left, right, lr, lg, lb, rr, rg, rb, size)

@@ -1,6 +1,4 @@
 using System;
-using System.Drawing;
-using System.Drawing.Imaging;
 using System.IO;
 
 namespace BonkTelegraphs
@@ -13,7 +11,7 @@ namespace BonkTelegraphs
             r.BaseStream.Position = 12;
             int width = (int)r.ReadUInt32(), height = (int)r.ReadUInt32();
             uint offset = r.ReadUInt32();
-            using (Bitmap bitmap = new Bitmap(width, height, PixelFormat.Format24bppRgb))
+            byte[] rgb = new byte[width * height * 3];
             {
                 int blocksX = (width + 3) / 4;
                 for (int by = 0; by < (height + 3) / 4; by++)
@@ -33,14 +31,12 @@ namespace BonkTelegraphs
                             float a = ((blp[pos + i / 2] >> (i % 2 * 4)) & 15) / 15f;
                             float[] c = palette[(indices >> (i * 2)) & 3];
                             float[] ground = { 0.30f, 0.38f, 0.18f };
-                            bitmap.SetPixel(x, y, Color.FromArgb(
-                                (int)(255 * (c[0] * a + ground[0] * (1 - a))),
-                                (int)(255 * (c[1] * a + ground[1] * (1 - a))),
-                                (int)(255 * (c[2] * a + ground[2] * (1 - a)))));
+                            for (int channel = 0; channel < 3; channel++)
+                                rgb[(y * width + x) * 3 + channel] = (byte)(255 * (c[channel] * a + ground[channel] * (1 - a)));
                         }
                     }
-                bitmap.Save(path, ImageFormat.Png);
             }
+            Png.WriteRgb(path, width, height, rgb);
         }
 
         static float[] Color565(ushort c)

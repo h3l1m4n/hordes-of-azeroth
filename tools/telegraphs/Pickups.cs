@@ -69,7 +69,7 @@ namespace BonkTelegraphs
                     for (int t = 0; t < BlueTextures.Length; t++)
                     {
                         string texture = BlueTextures[t];
-                        string recoloured = Folder + "Jewel" + jewel.Name + Path.GetFileName(texture);
+                        string recoloured = Folder + "Jewel" + jewel.Name + MpqPath.FileName(texture);
                         files[recoloured] = Blp.Recolour(Require(client, texture), t < 2 ? glow : rule);
                         swaps[texture] = recoloured;
                     }

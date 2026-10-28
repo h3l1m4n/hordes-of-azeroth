@@ -9,6 +9,11 @@ local UPSTAIRS_TARGETS = {
     { entry = 900008, name = "Theron Ashveil" },
 }
 local STAIRS_FOOT = { x = 16248.695, y = 16313.784, z = 20.844 }
+local DECK_SPOT = { x = 16256.1, y = 16312.2, z = 20.865 }
+local QUARTERMASTER = 900150
+local QUARTERMASTER_NAME = "Varrok Steelbrand"
+local QUARTERMASTER_TARGETS = { { entry = QUARTERMASTER, name = QUARTERMASTER_NAME } }
+local QUARTERMASTER_CHECK = 1
 local WAYPOINT_REACH = 3
 local UPSTAIRS_RISE = 3
 local ARROW = "Interface\\AddOns\\HordesOfAzeroth\\Textures\\TutorialArrow"
@@ -28,6 +33,7 @@ local GUIDE_ROW_GAP = 14
 local PAD_BUTTON_NAMES = {
     xbox = { dash = "RT", interact = "X", menu = "Menu" },
     ps = { dash = "R2", interact = "Square", menu = "Options" },
+    deck = { dash = "R2", interact = "X", menu = "Menu" },
 }
 local PLATE_KINDS = {
     { kind = 0, name = "Normal", text = "Regular enemies." },
@@ -173,6 +179,7 @@ local function BuildControllerTip()
     box.settings:SetPoint("BOTTOMRIGHT", box, "BOTTOM", -4, 18)
     box.next = UI.Button(box, 96, "Next", function() box:Hide() end)
     box.next:SetPoint("BOTTOMLEFT", box, "BOTTOM", 4, 18)
+    UI.NavPrompt(box, box.next, box.settings)
     box:SetScript("OnHide", function()
         if this:IsShown() then
             return
@@ -235,6 +242,7 @@ local function BuildCurrencyTip()
     end
     box.next = UI.Button(box, 96, "Next", function() tutorial:ShowInnkeeper() end)
     box.next:SetPoint("BOTTOM", box, "BOTTOM", 0, 18)
+    UI.NavPrompt(box, box.next)
     box:SetHeight(height + 16 + 22 + 18)
     box:Hide()
     return box
@@ -247,6 +255,7 @@ local dashArrow = Arrow(DASH_ARROW_SIZE)
 RotateTexture(dashArrow.texture, math.pi)
 dashBox.next = UI.Button(dashBox, 96, "Next", function() tutorial:ShowCurrencies() end)
 dashBox.next:SetPoint("BOTTOM", dashBox, "BOTTOM", 0, 18)
+UI.NavPrompt(dashBox, dashBox.next)
 
 local guideBox = Callout()
 guideBox:SetPoint("TOP", UIParent, "TOP", 0, -128)
@@ -329,9 +338,25 @@ local function EndLesson()
     HideCallouts()
 end
 
+local quartermasterSeenAt, quartermasterHere = 0, false
+
+local function QuartermasterHere()
+    if VanillaBonkQuartermasterTip or not ClosestUnitPosition then
+        return false
+    end
+    if GetTime() - quartermasterSeenAt >= QUARTERMASTER_CHECK then
+        quartermasterSeenAt = GetTime()
+        quartermasterHere = ClosestUnitPosition(QUARTERMASTER) ~= nil
+    end
+    return quartermasterHere
+end
+
 local function CompleteIntro()
     if not VanillaBonkTutorialDone and not VanillaBonkVendorTip then
         VanillaBonkVendorTip = "waiting"
+    end
+    if not VanillaBonkTutorialDone and not VanillaBonkDeckTip then
+        VanillaBonkDeckTip = "waiting"
     end
     VanillaBonkTutorialDone = true
     VanillaBonkControllerTipDone = true
@@ -348,13 +373,20 @@ local function NextLesson()
     if not VanillaBonkInnkeeperTip then
         return "innkeeper"
     end
+    if VanillaBonkDeckTip == "ready" then
+        return "deck"
+    end
     if VanillaBonkVendorTip == "ready" then
         return "vendors"
+    end
+    if QuartermasterHere() then
+        return "quartermaster"
     end
 end
 
 local function AllDone()
     return VanillaBonkControllerTipDone and VanillaBonkTutorialDone and VanillaBonkInnkeeperTip and VanillaBonkVendorTip ~= "waiting" and VanillaBonkVendorTip ~= "ready"
+        and VanillaBonkDeckTip ~= "waiting" and VanillaBonkDeckTip ~= "ready" and VanillaBonkQuartermasterTip
 end
 
 function tutorial:ShowControllerTip()
@@ -444,10 +476,35 @@ function tutorial:ShowVendors()
         .. "and Theron Ashveil, the Talent Trainer, is where you spend your talent points.")
 end
 
-function tutorial:Close()
+function tutorial:ShowDeck()
+    step = "deck"
+    waypointReached = false
+    ShowGuide("The Darkmoon Deck", "The Darkmoon Deck table at the foot of the stairs shows every Darkmoon Card and Glyph you own. "
+        .. "Ban the ones you don't want to see in your runs.")
+end
+
+function tutorial:ShowQuartermaster()
+    step = "quartermaster"
+    waypointReached = false
+    ShowGuide("The Mythic Quartermaster", QUARTERMASTER_NAME .. " has arrived at the Inn. He sells Mythic tier gear for your class, "
+        .. "two tiers below your best Mythic floor cleared, and never below Tier 1.")
+end
+
+local function MarkStepSeen()
     if step == "vendors" then
         VanillaBonkVendorTip = true
+    elseif step == "deck" then
+        VanillaBonkDeckTip = true
+    elseif step == "quartermaster" then
+        VanillaBonkQuartermasterTip = true
     else
+        return false
+    end
+    return true
+end
+
+function tutorial:Close()
+    if not MarkStepSeen() then
         VanillaBonkTutorialDone = true
         VanillaBonkControllerTipDone = true
         VanillaBonkInnkeeperTip = true
@@ -461,7 +518,7 @@ local function PlayerPlace()
         return
     end
     local playerY, playerX, playerZ = UnitPosition("player")
-    local facing = GetPlayerFacing()
+    local facing = GetCameraFacing and GetCameraFacing() or GetPlayerFacing()
     if not playerX or not facing then
         return
     end
@@ -541,6 +598,16 @@ local GUIDES = {
         far = "Follow the arrow to find him.",
         lost = "Look for " .. RUN_MASTER_NAME .. " <Run Master> at the Inn.",
     },
+    deck = {
+        spot = DECK_SPOT,
+        spotName = "the Darkmoon Deck table",
+        far = "Follow the arrow to the Darkmoon Deck.",
+    },
+    quartermaster = {
+        targets = QUARTERMASTER_TARGETS,
+        far = "Follow the arrow to find him.",
+        lost = "Look for " .. QUARTERMASTER_NAME .. " <Mythic Quartermaster> at the Inn.",
+    },
     vendors = {
         targets = UPSTAIRS_TARGETS,
         waypoint = STAIRS_FOOT,
@@ -576,7 +643,33 @@ local function UpdateWaypoint(guide)
     return true
 end
 
+local function OpenHint(name)
+    if PadStyle() then
+        return "Press " .. PadButton("interact") .. " to open " .. name .. "."
+    end
+    return "Right-click " .. name .. " to open it."
+end
+
+local function UpdateSpot(guide)
+    local angle, distance = WaypointBearing(guide.spot)
+    if not angle then
+        guideArrow:Hide()
+        SetHint(OpenHint(guide.spotName))
+        return
+    end
+    if distance <= TALK_RANGE then
+        SetHint(OpenHint(guide.spotName))
+    else
+        SetHint(guide.far)
+    end
+    PointArrow(angle, distance)
+end
+
 local function UpdateGuide(guide)
+    if guide.spot then
+        UpdateSpot(guide)
+        return
+    end
     if UpdateWaypoint(guide) then
         return
     end
@@ -604,8 +697,13 @@ local function IsSummaryOpen()
     return summary and summary:IsVisible()
 end
 
+local function IsDeckOpen()
+    local deck = getglobal("VanillaBonkDeckFrame")
+    return deck and deck:IsVisible()
+end
+
 local function ReadyToStart()
-    return inWorld and not inRun and UI.DashButton:IsVisible() and IsAtCamp() and not IsSummaryOpen()
+    return inWorld and not inRun and UI.DashButton:IsVisible() and IsAtCamp() and not IsSummaryOpen() and not IsDeckOpen()
 end
 
 local LESSONS = {
@@ -613,6 +711,8 @@ local LESSONS = {
     dash = function() tutorial:ShowDash() end,
     innkeeper = function() tutorial:ShowInnkeeper() end,
     vendors = function() tutorial:ShowVendors() end,
+    deck = function() tutorial:ShowDeck() end,
+    quartermaster = function() tutorial:ShowQuartermaster() end,
 }
 
 local function WaitForLesson(elapsed)
@@ -644,9 +744,7 @@ tutorial:SetScript("OnUpdate", function()
         return
     end
     if inRun or IsArenaOpen() then
-        if step == "vendors" then
-            VanillaBonkVendorTip = true
-        else
+        if not MarkStepSeen() then
             CompleteIntro()
         end
         EndLesson()
@@ -685,6 +783,7 @@ end
 tutorial:RegisterEvent("PLAYER_ENTERING_WORLD")
 tutorial:RegisterEvent("PLAYER_LEAVING_WORLD")
 tutorial:RegisterEvent("GOSSIP_SHOW")
+tutorial:RegisterEvent("MERCHANT_SHOW")
 tutorial:SetScript("OnEvent", function()
     if event == "PLAYER_ENTERING_WORLD" then
         inWorld = true
@@ -697,6 +796,11 @@ tutorial:SetScript("OnEvent", function()
         else
             VanillaBonkInnkeeperTip = true
         end
+    elseif (event == "GOSSIP_SHOW" or event == "MERCHANT_SHOW") and UnitName("npc") == QUARTERMASTER_NAME then
+        VanillaBonkQuartermasterTip = true
+        if step == "quartermaster" then
+            EndLesson()
+        end
     elseif event == "GOSSIP_SHOW" and IsUpstairsVendor(UnitName("npc")) then
         if VanillaBonkVendorTip == "waiting" or VanillaBonkVendorTip == "ready" then
             VanillaBonkVendorTip = true
@@ -708,7 +812,6 @@ tutorial:SetScript("OnEvent", function()
 end)
 
 local gearTip = {}
-local GEAR_TAB_COUNT = 6
 local GEAR_TIP_WIDTH = 270
 local GEAR_TIPS = {
     Heroic = { title = "Heroic gear",
@@ -719,7 +822,7 @@ local GEAR_TIPS = {
 
 local function BuildGearTip()
     local box = CreateFrame("Frame", nil, UIParent)
-    box:SetFrameStrata("DIALOG")
+    box:SetFrameStrata("FULLSCREEN_DIALOG")
     box:SetWidth(GEAR_TIP_WIDTH)
     DialogBackdrop(box)
     Title(box)
@@ -735,17 +838,18 @@ local function BuildGearTip()
     box.close:SetScript("OnClick", function() gearTip.Seen() end)
     box.done = UI.Button(box, 96, "Got it", function() gearTip.Seen() end)
     box.done:SetPoint("BOTTOM", box, "BOTTOM", 0, 18)
+    UI.NavPrompt(box, box.done)
     box.arrow = Arrow(DASH_ARROW_SIZE)
+    box.arrow:SetFrameStrata("FULLSCREEN_DIALOG")
     box:Hide()
     return box
 end
 
 local function UnseenGearTab()
-    for index = 1, GEAR_TAB_COUNT do
-        local tab = getglobal("VanillaBonkGearTab" .. index)
-        local name = tab and tab:IsVisible() and tab:GetText()
-        if name and GEAR_TIPS[name] and not (VanillaBonkGearTabTips and VanillaBonkGearTabTips[name]) then
-            return tab, name
+    for _, entry in ipairs(UI.vendorTierTabs or {}) do
+        local name = entry.name
+        if entry.tab:IsVisible() and not entry.tab.active and GEAR_TIPS[name] and not (VanillaBonkGearTabTips and VanillaBonkGearTabTips[name]) then
+            return entry.tab, name
         end
     end
 end
@@ -786,7 +890,7 @@ function gearTip.Update()
     if gearTip.tab then
         if not gearTip.tab:IsVisible() then
             gearTip.Hide()
-        elseif gearTip.tab:IsEnabled() ~= 1 then
+        elseif gearTip.tab.active then
             gearTip.Seen()
         else
             gearTip.box.arrow:SetPoint("TOP", gearTip.tab, "BOTTOM", 0, -2 - Bob())
@@ -794,7 +898,7 @@ function gearTip.Update()
         return
     end
     local tab, name = UnseenGearTab()
-    if tab and tab:IsEnabled() == 1 then
+    if tab then
         gearTip.Show(tab, name)
     end
 end
@@ -852,6 +956,7 @@ local function BuildPlateGuide()
     box.close:SetScript("OnClick", function() plateGuide.Close() end)
     box.done = UI.Button(box, 96, "Got it", function() plateGuide.Close() end)
     box.done:SetPoint("BOTTOM", box, "BOTTOM", 0, 18)
+    UI.NavPrompt(box, box.done)
 
     local textLeft = 22 + GUIDE_PLATE_COLUMN + 12
     local textWidth = GUIDE_WIDTH - textLeft - 26
@@ -940,6 +1045,8 @@ function UI.ResetTutorial()
     VanillaBonkPlateGuideDone = nil
     VanillaBonkHearthTipDone = nil
     VanillaBonkInnkeeperTip = nil
+    VanillaBonkDeckTip = nil
+    VanillaBonkQuartermasterTip = nil
     EndLesson()
     if not inRun then
         tutorial:Show()
@@ -954,11 +1061,23 @@ local function EnterRun()
 end
 
 UI.Listen({
+    cdx = function(f)
+        if f[4] ~= "1" then
+            return
+        end
+        VanillaBonkDeckTip = true
+        if step == "deck" then
+            EndLesson()
+        end
+    end,
     start = EnterRun,
     state = EnterRun,
     ["end"] = function()
         if inRun and VanillaBonkVendorTip == "waiting" then
             VanillaBonkVendorTip = "ready"
+        end
+        if inRun and VanillaBonkDeckTip == "waiting" then
+            VanillaBonkDeckTip = "ready"
         end
         inRun = false
         if not AllDone() then

@@ -9,6 +9,8 @@ local LABEL_ROW = 34
 local LABEL_PAD = 0.03
 local LABEL_WIDTH = 190
 local GLYPH_SIZE = 24
+local CHOICE_WIDTH = 84
+local CHOICE_GAP = 4
 local COLUMN_LEFT = 34
 local COLUMN_RIGHT = 434
 local SLIDER_WIDTH = 270
@@ -17,7 +19,8 @@ local ART = {
     xbox = { file = "Interface\\AddOns\\HordesOfAzeroth\\Textures\\ControllerXbox", height = 329 },
     ps = { file = "Interface\\AddOns\\HordesOfAzeroth\\Textures\\ControllerPlayStation", height = 331 },
 }
-local KIND_NAMES = { xbox = "Xbox controller connected", ps = "PlayStation controller connected" }
+ART.deck = ART.xbox
+local KIND_NAMES = { xbox = "Xbox controller connected", ps = "PlayStation controller connected", deck = "Steam Deck controls connected" }
 local LEFT_LABELS = {
     { "lt", "Zoom", "Hold with right stick or d-pad" },
     { "ls", "Move", "Full 360 degrees" },
@@ -33,7 +36,7 @@ local RIGHT_LABELS = {
     { "rs", "Camera", "Press to recenter" },
     { "menu", "Pause menu" },
 }
-local PROMPT_CHOICES = { { "auto", "Automatic" }, { "xbox", "Xbox" }, { "ps", "PlayStation" } }
+local PROMPT_CHOICES = { { "auto", "Automatic" }, { "xbox", "Xbox" }, { "ps", "PlayStation" }, { "deck", "Steam Deck" } }
 
 local panel = UI.Window("VanillaBonkControllerPanel", PANEL_WIDTH, PANEL_HEIGHT)
 panel:SetPoint("CENTER", UIParent, "CENTER", 0, 10)
@@ -204,7 +207,7 @@ local function ChoiceRow(x, y, key, title, help, choices)
     local row = { key = key, buttons = {} }
     local left = x
     for _, choice in ipairs(choices) do
-        local button = UI.Button(panel, 92, choice[2])
+        local button = UI.Button(panel, CHOICE_WIDTH, choice[2])
         button:SetPoint("TOPLEFT", panel, "TOPLEFT", left, y - 30)
         button.value = choice[1]
         button:SetScript("OnClick", function()
@@ -212,7 +215,7 @@ local function ChoiceRow(x, y, key, title, help, choices)
             panel:Refresh()
         end)
         table.insert(row.buttons, button)
-        left = left + 96
+        left = left + CHOICE_WIDTH + CHOICE_GAP
     end
     row.Load = function(self)
         local current = Controller.Setting(self.key)

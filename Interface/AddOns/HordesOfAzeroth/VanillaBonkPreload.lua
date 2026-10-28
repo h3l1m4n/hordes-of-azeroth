@@ -16,24 +16,6 @@ local MISSILES = {
     "Spells\\GooBolt_Missile_Low.mdx",
 }
 
-local PATCH_MODELS = {
-    "Creature\\Wisp\\WispGreen.mdx",
-    "Creature\\WISP\\WispRed.mdx",
-}
-for _, shape in ipairs({ "Circle", "Cone", "Line", "Ring" }) do
-    local base = "World\\Generic\\BonkTelegraph\\" .. shape
-    tinsert(PATCH_MODELS, base .. "Outline.mdx")
-    for _, length in ipairs({ 1000, 1500, 2000, 2500, 3000 }) do
-        tinsert(PATCH_MODELS, base .. "Fill" .. length .. ".mdx")
-    end
-end
-tinsert(PATCH_MODELS, "World\\Generic\\BonkTelegraph\\LineStartOutline.mdx")
-tinsert(PATCH_MODELS, "World\\Generic\\BonkTelegraph\\LineEndOutline.mdx")
-for _, ms in ipairs({ 60, 80, 100, 125, 150, 200, 250, 300 }) do
-    for piece = 0, 11 do
-        tinsert(PATCH_MODELS, "World\\Generic\\BonkTelegraph\\LineFill" .. ms .. "_" .. piece .. ".mdx")
-    end
-end
 local PRELOAD_SHOWN_SECONDS = 3
 
 local holder = CreateFrame("Frame", nil, UIParent)
@@ -63,9 +45,6 @@ holder:SetScript("OnEvent", function()
     end)
     if not ok then
         DEFAULT_CHAT_FRAME:AddMessage("Hordes of Azeroth: missile models were not preloaded (" .. tostring(err) .. ").")
-    end
-    for i = 1, table.getn(PATCH_MODELS) do
-        pcall(Preload, PATCH_MODELS[i])
     end
     this.shownFor = 0
     this:SetScript("OnUpdate", function()

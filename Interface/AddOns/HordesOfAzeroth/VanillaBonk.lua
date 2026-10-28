@@ -268,17 +268,17 @@ local function Lock(index)
     Command("lock " .. index)
 end
 
-offerFrame.skip = CreateFrame("Button", nil, offerFrame.chrome, "UIPanelButtonTemplate")
+offerFrame.skip = VanillaBonkUI.SliceButton(CreateFrame("Button", nil, offerFrame.chrome, "UIPanelButtonTemplate"))
 offerFrame.skip:SetWidth(120)
 offerFrame.skip:SetHeight(24)
 offerFrame.skip:SetScript("OnClick", Skip)
 
-offerFrame.reroll = CreateFrame("Button", nil, offerFrame.chrome, "UIPanelButtonTemplate")
+offerFrame.reroll = VanillaBonkUI.SliceButton(CreateFrame("Button", nil, offerFrame.chrome, "UIPanelButtonTemplate"))
 offerFrame.reroll:SetWidth(120)
 offerFrame.reroll:SetHeight(24)
 offerFrame.reroll:SetScript("OnClick", Reroll)
 
-offerFrame.banish = CreateFrame("Button", nil, offerFrame.chrome, "UIPanelButtonTemplate")
+offerFrame.banish = VanillaBonkUI.SliceButton(CreateFrame("Button", nil, offerFrame.chrome, "UIPanelButtonTemplate"))
 offerFrame.banish:SetWidth(120)
 offerFrame.banish:SetHeight(24)
 offerFrame.banish:SetScript("OnClick", ToggleBanish)
@@ -454,11 +454,11 @@ function VanillaBonkUI.FillKeywordTip(tooltip, id)
     tooltip:AddLine(keyword.description, 1, 1, 1, 1)
 end
 
-local function ShowKeywordTooltip(id)
+local function ShowKeywordTooltip(id, owner)
     if not VanillaBonkUI.HasKeywordTip(id) then
         return
     end
-    GameTooltip:SetOwner(UIParent, "ANCHOR_CURSOR")
+    GameTooltip:SetOwner(owner, "ANCHOR_TOP")
     VanillaBonkUI.FillKeywordTip(GameTooltip, id)
     GameTooltip:Show()
 end
@@ -545,7 +545,7 @@ local function CreateKeywordHover(card, index, parent)
     hover.card = card
     hover:SetScript("OnEnter", function()
         HighlightCard(this.card)
-        ShowKeywordTooltip(this.keyword)
+        ShowKeywordTooltip(this.keyword, this)
     end)
     hover:SetScript("OnLeave", function()
         GameTooltip:Hide()
@@ -564,11 +564,10 @@ end
 
 local function PlaceKeywordHovers(card, spans)
     local html = card.description
-    local shift = html:GetWidth() / 2
     for index, span in ipairs(spans) do
         local hover = card.hovers[index] or CreateKeywordHover(card, index)
         hover:ClearAllPoints()
-        hover:SetPoint("TOPLEFT", html, "TOPLEFT", span:GetLeft() - html:GetLeft() + shift, span:GetTop() - html:GetTop())
+        hover:SetPoint("TOPLEFT", html, "TOPLEFT", span:GetLeft() - html:GetLeft(), span:GetTop() - html:GetTop())
         hover:SetWidth(span:GetWidth())
         hover:SetHeight(span:GetHeight())
         hover.keyword = card.descriptionLinks and card.descriptionLinks[index]
@@ -739,7 +738,7 @@ for index = 1, MAX_CARDS do
         UnhighlightCard(this)
     end)
 
-    card.lock = CreateFrame("Button", nil, card, "UIPanelButtonTemplate")
+    card.lock = VanillaBonkUI.SliceButton(CreateFrame("Button", nil, card, "UIPanelButtonTemplate"))
     card.lock:SetWidth(80)
     card.lock:SetHeight(20)
     card.lock:SetPoint("BOTTOM", card, "BOTTOM", 0, 18)
@@ -1102,7 +1101,7 @@ end
 
 local function ShowOffer(level)
     if offerFrame.anim and offerFrame.anim.mode == "close" then
-        offerFrame.deferred = level
+        offerFrame.deferred = { level = level }
         return
     end
     local fresh = not offerFrame.open
@@ -1310,10 +1309,10 @@ local function AnimateOffer(frame, elapsed)
         end
         if e >= 1 then
             frame.anim = nil
-            local level = frame.deferred
+            local deferred = frame.deferred
             frame.deferred = nil
-            if level then
-                ShowOffer(level)
+            if deferred then
+                ShowOffer(deferred.level)
             else
                 frame:Hide()
             end
@@ -1408,7 +1407,7 @@ SetFont(results.body, 13, "")
 results.body:SetPoint("TOP", results.title, "BOTTOM", 0, -14)
 results.body:SetJustifyH("CENTER")
 
-results.close = CreateFrame("Button", nil, results, "UIPanelButtonTemplate")
+results.close = VanillaBonkUI.SliceButton(CreateFrame("Button", nil, results, "UIPanelButtonTemplate"))
 results.close:SetWidth(100)
 results.close:SetHeight(22)
 results.close:SetPoint("BOTTOM", results, "BOTTOM", 0, 18)
@@ -1417,8 +1416,32 @@ results.close:SetScript("OnClick", function()
     results:Hide()
 end)
 
+function VB.TakeOverGossip(pending)
+    if VB.gossipFrame and VB.gossipFrame ~= pending.frame then
+        VB.gossipFrame.gossipClosed = true
+        VB.gossipFrame:Hide()
+    end
+    VB.gossipFrame = pending.frame
+    pending.refresh()
+    pending.frame:Show()
+end
+
+function VB.HideBlizzardGossipKeepingItOpen()
+    local onHide = GossipFrame:GetScript("OnHide")
+    GossipFrame:SetScript("OnHide", nil)
+    HideUIPanel(GossipFrame)
+    GossipFrame:SetScript("OnHide", onHide)
+end
+
 local function ReplaceNextGossip(frame, npc, refresh)
-    VB.gossipPending = { frame = frame, npc = npc, refresh = refresh }
+    local pending = { frame = frame, npc = npc, refresh = refresh }
+    if GossipFrame:IsShown() and UnitName("npc") == npc then
+        VB.gossipPending = nil
+        VB.HideBlizzardGossipKeepingItOpen()
+        VB.TakeOverGossip(pending)
+        return
+    end
+    VB.gossipPending = pending
 end
 
 local function GossipWindowHidden(frame)
@@ -1437,13 +1460,7 @@ function GossipFrame_OnEvent()
         local pending = VB.gossipPending
         VB.gossipPending = nil
         if pending and UnitName("npc") == pending.npc then
-            if VB.gossipFrame and VB.gossipFrame ~= pending.frame then
-                VB.gossipFrame.gossipClosed = true
-                VB.gossipFrame:Hide()
-            end
-            VB.gossipFrame = pending.frame
-            pending.refresh()
-            pending.frame:Show()
+            VB.TakeOverGossip(pending)
             return
         end
     elseif event == "GOSSIP_CLOSED" and VB.gossipFrame then
@@ -1455,74 +1472,53 @@ end
 
 local UI = VanillaBonkUI
 
-local ARENA_WIDTH, ARENA_HEIGHT = 880, 630
-local ARENA_RIGHT_X, ARENA_BOX_TOP, ARENA_BOX_WIDTH, ARENA_BOX_HEIGHT = 372, 446, 232, 120
+local ARENA_WIDTH, ARENA_HEIGHT = 920, 600
+local STARTER_SIZE, STARTER_STEP = 28, 34
 
-local arena = UI.Window("VanillaBonkArena", ARENA_WIDTH, ARENA_HEIGHT)
-arena:SetPoint("CENTER", UIParent, "CENTER", 0, 40)
-arena.title:SetText("Choose your challenge")
+local arena = UI.GoldWindow("VanillaBonkArena", ARENA_WIDTH, ARENA_HEIGHT)
+arena:SetPoint("CENTER", UIParent, "CENTER", 0, 30)
+arena.title:SetText("Run Master")
 
-arena.pane = UI.Pane(arena, UI.CONTENT_LEFT, UI.CONTENT_TOP, ARENA_WIDTH - UI.CONTENT_LEFT - UI.CONTENT_RIGHT,
-    ARENA_HEIGHT - UI.CONTENT_TOP - UI.CONTENT_BOTTOM, "Interface\\Glues\\LoadingScreens\\LoadScreenEnviroment", 0.55)
-arena.pane:SetFrameLevel(arena:GetFrameLevel() + 1)
 local content = CreateFrame("Frame", nil, arena)
 content:SetAllPoints(arena)
-content:SetFrameLevel(arena.pane:GetFrameLevel() + 2)
+content:SetFrameLevel(arena:GetFrameLevel() + 2)
 arena.content = content
 
-arena.name = content:CreateFontString(nil, "OVERLAY")
-arena.name:SetFont(UI.TITLE_FONT, 32, "OUTLINE")
-arena.name:SetPoint("TOPLEFT", arena, "TOPLEFT", 36, -84)
-arena.name:SetTextColor(1, 0.82, 0)
+arena.hero = UI.Text(content, 12)
+arena.hero:SetPoint("TOPRIGHT", arena, "TOPRIGHT", -36, -20)
+arena.hero:SetJustifyH("RIGHT")
 
-arena.lock = content:CreateFontString(nil, "OVERLAY")
-arena.lock:SetFont(UI.TITLE_FONT, 22, "OUTLINE")
-arena.lock:SetPoint("LEFT", arena.name, "RIGHT", 14, -2)
-arena.lock:SetTextColor(1, 0.3, 0.3)
-arena.lock:SetText("Locked")
+local LOADOUT_X, LOADOUT_TOP, LOADOUT_WIDTH = 22, 252, 214
+local LOADOUT_GREY = { 0.51, 0.49, 0.44 }
 
-arena.description = UI.Text(content, 12)
-arena.description:SetPoint("TOPLEFT", arena, "TOPLEFT", 38, -124)
-arena.description:SetWidth(ARENA_WIDTH - 80)
-arena.description:SetJustifyH("LEFT")
+arena.loadoutDivider = UI.Divider(content, LOADOUT_WIDTH)
+arena.loadoutDivider:SetPoint("TOPLEFT", arena, "TOPLEFT", LOADOUT_X, -(LOADOUT_TOP - 14))
+arena.loadoutLabel = UI.Text(content, 11)
+arena.loadoutLabel:SetPoint("TOPLEFT", arena, "TOPLEFT", LOADOUT_X, -LOADOUT_TOP)
+arena.loadoutLabel:SetTextColor(1, 0.82, 0)
+arena.loadoutLabel:SetText("Your loadout")
 
-arena.best = UI.Text(content, 11)
-arena.best:SetPoint("TOPLEFT", arena.description, "BOTTOMLEFT", 0, -6)
-arena.best:SetJustifyH("LEFT")
-
-arena.DETAILS_X = 470
-
-arena.detailsLabel = UI.Text(content, 12)
-arena.detailsLabel:SetPoint("TOPLEFT", arena, "TOPLEFT", arena.DETAILS_X, -88)
-arena.detailsLabel:SetTextColor(1, 0.82, 0)
-arena.detailsLabel:SetText("Difficulty changes")
-
-arena.details = UI.Text(content, 10)
-arena.details:SetPoint("TOPLEFT", arena.detailsLabel, "BOTTOMLEFT", 0, -3)
-arena.details:SetWidth(ARENA_WIDTH - arena.DETAILS_X - 36)
-arena.details:SetJustifyH("LEFT")
-
-arena.strip = UI.Strip(content)
-arena.strip:SetPoint("TOPLEFT", arena, "TOPLEFT", ARENA_RIGHT_X, -ARENA_BOX_TOP)
-arena.strip:SetWidth(ARENA_BOX_WIDTH)
-arena.strip:SetHeight(ARENA_BOX_HEIGHT)
-arena.challengesLabel = UI.Text(arena.strip, 13)
-arena.challengesLabel:SetPoint("TOPLEFT", arena.strip, "TOPLEFT", 12, -10)
-arena.challengesLabel:SetTextColor(1, 0.82, 0)
+arena.challengesLabel = UI.Text(content, 10)
+arena.challengesLabel:SetPoint("TOPLEFT", arena, "TOPLEFT", LOADOUT_X, -(LOADOUT_TOP + 84))
+arena.challengesLabel:SetTextColor(LOADOUT_GREY[1], LOADOUT_GREY[2], LOADOUT_GREY[3])
 arena.challengesLabel:SetText("Dark Fortunes")
-arena.challenges = UI.Text(arena.strip, 12)
-arena.challenges:SetPoint("TOPLEFT", arena.challengesLabel, "BOTTOMLEFT", 0, -6)
-arena.challenges:SetWidth(ARENA_BOX_WIDTH - 24)
-arena.challenges:SetJustifyH("LEFT")
-arena.perks = UI.Text(arena.strip, 11)
-arena.perks:SetPoint("TOPLEFT", arena.challenges, "BOTTOMLEFT", 0, -6)
-arena.perks:SetWidth(ARENA_BOX_WIDTH - 24)
-arena.perks:SetJustifyH("LEFT")
+arena.challenges = UI.Text(content, 10)
+arena.challenges:SetPoint("TOPRIGHT", arena, "TOPLEFT", LOADOUT_X + LOADOUT_WIDTH, -(LOADOUT_TOP + 84))
+arena.challenges:SetWidth(120)
+arena.challenges:SetJustifyH("RIGHT")
+
+arena.perksLabel = UI.Text(content, 10)
+arena.perksLabel:SetTextColor(LOADOUT_GREY[1], LOADOUT_GREY[2], LOADOUT_GREY[3])
+arena.perksLabel:SetText("Perks")
+arena.perks = UI.Text(content, 10)
+arena.perks:SetPoint("TOPRIGHT", arena.challenges, "BOTTOMRIGHT", 0, -5)
+arena.perks:SetWidth(140)
+arena.perks:SetJustifyH("RIGHT")
+arena.perksLabel:SetPoint("LEFT", arena, "LEFT", LOADOUT_X, 0)
+arena.perksLabel:SetPoint("TOP", arena.perks, "TOP", 0, 0)
 
 VB.starters = {}
 VB.pendingStarters = {}
-
-local STARTER_SWAP_STEP = 32
 
 local function ChosenStarter()
     for _, option in ipairs(VB.starters) do
@@ -1566,94 +1562,107 @@ local function SetStarterIcon(texture, option)
     SetDesaturation(texture, option and not option.unlocked)
 end
 
-local function StarterButton(parent, size)
-    local slot = UI.Slot(parent, size)
-    slot:SetScript("OnClick", function() ChooseStarter(this.option) end)
-    slot:SetScript("OnEnter", function() ShowStarterTooltip(this, this.option) end)
-    slot:SetScript("OnLeave", function() GameTooltip:Hide() end)
+local starterBox = CreateFrame("Frame", nil, content)
+starterBox:SetPoint("TOPLEFT", arena, "TOPLEFT", LOADOUT_X, -(LOADOUT_TOP + 26))
+starterBox:SetWidth(LOADOUT_WIDTH)
+starterBox:SetHeight(48)
+starterBox.label = UI.Text(starterBox, 10)
+starterBox.label:SetPoint("TOPLEFT", starterBox, "TOPLEFT", 0, 0)
+starterBox.label:SetTextColor(LOADOUT_GREY[1], LOADOUT_GREY[2], LOADOUT_GREY[3])
+starterBox.label:SetText("Starter spell")
+starterBox.name = UI.Text(starterBox, 11)
+starterBox.name:SetJustifyH("LEFT")
+starterBox.slots = {}
+
+local function StarterSlot(index)
+    local slot = starterBox.slots[index]
+    if not slot then
+        slot = CreateFrame("Button", nil, starterBox)
+        slot:SetWidth(STARTER_SIZE)
+        slot:SetHeight(STARTER_SIZE)
+        slot:SetPoint("TOPLEFT", starterBox, "TOPLEFT", (index - 1) * STARTER_STEP, -16)
+        slot:SetBackdrop({ edgeFile = UI.FLAT, edgeSize = 1 })
+        slot.icon = slot:CreateTexture(nil, "ARTWORK")
+        slot.icon:SetPoint("TOPLEFT", slot, "TOPLEFT", 1, -1)
+        slot.icon:SetPoint("BOTTOMRIGHT", slot, "BOTTOMRIGHT", -1, 1)
+        UI.CropIcon(slot.icon)
+        slot:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
+        slot:SetScript("OnClick", function() ChooseStarter(this.option) end)
+        slot:SetScript("OnEnter", function() ShowStarterTooltip(this, this.option) end)
+        slot:SetScript("OnLeave", function() GameTooltip:Hide() end)
+        slot.glow = slot:CreateTexture(nil, "OVERLAY")
+        slot.glow:SetTexture("Interface\\Buttons\\UI-ActionButton-Border")
+        slot.glow:SetBlendMode("ADD")
+        slot.glow:SetVertexColor(1, 0.82, 0)
+        slot.glow:SetWidth(STARTER_SIZE * 1.8)
+        slot.glow:SetHeight(STARTER_SIZE * 1.8)
+        slot.glow:SetPoint("CENTER", slot, "CENTER", 0, 0)
+        starterBox.slots[index] = slot
+    end
     return slot
 end
-
-local starterBox = UI.Strip(content)
-starterBox:SetPoint("TOPLEFT", arena, "TOPLEFT", ARENA_RIGHT_X + ARENA_BOX_WIDTH + 12, -ARENA_BOX_TOP)
-starterBox:SetWidth(ARENA_BOX_WIDTH)
-starterBox:SetHeight(ARENA_BOX_HEIGHT)
-starterBox.label = UI.Text(starterBox, 13)
-starterBox.label:SetPoint("TOPLEFT", starterBox, "TOPLEFT", 12, -10)
-starterBox.label:SetTextColor(1, 0.82, 0)
-starterBox.label:SetText("Starter spell")
-starterBox.slot = StarterButton(starterBox, 36)
-starterBox.slot:SetPoint("TOPLEFT", starterBox, "TOPLEFT", 14, -34)
-starterBox.name = UI.Text(starterBox, 13)
-starterBox.name:SetPoint("LEFT", starterBox.slot, "RIGHT", 10, 0)
-starterBox.name:SetJustifyH("LEFT")
-starterBox.swap = UI.Text(starterBox, 10)
-starterBox.swap:SetPoint("BOTTOMLEFT", starterBox, "BOTTOMLEFT", 14, 22)
-starterBox.swap:SetTextColor(0.7, 0.7, 0.7)
-starterBox.swap:SetText("Swap for")
-starterBox.others = {}
 
 local function RefreshStarters()
     if getn(VB.starters) == 0 then
         starterBox:Hide()
         return
     end
-
-    local chosen = ChosenStarter()
-    starterBox.slot.option = chosen
-    SetStarterIcon(starterBox.slot.icon, chosen)
-    starterBox.name:SetText(chosen and ("|cffffd100" .. chosen.name .. "|r") or "")
-
-    for _, slot in ipairs(starterBox.others) do
+    for _, slot in ipairs(starterBox.slots) do
         slot:Hide()
     end
-    local count = 0
-    for _, option in ipairs(VB.starters) do
-        if not option.chosen then
-            count = count + 1
-            local slot = starterBox.others[count]
-            if not slot then
-                slot = StarterButton(starterBox, 24)
-                starterBox.others[count] = slot
-            end
-            slot:ClearAllPoints()
-            slot:SetPoint("BOTTOMLEFT", starterBox, "BOTTOMLEFT", 70 + (count - 1) * STARTER_SWAP_STEP, 14)
-            slot.option = option
-            SetStarterIcon(slot.icon, option)
-            slot:Show()
+    local chosen = ChosenStarter()
+    local last
+    for index, option in ipairs(VB.starters) do
+        local slot = StarterSlot(index)
+        slot.option = option
+        SetStarterIcon(slot.icon, option)
+        if option.chosen then
+            slot.icon:SetVertexColor(1, 1, 1)
+            slot:SetBackdropBorderColor(1, 0.82, 0, 1)
+            slot.glow:Show()
+        else
+            slot.icon:SetVertexColor(0.6, 0.6, 0.6)
+            slot:SetBackdropBorderColor(0, 0, 0, 1)
+            slot.glow:Hide()
         end
+        slot:Show()
+        last = slot
     end
-
-    starterBox.name:SetWidth(ARENA_BOX_WIDTH - 70)
-    if count == 0 then
-        starterBox.swap:Hide()
-    else
-        starterBox.swap:Show()
-    end
+    starterBox.name:ClearAllPoints()
+    starterBox.name:SetPoint("LEFT", last, "RIGHT", 10, 0)
+    starterBox.name:SetText(chosen and chosen.name or "")
     starterBox:Show()
 end
 
-arena.button = UI.Button(content, 110, "Start run", function()
+arena.button = UI.Button(content, 140, "Start run", function()
     local tier = arena.tier
-    if not tier or not tier.unlocked or VB.inRun then
+    if not tier or not tier.unlocked or VB.inRun or not VanillaBonkRunMaster.CanStart(tier) then
         return
     end
     Command("start " .. VanillaBonkRunMaster.StartArgs(tier))
     arena:Hide()
 end)
-arena.button:SetPoint("BOTTOMRIGHT", arena, "BOTTOMRIGHT", -30, 28)
+arena.button:SetWidth(ARENA_WIDTH - 22 - 560)
+arena.button:SetHeight(38)
+arena.button:SetPoint("TOPLEFT", arena, "TOPLEFT", 560, -(ARENA_HEIGHT - 62))
+arena.button:SetText("")
+arena.button.label = UI.Text(arena.button, 15)
+arena.button.label:SetPoint("CENTER", arena.button, "CENTER", 0, 5)
+arena.button.label:SetTextColor(1, 0.82, 0)
+arena.button.caption = UI.Text(arena.button, 9)
+arena.button.caption:SetPoint("CENTER", arena.button, "CENTER", 0, -9)
+arena.button.caption:SetTextColor(0.94, 0.82, 0.63)
 
 arena:SetScript("OnShow", function()
     PlaySound("igCharacterInfoOpen")
-    UI.SetPortrait(arena)
-    arena.header:SetText(UnitExists("npc") and UnitName("npc") or "Run Master")
+    arena.title:SetText(UnitExists("npc") and UnitName("npc") or "Run Master")
     local _, classToken = UnitClass("player")
     local color = RAID_CLASS_COLORS and RAID_CLASS_COLORS[classToken]
     local name = UnitName("player") or ""
     if color then
         name = format("|cff%02x%02x%02x%s|r", color.r * 255, color.g * 255, color.b * 255, name)
     end
-    arena.headerRight:SetText("|cffffffffHero:|r " .. name .. "|cffffffff, " .. (UnitClass("player") or "") .. "|r")
+    arena.hero:SetText(name .. "|cffffffff, " .. (UnitClass("player") or "") .. "|r")
 end)
 
 arena:SetScript("OnHide", function()
@@ -1661,94 +1670,47 @@ arena:SetScript("OnHide", function()
     GossipWindowHidden(arena)
 end)
 
-local function ArenaArt(tier)
-    return tier.art ~= "" and tier.art or "Interface\\Glues\\LoadingScreens\\LoadScreenEnviroment"
-end
-
 local ShowArenaDetail
 
 ShowArenaDetail = function(tier)
     arena.tier = tier
     RefreshStarters()
     VanillaBonkRunMaster.Show(tier)
-    UI.SetPaneArt(arena.pane, ArenaArt(tier), 0.6)
-    SetDesaturation(arena.pane.art, not tier.unlocked)
-    arena.name:SetText(tier.name)
-    arena.description:SetText(tier.description)
-    local details = tier.details ~= "" and Split(tier.details, "^") or {}
-    local bullets = ""
-    for _, line in ipairs(details) do
-        bullets = bullets .. (bullets ~= "" and "\n" or "") .. "|cffffffff- " .. line .. "|r"
-    end
-    arena.details:SetText(bullets)
-    arena.description:SetWidth(bullets ~= "" and arena.DETAILS_X - 58 or ARENA_WIDTH - 80)
-    if bullets ~= "" then
-        arena.detailsLabel:Show()
-    else
-        arena.detailsLabel:Hide()
-    end
-
-    local length = ""
-    if tier.stages then
-        length = tier.stages .. (tier.stages == 1 and " stage" or " stages") .. (tier.endless and ", then Endless. " or ". ")
-    end
-    if tier.unlocked then
-        arena.lock:Hide()
-        arena.name:SetTextColor(1, 0.82, 0)
-        local progress
-        if tier.stages and tier.best > tier.stages then
-            progress = "|cffffd100Cleared.|r"
-            if tier.endless and tier.best > tier.stages + 1 then
-                progress = progress .. " |cffff8040Best in Endless: stage " .. tier.best .. ".|r"
-            end
-        elseif tier.best > 0 then
-            progress = "|cff40ff40Best: stage " .. tier.best .. ".|r"
-        else
-            progress = "|cff9d9d9dNot played yet.|r"
-        end
-        arena.best:SetText("|cffffffff" .. length .. "|r" .. progress)
-        arena.button:SetText("Start run")
-        arena.button:Enable()
-    else
-        arena.lock:Show()
-        arena.name:SetTextColor(0.6, 0.6, 0.6)
-        arena.best:SetText("|cffffffff" .. length .. "|r|cffff6060" .. tier.hint .. "|r")
-        arena.button:SetText("Locked")
+    if not tier.unlocked then
+        arena.button.label:SetText("Locked")
         arena.button:Disable()
+    elseif not VanillaBonkRunMaster.CanStart(tier) then
+        arena.button.label:SetText("Start run")
+        arena.button:Disable()
+    else
+        arena.button.label:SetText("Start run")
+        arena.button:Enable()
     end
 end
 
 local RefreshArena
 
 RefreshArena = function()
-    local selected, selectedIndex
-    for index, tier in ipairs(VB.tiers) do
+    local selected
+    for _, tier in ipairs(VB.tiers) do
         if tier.id == VB.arenaSelected then
-            selected, selectedIndex = tier, index
+            selected = tier
         end
     end
     if not selected then
-        for index, tier in ipairs(VB.tiers) do
+        for _, tier in ipairs(VB.tiers) do
             if tier.unlocked or not selected then
-                selected, selectedIndex = tier, index
+                selected = tier
             end
         end
         VB.arenaSelected = selected and selected.id
     end
 
-    local labels = {}
-    for _, tier in ipairs(VB.tiers) do
-        tinsert(labels, tier.unlocked and tier.name or ("|cff808080" .. tier.name .. "|r"))
-    end
-    UI.Tabs(arena, labels, function(id)
-        local tier = VB.tiers[id]
-        if tier then
-            VB.arenaSelected = tier.id
-            RefreshArena()
-        end
+    VanillaBonkRunMaster.SetTiers(VB.tiers, VB.arenaSelected, function(tier)
+        VB.arenaSelected = tier.id
+        RefreshArena()
     end)
-    if selectedIndex then
-        UI.SelectTab(arena, selectedIndex)
+    if selected then
         ShowArenaDetail(selected)
     end
 
@@ -1761,17 +1723,15 @@ RefreshArena = function()
                 lines = lines .. (lines ~= "" and ", " or "") .. trimmed
             end
         end
-        arena.challenges:SetText("|cffffffff" .. lines .. "|r\n|cffffe873+" .. (info.goldBonus or 0) .. "% gold|r")
+        arena.challenges:SetText("|cffffffff" .. lines .. "|r |cffffe873+" .. (info.goldBonus or 0) .. "% gold|r")
     else
-        arena.challenges:SetText("|cff9d9d9dNo Dark Fortunes active. Sayge sells them for Darkmoon Tickets.|r")
+        arena.challenges:SetText("|cff9d9d9dNone|r")
     end
     if info.perks and info.perks ~= "" then
-        arena.perks:SetText("|cff80c0ffYour perks:|r " .. info.perks)
+        arena.perks:SetText("|cffffffff" .. gsub(info.perks, ", ", "\n") .. "|r")
     else
-        arena.perks:SetText("|cff9d9d9dNo perks yet.|r")
+        arena.perks:SetText("|cff9d9d9dNone yet|r")
     end
-    arena.strip:SetHeight(max(ARENA_BOX_HEIGHT, 10 + arena.challengesLabel:GetHeight() + 6 + arena.challenges:GetHeight() + 6 +
-        arena.perks:GetHeight() + 10))
 end
 
 StaticPopupDialogs["VANILLABONK_LEAVE_RUN"] = {
@@ -1807,10 +1767,6 @@ local SHOP_HINTS = {
 }
 local MASTERY_SHOP = "3"
 local FORTUNE_SHOP = "2"
-local SHOP_UNLOCK_TABS = {
-    [2] = { kind = "c", hint = "Unlock a Darkmoon Card to find it during runs." },
-    [3] = { kind = "g", hint = "Unlock a Glyph to find it during runs." },
-}
 local SHOP_REFUNDS = {
     ["1"] = { label = "Refund all", text = "Refunds every upgrade you bought. You get all your gold back." },
     ["2"] = { label = "Refund all", text = "Refunds every Dark Fortune you bought. You get all your Darkmoon Tickets back." },
@@ -1829,9 +1785,8 @@ local TREE_MIN_ROWS = 4
 local TREE_TOP = 74
 local SHOP_FOOTER = 40
 
-local BRANCH_UP = { [1] = { 0.12890625, 0.25390625, 0, 0.484375 }, [-1] = { 0.12890625, 0.25390625, 0.515625, 1.0 } }
-local BRANCH_DOWN = { [1] = { 0, 0.125, 0, 0.484375 }, [-1] = { 0, 0.125, 0.515625, 1.0 } }
-local ARROW_TOP = { [1] = { 0, 0.5, 0, 0.5 }, [-1] = { 0, 0.5, 0.5, 1.0 } }
+local SHOP_NODE_SIZE = 36
+local SHOP_NODE_HALF = SHOP_NODE_SIZE / 2
 
 local shop = VanillaBonkUI.Window("VanillaBonkShop", 400, 400)
 shop:SetPoint("CENTER", UIParent, "CENTER", 0, 40)
@@ -1845,7 +1800,7 @@ shop.hint:SetShadowOffset(1, -1)
 shop.hint:SetPoint("BOTTOMLEFT", shop, "BOTTOMLEFT", 26, 26)
 shop.hint:SetTextColor(0.7, 0.7, 0.7)
 
-shop.respec = CreateFrame("Button", nil, shop, "UIPanelButtonTemplate")
+shop.respec = VanillaBonkUI.SliceButton(CreateFrame("Button", nil, shop, "UIPanelButtonTemplate"))
 shop.respec:SetWidth(110)
 shop.respec:SetHeight(22)
 shop.respec:SetPoint("BOTTOMRIGHT", shop, "BOTTOMRIGHT", -28, 22)
@@ -1922,6 +1877,10 @@ local function MissingRequirement(node)
         end
         return text .. "."
     end
+    local gate = VB.shop.gates and VB.shop.gates[node.row]
+    if gate and gate.above < gate.need then
+        return "Requires " .. gate.need .. " Darkmoon Tickets spent in the rows above"
+    end
     local perRow = VB.shop.pointsPerRow or 0
     if perRow > 0 and node.row > 1 and TreeSpent(node.tree) < (node.row - 1) * perRow then
         return "Requires " .. ((node.row - 1) * perRow) .. " points in " .. TreeName(node.tree)
@@ -1975,6 +1934,10 @@ local function RefundBlocker(node)
         if other ~= node and other.rank > 0 then
             if other.requiredId == node.id and node.rank - 1 < other.requiredRank then
                 return "Refund " .. other.name .. " first. It depends on this one."
+            end
+            local gate = VB.shop.gates and VB.shop.gates[other.row]
+            if gate and other.row > node.row and gate.above - node.refund < gate.need then
+                return "Refund " .. other.name .. " first. It needs the tickets you spent here."
             end
             if perRow > 0 and other.tree == node.tree and other.row > node.row then
                 local above = 0
@@ -2104,25 +2067,11 @@ end
 
 local function CreateNodeButton(panel, index)
     local name = panel.name .. "Node" .. index
-    local button = CreateFrame("Button", name, panel, "ItemButtonTemplate")
-
-    button.slot = button:CreateTexture(nil, "BACKGROUND")
-    button.slot:SetTexture("Interface\\Buttons\\UI-EmptySlot-White")
-    button.slot:SetWidth(64)
-    button.slot:SetHeight(64)
-    button.slot:SetPoint("CENTER", button, "CENTER", 0, 0)
-
-    button.rankBorder = button:CreateTexture(nil, "OVERLAY")
-    button.rankBorder:SetTexture("Interface\\TalentFrame\\TalentFrame-RankBorder")
-    button.rankBorder:SetWidth(32)
-    button.rankBorder:SetHeight(32)
-    button.rankBorder:SetPoint("CENTER", button, "BOTTOMRIGHT", 0, 0)
-
-    button.rank = button:CreateFontString(nil, "OVERLAY")
-    SetFont(button.rank, 10, "")
-    button.rank:SetShadowColor(0, 0, 0)
-    button.rank:SetShadowOffset(1, -1)
-    button.rank:SetPoint("CENTER", button.rankBorder, "CENTER", 0, 0)
+    local button = CreateFrame("Button", name, panel)
+    button:SetWidth(SHOP_NODE_SIZE)
+    button:SetHeight(SHOP_NODE_SIZE)
+    button:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
+    VanillaBonkTalents.StyleButton(button)
 
     button:SetScript("OnEnter", function() ShowNodeTooltip(this) end)
     button:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -2138,39 +2087,20 @@ local function SetNode(button, node)
     button:ClearAllPoints()
     button:SetPoint("TOPLEFT", button:GetParent(), "TOPLEFT",
         treeLayout.left + (node.column - 1) * treeLayout.column, -(TREE_OFFSET_Y + (node.row - 1) * TREE_SPACING))
-    SetItemButtonTexture(button, ICON_PATH .. (node.icon ~= "" and node.icon or "INV_Misc_QuestionMark"))
-
     local missing = MissingRequirement(node)
-    local r, g, b, text, grey = 1, 0.82, 0, node.rank, nil
+    local which, text, colour = "locked", node.rank .. "/" .. node.maxRank, nil
     if node.toggle and node.rank > 0 then
-        if node.enabled then
-            r, g, b, text = 0.1, 1, 0.1, "On"
-            button.slot:SetVertexColor(1, 0.82, 0)
-        else
-            r, g, b, text, grey = 0.5, 0.5, 0.5, "Off", 1
-            button.slot:SetVertexColor(0.5, 0.5, 0.5)
-        end
-    elseif not missing and node.rank < node.maxRank and ShopBalance() >= node.cost then
-        r, g, b = 0.1, 1, 0.1
-        button.slot:SetVertexColor(0.1, 1, 0.1)
+        which = node.enabled and "on" or "off"
+        text = node.enabled and "On" or "Off"
+        colour = node.enabled and { 0.1, 1, 0.1 } or { 0.8, 0.8, 0.8 }
+    elseif not missing and node.rank >= node.maxRank then
+        which = "max"
+    elseif not missing and ShopBalance() >= node.cost then
+        which = node.rank > 0 and "part" or "open"
     elseif not missing and node.rank > 0 then
-        button.slot:SetVertexColor(1, 0.82, 0)
-    else
-        r, g, b, grey = 0.5, 0.5, 0.5, 1
-        button.slot:SetVertexColor(0.5, 0.5, 0.5)
+        which = "max"
     end
-
-    SetItemButtonDesaturated(button, grey, 0.65, 0.65, 0.65)
-    button.rank:SetText(tostring(text))
-    button.rank:SetTextColor(r, g, b)
-    if grey and node.rank == 0 then
-        button.rankBorder:Hide()
-        button.rank:Hide()
-    else
-        button.rankBorder:SetVertexColor(grey and 0.5 or 1, grey and 0.5 or 1, grey and 0.5 or 1)
-        button.rankBorder:Show()
-        button.rank:Show()
-    end
+    VanillaBonkTalents.StyleNode(button, node.toggle, which, node.icon ~= "" and node.icon or "INV_Misc_QuestionMark", text, colour)
     button:Show()
 
     if GameTooltip:IsOwned(button) then
@@ -2214,9 +2144,6 @@ local function CreateTreePanel(index)
     panel.spent:SetShadowOffset(1, -1)
     panel.spent:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -10, -8)
 
-    panel.arrowFrame = CreateFrame("Frame", nil, panel)
-    panel.arrowFrame:SetAllPoints(panel)
-
     shop.panels[index] = panel
     return panel
 end
@@ -2252,36 +2179,12 @@ local function LayoutArt(panel, background, height)
     art.BottomRight:Hide()
 end
 
-local function PlaceLine(pool, parent, file, index, coords, x, y)
-    local texture = pool[index]
-    if not texture then
-        texture = parent:CreateTexture(nil, "ARTWORK")
-        texture:SetTexture(file)
-        texture:SetWidth(32)
-        texture:SetHeight(32)
-        pool[index] = texture
-    end
-    texture:SetTexCoord(coords[1], coords[2], coords[3], coords[4])
-    texture:ClearAllPoints()
-    texture:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
-    texture:Show()
-end
-
 local function DrawTree(panel, tree)
     local nodes = VB.shop.nodes
-    for _, list in ipairs({ panel.buttons, panel.branches, panel.arrows }) do
+    for _, list in ipairs({ panel.buttons, panel.branches }) do
         for _, region in ipairs(list) do
             region:Hide()
         end
-    end
-
-    local grid = {}
-    local function Cell(row, column)
-        local key = row * 10 + column
-        if not grid[key] then
-            grid[key] = { row = row, column = column, up = 0, down = 0, arrow = 0 }
-        end
-        return grid[key]
     end
 
     local count, spent = 0, 0
@@ -2289,85 +2192,59 @@ local function DrawTree(panel, tree)
         if node.tree == tree.id then
             count = count + 1
             SetNode(panel.buttons[count] or CreateNodeButton(panel, count), node)
-            Cell(node.row, node.column).node = node
             spent = spent + node.rank
         end
     end
     panel.header:SetText(tree.name)
-    panel.spent:SetText(spent .. (spent == 1 and " point spent" or " points spent"))
+    if tree.tickets then
+        panel.spent:SetText(tree.tickets .. (tree.tickets == 1 and " ticket spent" or " tickets spent"))
+    else
+        panel.spent:SetText(spent .. (spent == 1 and " point spent" or " points spent"))
+    end
 
+    local height = panel:GetHeight()
+    local function Centre(node)
+        return treeLayout.left + (node.column - 1) * treeLayout.column + SHOP_NODE_HALF,
+            height - TREE_OFFSET_Y - (node.row - 1) * TREE_SPACING - SHOP_NODE_HALF
+    end
+    local lines = 0
     for _, node in pairs(nodes) do
         local required = nodes[node.requiredId]
-        if node.tree == tree.id and required and required.tree == tree.id and required.column == node.column and required.row < node.row then
-            local lit = MissingRequirement(node) and -1 or 1
-            for row = required.row, node.row - 1 do
-                Cell(row, node.column).down = lit
-                if row + 1 <= node.row - 1 then
-                    Cell(row + 1, node.column).up = lit
-                end
-            end
-            Cell(node.row, node.column).arrow = lit
+        if node.tree == tree.id and required and required.tree == tree.id then
+            local sx, sy = Centre(required)
+            local ex, ey = Centre(node)
+            local kind = MissingRequirement(node) and "dark" or node.rank > 0 and "lit" or "open"
+            lines = lines + 1
+            VanillaBonkTalents.ShopLine(panel, panel.branches, lines, sx, sy, ex, ey, kind)
         end
     end
 
-    local branches, arrows = 0, 0
-    local branchFile, arrowFile = "Interface\\TalentFrame\\UI-TalentBranches", "Interface\\TalentFrame\\UI-TalentArrows"
-    for _, cell in pairs(grid) do
-        local x = treeLayout.left + (cell.column - 1) * treeLayout.column + 2
-        local y = -(TREE_OFFSET_Y + (cell.row - 1) * TREE_SPACING) - 2
-        if cell.node then
-            if cell.up ~= 0 then
-                branches = branches + 1
-                PlaceLine(panel.branches, panel, branchFile, branches, BRANCH_UP[cell.up], x, y + 32)
+    VanillaBonkTalents.HideShopGates(panel.arrows)
+    local gates = VB.shop.gates
+    if gates then
+        local count = 0
+        for row = 2, table.getn(gates) do
+            if gates[row].need > gates[row - 1].need then
+                count = count + 1
+                local lit = gates[row].above >= gates[row].need
+                local text = lit and ("Unlocked at " .. gates[row].need .. " tickets spent") or (gates[row].need .. " tickets spent to unlock")
+                VanillaBonkTalents.ShopGate(panel, panel.arrows, count, -(TREE_OFFSET_Y + (row - 1.5) * TREE_SPACING + SHOP_NODE_HALF), text, lit)
             end
-            if cell.down ~= 0 then
-                branches = branches + 1
-                PlaceLine(panel.branches, panel, branchFile, branches, BRANCH_DOWN[cell.down], x, y - 31)
-            end
-        elseif cell.up ~= 0 and cell.down ~= 0 then
-            branches = branches + 1
-            PlaceLine(panel.branches, panel, branchFile, branches, BRANCH_UP[cell.up], x, y)
-            branches = branches + 1
-            PlaceLine(panel.branches, panel, branchFile, branches, BRANCH_DOWN[cell.down], x, y - 32)
-        end
-        if cell.arrow ~= 0 then
-            arrows = arrows + 1
-            PlaceLine(panel.arrows, panel.arrowFrame, arrowFile, arrows, ARROW_TOP[cell.arrow], x, y + 21)
         end
     end
-    panel.arrowFrame:SetFrameLevel(panel:GetFrameLevel() + 3)
 end
 
 local RefreshShop
 
 local function UpdateShopTabs(data)
-    if data.kind ~= FORTUNE_SHOP then
-        shop.tab = nil
-        UI.Tabs(shop, {}, nil)
-        return
-    end
-    UI.Tabs(shop, { "Dark Fortunes", "Darkmoon Cards", "Glyphs" }, function(id)
-        shop.tab = id
-        RefreshShop()
-    end)
-    shop.tab = shop.tab or 1
-    UI.SelectTab(shop, shop.tab)
-end
-
-local function ShowShopUnlocks(height, unlocks)
-    for _, panel in ipairs(shop.panels) do
-        panel:Hide()
-    end
-    shop.hint:SetText(unlocks.hint)
-    shop.gold:SetText(FormatShards(VB.shop.balance))
-    shop.respec:Hide()
-    VanillaBonkCardShop.SetTickets(VB.shop.balance)
-    VanillaBonkCardShop.Show(shop, 20, TREE_TOP, shop:GetWidth() - 30, height, unlocks.kind)
+    shop.tab = nil
+    UI.Tabs(shop, {}, nil)
 end
 
 RefreshShop = function()
     local data = VB.shop
     UpdateShopTabs(data)
+    TREE_SPACING = data.gates and 84 or 63
     local rows = TREE_MIN_ROWS
     for _, node in pairs(data.nodes) do
         rows = max(rows, node.row)
@@ -2377,22 +2254,31 @@ RefreshShop = function()
     for _, panel in ipairs(shop.panels) do
         panel:Hide()
     end
-    local count = table.getn(data.trees)
-    treeLayout = count >= 4 and TREE_LAYOUTS.narrow or TREE_LAYOUTS.wide
-    local width = treeLayout.width
-    for index, tree in ipairs(data.trees) do
-        local panel = shop.panels[index] or CreateTreePanel(index)
-        panel:ClearAllPoints()
-        panel:SetPoint("TOPLEFT", shop, "TOPLEFT", 20 + (index - 1) * (width + TREE_GAP), -TREE_TOP)
-        panel:SetWidth(width)
-        panel:SetHeight(height)
-        LayoutArt(panel, tree.background, height)
-        DrawTree(panel, tree)
-        panel:Show()
-    end
+    if VanillaBonkTalents and VanillaBonkTalents.Wants(data) then
+        local freeWidth, freeHeight = VanillaBonkTalents.Show(shop, data, TREE_TOP)
+        height = freeHeight
+        VanillaBonkUI.SetWindowSize(shop, freeWidth, TREE_TOP + height + SHOP_FOOTER + 9)
+    else
+        if VanillaBonkTalents then
+            VanillaBonkTalents.Hide()
+        end
+        local count = table.getn(data.trees)
+        treeLayout = count >= 4 and TREE_LAYOUTS.narrow or TREE_LAYOUTS.wide
+        local width = treeLayout.width
+        for index, tree in ipairs(data.trees) do
+            local panel = shop.panels[index] or CreateTreePanel(index)
+            panel:ClearAllPoints()
+            panel:SetPoint("TOPLEFT", shop, "TOPLEFT", 20 + (index - 1) * (width + TREE_GAP), -TREE_TOP)
+            panel:SetWidth(width)
+            panel:SetHeight(height)
+            LayoutArt(panel, tree.background, height)
+            DrawTree(panel, tree)
+            panel:Show()
+        end
 
-    count = max(count, 1)
-    VanillaBonkUI.SetWindowSize(shop, max(360, 30 + count * width + (count - 1) * TREE_GAP), TREE_TOP + height + SHOP_FOOTER + 9)
+        count = max(count, 1)
+        VanillaBonkUI.SetWindowSize(shop, max(360, 30 + count * width + (count - 1) * TREE_GAP), TREE_TOP + height + SHOP_FOOTER + 9)
+    end
     shop.title:SetText((data.className and (data.className .. " ") or "") .. (SHOP_TITLES[data.kind] or ""))
     shop.header:SetText(data.npc)
     shop.hint:SetText(SHOP_HINTS[data.kind] or "")
@@ -2414,12 +2300,6 @@ RefreshShop = function()
         shop.respec:Show()
     else
         shop.respec:Hide()
-    end
-    local unlocks = SHOP_UNLOCK_TABS[shop.tab or 0]
-    if unlocks and data.kind == FORTUNE_SHOP then
-        ShowShopUnlocks(height, unlocks)
-    else
-        VanillaBonkCardShop.Hide()
     end
 end
 
@@ -2650,7 +2530,7 @@ handlers["end"] = function(f)
     else
         results.title:SetText("|cffff3030Defeated|r")
     end
-    results.body:SetText("Reached stage " .. (f[7] or "1") .. " in " .. FormatTime(f[3]) .. "\n" ..
+    results.body:SetText("Reached floor " .. (f[7] or "1") .. " in " .. FormatTime(f[3]) .. "\n" ..
         "Kills: " .. f[4] .. "    Level: " .. f[6] .. "\n" ..
         "Gold earned: " .. FormatGold(f[5]) .. "\n" ..
         "Darkmoon Tickets: |cffc080ff" .. (f[8] or "0") .. "|r\n\n" ..
@@ -2688,12 +2568,25 @@ handlers["shop"] = function(f)
         data.fromQuests = tonumber(f[12]) or 0
         data.className = f[13]
         data.pointsPerRow = tonumber(f[14]) or 0
+    elseif f[2] == FORTUNE_SHOP and f[7] and f[7] ~= "" then
+        local data = VB.shopIncoming
+        data.gates = {}
+        for need, above in string.gfind(f[7], "(%d+):(%d+)") do
+            tinsert(data.gates, { need = tonumber(need), above = tonumber(above) })
+        end
     end
 end
 
 handlers["tree"] = function(f)
     if VB.shopIncoming then
-        tinsert(VB.shopIncoming.trees, { id = f[2], name = f[3] or "", background = f[4] or "MageFire" })
+        local tree = { id = f[2], name = f[3] or "", background = f[4] or "MageFire" }
+        if VB.shopIncoming.kind == FORTUNE_SHOP then
+            tree.tickets = tonumber(f[5])
+        end
+        if VB.shopIncoming.kind == MASTERY_SHOP and VanillaBonkTalents then
+            VanillaBonkTalents.ParseTree(tree, f)
+        end
+        tinsert(VB.shopIncoming.trees, tree)
     end
 end
 
@@ -2722,6 +2615,9 @@ handlers["node"] = function(f)
         refund = tonumber(f[19]) or 0,
         questDescription = f[20] or "",
     }
+    if VB.shopIncoming.kind == MASTERY_SHOP and VanillaBonkTalents then
+        VanillaBonkTalents.ParseNode(VB.shopIncoming.nodes[f[3]], f)
+    end
 end
 
 local function ShopChanges(before, after)
@@ -2793,45 +2689,43 @@ handlers["shopclose"] = function()
 end
 
 local STATS = {
-    [0]  = { name = "Power", pct = true, text = "You deal %s more damage." },
-    [1]  = { name = "Haste", pct = true, curve = 75, gearCap = 20, text = "Your attacks and dots tick %s more often." },
-    [2]  = { name = "Count", cap = 5, text = "Your spells fire %s more bolts or shots, swing that many more times, and place or summon that many more. AoE spells are not affected." },
-    [3]  = { name = "Movement speed", pct = true, cap = 50, text = "You run %s faster." },
-    [4]  = { name = "Max health", pct = true, text = "You have %s more maximum health." },
-    [5]  = { name = "Regen", pct = true, text = "You regain %s of your maximum health every second." },
-    [6]  = { name = "Gold", pct = true, text = "You find %s more gold." },
-    [7]  = { name = "Experience", pct = true, text = "You gain %s more experience." },
-    [8]  = { name = "Pickup range", pct = true, cap = 400, text = "Experience orbs and turkey legs come to you from %s further away." },
-    [9]  = { name = "Leech", pct = true, text = "Each hit has a %s chance to heal 1%% of your maximum health (at most 2%% a second)." },
-    [10] = { name = "Area", pct = true, cap = 50, text = "AoE spells are %s bigger." },
-    [11] = { name = "Duration", pct = true, text = "Damage over time and ground spells last %s longer." },
-    [12] = { name = "Armor", text = "Enemies deal %s less damage to you." },
-    [13] = { name = "Hit chance", short = "Hit", pct = true, cap = 100, text = "Elites and bosses dodge your hits %s less often. Normal enemies never dodge." },
-    [14] = { name = "Dodge chance", short = "Dodge", pct = true, cap = 60, text = "You have a %s chance to dodge enemy swings." },
-    [15] = { name = "Critical strike chance", short = "Crit chance", pct = true, text = "Your hits have a %s chance to be a critical strike. Above 100%%, the excess is your chance to strike critically twice." },
-    [16] = { name = "Critical strike damage", short = "Crit damage", pct = true, text = "Critical strikes deal %s more damage, on top of the base +50%% for spells and +100%% for weapon attacks." },
-    [17] = { name = "Shield", pct = true, text = "Absorbs damage equal to %s of your maximum health. Refills after 4 seconds without taking damage." },
-    [18] = { name = "Luck", text = "Chests and level-ups offer rarer choices." },
-    [19] = { name = "Poison damage", pct = true, text = "Your Poison deals %s more damage." },
+    [0]  = { name = "Power", pct = true, text = "Increases all damage you and your minions deal by %s." },
+    [1]  = { name = "Haste", pct = true, curve = 75, gearCap = 20, text = "Increases the speed of your attacks, damage over time and minions by %s." },
+    [2]  = { name = "Count", cap = 5, text = "Your spells fire %s extra bolts, shots or swings." },
+    [3]  = { name = "Movement speed", short = "Speed", pct = true, cap = 50, text = "Increases movement speed by %s." },
+    [4]  = { name = "Max health", pct = true, text = "Increases maximum health by %s." },
+    [5]  = { name = "Regen", pct = true, text = "Restores %s of maximum health every sec." },
+    [6]  = { name = "Gold", pct = true, text = "Increases gold found by %s." },
+    [7]  = { name = "Experience", pct = true, text = "Increases experience gained by %s." },
+    [8]  = { name = "Pickup range", pct = true, cap = 400, text = "Increases pickup range by %s." },
+    [9]  = { name = "Leech", pct = true, text = "Your hits have a %s chance to heal you for 1%% of maximum health." },
+    [10] = { name = "Area", pct = true, curve = 60, text = "Increases the size of your AoE spells by %s." },
+    [11] = { name = "Duration", pct = true, text = "Increases the duration of your spells by %s." },
+    [12] = { name = "Armor", text = "Reduces damage taken by %s." },
+    [14] = { name = "Dodge chance", short = "Dodge", pct = true, cap = 60, text = "Increases your chance to dodge attacks by %s." },
+    [15] = { name = "Critical strike chance", short = "Crit chance", pct = true, text = "Increases your chance to critically hit by %s." },
+    [16] = { name = "Critical strike damage", short = "Crit damage", pct = true, text = "Increases critical strike damage by %s." },
+    [17] = { name = "Shield", pct = true, text = "Absorbs damage equal to %s of maximum health.", note = "Shield is restored after 4 sec without taking damage." },
+    [18] = { name = "Luck", text = "Improves the rarity of chest and level-up choices." },
+    [19] = { name = "Poison damage", pct = true, text = "Increases Poison damage by %s." },
 }
-local STAT_ORDER = { 0, 12, 14, 13, 15, 16, 17, 1, 10, 8, 18, 4, 3, 5, 9, 11, 19, 6, 7, 2 }
+local STAT_ORDER = { 0, 12, 14, 15, 16, 17, 1, 10, 8, 18, 4, 3, 5, 9, 11, 19, 6, 7, 2 }
 
 VB.statTips = {
-    s0 = { name = "Power", text = "Increases the damage of all your spells and pets." },
-    s1 = { name = "Haste", text = "Your attacks and dots tick more often. Each point is worth a little less than the last, up to at most 75%." },
-    s2 = { name = "Count", text = "Your spells fire more bolts or shots, swing more times, and place or summon more. AoE spells are not affected." },
-    s3 = { name = "Movement speed", text = "You run faster." },
-    s4 = { name = "Maximum health", text = "Raises your maximum health." },
-    s5 = { name = "Health regeneration", text = "You regain a share of your maximum health every second." },
-    s7 = { name = "Experience", text = "You gain more experience, so you level up and get upgrades sooner." },
-    s8 = { name = "Pickup range", text = "Experience orbs and turkey legs come to you from further away." },
-    s10 = { name = "Area", text = "AoE spells are bigger." },
-    s12 = { name = "Armor", text = "Enemies deal less damage to you." },
-    s13 = { name = "Hit chance", text = "Elites and bosses dodge your hits less often. Normal enemies never dodge." },
-    s14 = { name = "Dodge chance", text = "Your chance to dodge enemy swings and take no damage." },
-    s15 = { name = "Critical strike chance", text = "Your chance for a hit to deal extra damage. Above 100%, the excess is your chance to strike critically twice." },
-    s16 = { name = "Critical strike damage", text = "Critical strikes deal more damage, on top of the base +50% for spells and +100% for weapon attacks." },
-    s18 = { name = "Luck", text = "Chests and level-ups offer rarer choices." },
+    s0 = { name = "Power", text = "Increases all damage you and your minions deal." },
+    s1 = { name = "Haste", text = "Increases the speed of your attacks, damage over time and minions." },
+    s2 = { name = "Count", text = "Your spells fire extra bolts, shots or swings. Does not affect AoE spells." },
+    s3 = { name = "Movement speed", text = "Increases movement speed." },
+    s4 = { name = "Maximum health", text = "Increases maximum health." },
+    s5 = { name = "Health regeneration", text = "Restores a share of maximum health every sec." },
+    s7 = { name = "Experience", text = "Increases experience gained." },
+    s8 = { name = "Pickup range", text = "Increases the range you collect experience and food from." },
+    s10 = { name = "Area", text = "Increases the size of your AoE spells." },
+    s12 = { name = "Armor", text = "Reduces damage taken." },
+    s14 = { name = "Dodge chance", text = "Increases your chance to dodge attacks." },
+    s15 = { name = "Critical strike chance", text = "Increases your chance to critically hit." },
+    s16 = { name = "Critical strike damage", text = "Increases critical strike damage." },
+    s18 = { name = "Luck", text = "Improves the rarity of chest and level-up choices." },
 }
 function VB.BuildStatTerms(names)
     VB.statTerms = {}
@@ -2848,7 +2742,7 @@ VB.BuildStatTerms({
     ["Health regained each second"] = "s5",
     ["Experience"] = "s7", ["experience"] = "s7",
     ["Pickup range"] = "s8", ["pickup range"] = "s8",
-    ["Area"] = "s10", ["Armor"] = "s12", ["Hit chance"] = "s13",
+    ["Area"] = "s10", ["Armor"] = "s12",
     ["Dodge chance"] = "s14", ["chance to dodge"] = "s14",
     ["Critical strike chance"] = "s15", ["critical strike chance"] = "s15", ["Crit chance"] = "s15",
     ["Critical strike damage"] = "s16", ["critical strike damage"] = "s16",
@@ -2856,6 +2750,17 @@ VB.BuildStatTerms({
 })
 
 VB.gear = {}
+VB.tierGear = { first = 0, tiers = 0, slots = 0, classes = 0, stats = {} }
+setmetatable(VB.gear, { __index = function(gear, id)
+    local tierGear = VB.tierGear
+    local index = (tonumber(id) or 0) - tierGear.first
+    local perClass = tierGear.tiers * tierGear.slots
+    if tierGear.first == 0 or perClass == 0 or index < 0 or index >= perClass * tierGear.classes then
+        return nil
+    end
+    local stats = tierGear.stats[floor(mod(index, perClass) / tierGear.slots) + 1]
+    return stats and { set = 0, stats = stats }
+end })
 VB.sets = {}
 VB.stats = {}
 VB.statsInRun = false
@@ -2992,6 +2897,17 @@ local function AddGearLines(tooltip, link)
             PRIMARY_STATS.AddLine(tooltip, statId, stat.stats[statId], 0.12, 1, 0.12)
         end
     end
+    local tier = VanillaBonkUI.GearTier and VanillaBonkUI.GearTier(id)
+    local tierText = tier and tooltip:GetName() and getglobal(tooltip:GetName() .. "TextRight1")
+    if tierText then
+        tierText:SetText("Tier " .. tier)
+        tierText:SetTextColor(1, 0.82, 0)
+        tierText:Show()
+    end
+    local proc = VanillaBonkUI.trinketTips and VanillaBonkUI.trinketTips[id]
+    if proc then
+        tooltip:AddLine("Equip: " .. proc, 0.12, 1, 0.12, 1)
+    end
 
     local set = stat.set > 0 and VB.sets[stat.set]
     if set then
@@ -3018,6 +2934,8 @@ local function AddGearLines(tooltip, link)
     end
     tooltip:Show()
 end
+
+VanillaBonkUI.AddGearLines = AddGearLines
 
 local function HookTooltip(tooltip, method, linkOf)
     local original = tooltip and tooltip[method]
@@ -3255,7 +3173,7 @@ local function CreateStatLine(column, row)
 end
 
 local STAT_LAYOUT = {
-    { 0, 1, 15, 16, 13, 10, 18 },
+    { 0, 1, 15, 16, 10, 18 },
     { 12, 14, 17, 4, 3, 8 },
 }
 local statLines = {}
@@ -3275,7 +3193,6 @@ local function RefreshHeroStats()
     end
 
     local gear, active = GearTotals()
-    local source = VB.statsInRun and "upgrades, talents and this run's picks" or "Inn upgrades and talents"
 
     for statId, line in pairs(statLines) do
         local stat = STATS[statId]
@@ -3289,30 +3206,15 @@ local function RefreshHeroStats()
         end
 
         line.value:SetText(FormatStat(statId, shown))
-        line.title = stat.name .. " " .. FormatStat(statId, shown)
+        line.title = stat.name
         local explained = FormatStat(statId, shown)
         if statId == 12 then
-            explained = Percent(floor(1000 * max(0, shown) / (100 + max(0, shown)) + 0.5) / 10)
+            explained = Percent(floor(1000 * min(0.6, max(0, shown) / (max(0, shown) * 4 / 3 + 100)) + 0.5) / 10)
         end
-        line.lines = { format(stat.text, explained),
-            FormatStat(statId, fromGear) .. " from gear, " .. FormatStat(statId, fromRest) .. " from " .. source .. "." }
-        if statId == 15 then
-            tinsert(line.lines, "Every hero starts with " .. Percent(5) .. ".")
-        end
-        if stat.gearCap then
-            tinsert(line.lines, "Gear gives at most " .. FormatStat(statId, stat.gearCap) .. ".")
-        end
-        if stat.curve then
-            tinsert(line.lines, "Each point is worth a little less than the last, up to at most " .. FormatStat(statId, stat.curve) .. ".")
-            if FormatStat(statId, total) ~= FormatStat(statId, shown) then
-                tinsert(line.lines, "Your " .. FormatStat(statId, total) .. " counts as " .. FormatStat(statId, shown) .. ".")
-            end
-        end
-        if stat.cap then
-            tinsert(line.lines, "Capped at " .. FormatStat(statId, stat.cap) .. ".")
-            if total > stat.cap then
-                tinsert(line.lines, "Yours adds up to " .. FormatStat(statId, total) .. ", so " .. FormatStat(statId, total - stat.cap) .. " is wasted.")
-            end
+        line.lines = { format(stat.text, explained) }
+        if stat.note then
+            tinsert(line.lines, " ")
+            tinsert(line.lines, stat.note)
         end
     end
 
@@ -3345,6 +3247,17 @@ end)
 
 handlers["gear"] = function(f)
     VB.gear[tonumber(f[2])] = { set = tonumber(f[3]) or 0, stats = ParseStats(f[4]) }
+end
+
+handlers["tiergear"] = function(f)
+    VB.tierGear.first = tonumber(f[2]) or 0
+    VB.tierGear.tiers = tonumber(f[3]) or 0
+    VB.tierGear.slots = tonumber(f[4]) or 0
+    VB.tierGear.classes = tonumber(f[5]) or 0
+end
+
+handlers["tierstats"] = function(f)
+    VB.tierGear.stats[tonumber(f[2]) or 0] = ParseStats(f[3])
 end
 
 handlers["set"] = function(f)
@@ -3521,3 +3434,9 @@ events:SetScript("OnEvent", function()
         end
     end
 end)
+
+function UI.NavPrompt(box, primary, second)
+    box.navButtons = { primary, second }
+    UI.navPrompts = UI.navPrompts or {}
+    tinsert(UI.navPrompts, box)
+end

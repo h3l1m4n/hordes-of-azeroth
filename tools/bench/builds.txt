@@ -11,7 +11,7 @@ warrior protB 326 328 330 332 Protection B
 warrior afk 326 327 329 332 Prot AFK loop
 rogue user 628 631 601 624 User build
 rogue combat 600 601 602 603 Combat base
-rogue ass 604 605 606 607 Assassination base
+rogue assn 604 605 606 607 Assassination base
 rogue sub 608 609 610 611 Subtlety base
 rogue combA 612 614 616 618 Combat A
 rogue combB 613 615 617 619 Combat B
@@ -107,3 +107,40 @@ druid ssurge 1038 1001 1004 1006 Shifting Surge dancing every 3 sec, Starfire, R
 druid sspirit 1039 1001 1004 1006 Spirit Forms dancing every 3 sec, Starfire, Rake, Swipe
 druid hybrid2 1013 1001 1002 1004 Two trees, dancing every 3 sec: Starfire, Moonfire, Rake
 druid hybrid3 1013 1002 1006 1011 Three trees, dancing every 3 sec: Moonfire, Swipe, Tranquility
+hunter pet201 201 Pet alone 201
+hunter pet211 211 Pet alone 211
+hunter pet228 228 Pet alone 228
+hunter pet229 229 Pet alone 229
+hunter pet230 230 Pet alone 230
+hunter pet231 231 Pet alone 231
+priest pet511 511 Pet alone 511
+priest pet534 534 Pet alone 534
+priest pet535 535 Pet alone 535
+shaman pet707 707 Pet alone 707
+shaman pet726 726 Pet alone 726
+shaman pet727 727 Pet alone 727
+shaman pet708 708 Pet alone 708
+shaman pet709 709 Pet alone 709
+shaman pet728 728 Pet alone 728
+shaman pet729 729 Pet alone 729
+shaman pet730 730 Pet alone 730
+shaman pet731 731 Pet alone 731
+shaman pet733 733 Pet alone 733
+mage pet410 410 Pet alone 410
+mage pet431 431 Pet alone 431
+mage pet432 432 Pet alone 432
+warlock pet900 900 Pet alone 900
+warlock pet901 901 Pet alone 901
+warlock pet902 902 Pet alone 902
+warlock pet903 903 Pet alone 903
+warlock pet911 911 Pet alone 911
+warlock pet912 912 Pet alone 912
+warlock pet913 913 Pet alone 913
+warlock pet914 914 Pet alone 914
+warlock pet915 915 Pet alone 915
+warlock pet916 916 Pet alone 916
+warlock pet917 917 Pet alone 917
+warlock pet918 918 Pet alone 918
+druid pet1009 1009 Pet alone 1009
+druid pet1030 1030 Pet alone 1030
+druid pet1031 1031 Pet alone 1031

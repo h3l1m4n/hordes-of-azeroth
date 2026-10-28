@@ -206,6 +206,20 @@ namespace BonkTelegraphs
         }
     }
 
+    static class GameFiles
+    {
+        public static string Child(string directory, string name)
+        {
+            string exact = System.IO.Path.Combine(directory, name);
+            if (File.Exists(exact) || Directory.Exists(exact) || !Directory.Exists(directory))
+                return exact;
+            foreach (string entry in Directory.EnumerateFileSystemEntries(directory))
+                if (string.Equals(System.IO.Path.GetFileName(entry), name, StringComparison.OrdinalIgnoreCase))
+                    return entry;
+            return exact;
+        }
+    }
+
     sealed class ClientData : IDisposable
     {
         readonly List<MpqReader> m_archives = new List<MpqReader>();
@@ -215,10 +229,13 @@ namespace BonkTelegraphs
             HashSet<string> skipped = new HashSet<string>(skip, StringComparer.OrdinalIgnoreCase);
             string[] order = { "patch-9.MPQ", "patch-8.MPQ", "patch-7.MPQ", "patch-6.MPQ", "patch-5.MPQ", "patch-4.MPQ", "patch-3.MPQ",
                 "patch-2.MPQ", "patch.MPQ", "dbc.MPQ", "model.MPQ", "texture.MPQ", "misc.MPQ", "interface.MPQ", "sound.MPQ", "base.MPQ" };
+            Dictionary<string, string> present = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (string path in Directory.GetFiles(dataDir))
+                present[System.IO.Path.GetFileName(path)] = path;
             foreach (string file in order)
             {
-                string path = System.IO.Path.Combine(dataDir, file);
-                if (File.Exists(path) && !skipped.Contains(file))
+                string path;
+                if (present.TryGetValue(file, out path) && !skipped.Contains(file))
                     m_archives.Add(new MpqReader(path));
             }
         }
@@ -238,6 +255,36 @@ namespace BonkTelegraphs
         {
             foreach (MpqReader archive in m_archives)
                 archive.Dispose();
+        }
+    }
+
+    static class MpqPath
+    {
+        public static string FileName(string path)
+        {
+            return path.Substring(LastSlash(path) + 1);
+        }
+
+        public static string Directory(string path)
+        {
+            int slash = LastSlash(path);
+            return slash < 0 ? "" : path.Substring(0, slash);
+        }
+
+        public static string WithoutExtension(string path)
+        {
+            int dot = path.LastIndexOf('.');
+            return dot > LastSlash(path) ? path.Substring(0, dot) : path;
+        }
+
+        public static string Join(string directory, string name)
+        {
+            return directory.Length == 0 ? name : directory + "\\" + name;
+        }
+
+        static int LastSlash(string path)
+        {
+            return Math.Max(path.LastIndexOf('\\'), path.LastIndexOf('/'));
         }
     }
 

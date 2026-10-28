@@ -247,7 +247,7 @@ local LOCKED_SLOTS = {
 
 local function AddPassiveLines(entry)
     local info = run.info[entry.index] or {}
-    GameTooltip:AddDoubleLine(info.name or "?", "Rank " .. entry.rank .. " / " .. entry.max, 1, 1, 1, 0.6, 0.6, 0.6)
+    GameTooltip:AddDoubleLine(info.name or "?", "Rank " .. entry.rank .. (entry.max > 0 and " / " .. entry.max or ""), 1, 1, 1, 0.6, 0.6, 0.6)
     GameTooltip:AddLine("Passive", 0.6, 0.6, 0.6)
     if info.description and info.description ~= "" then
         GameTooltip:AddLine(info.description, 1, 0.82, 0, 1)
@@ -269,25 +269,25 @@ local function ShowSpellTip(owner, anchor, entry, stat)
     local rarity = UI.RARITY[evolved and 4 or BestRarity(info.ranks)]
     Tip:SetOwner(owner, anchor)
     Tip:SetLegendary(evolved)
-    Tip:Title(info.name or "?", { rarity.r, rarity.g, rarity.b }, Tip:SpellTags(info.school, info.aoe))
-
-    local rank = "Rank " .. entry.rank
-    local spec = info.spec or ""
-    local headerColor = info.faster and Tip.GREEN or Tip.WHITE
+    Tip:Title(info.name or "?", { rarity.r, rarity.g, rarity.b })
     if evolved and info.evolvedFrom and info.evolvedFrom ~= "" then
-        Tip:AddDoubleLine(spec, info.header, Tip.SPEC[1], Tip.SPEC[2], Tip.SPEC[3], headerColor[1], headerColor[2], headerColor[3])
-        Tip:AddDoubleLine("Evolved from " .. info.evolvedFrom, rank, 1, 0.5, 0, 0.62, 0.62, 0.62, 11)
-    else
-        local left = spec ~= "" and (spec .. " |cff9d9d9d· " .. rank .. "|r") or ("|cff9d9d9d" .. rank .. "|r")
-        Tip:AddDoubleLine(left, info.header, Tip.SPEC[1], Tip.SPEC[2], Tip.SPEC[3], headerColor[1], headerColor[2], headerColor[3])
+        Tip:AddSmallLine("Evolved from " .. info.evolvedFrom, Tip.ORANGE)
+    end
+
+    local headerColor = info.faster and Tip.GREEN or Tip.WHITE
+    Tip:AddDoubleLine("Rank " .. entry.rank, Tip.ReachText(info.radius, info.range, info.currentRadius, info.currentRange),
+        0.62, 0.62, 0.62, 1, 1, 1)
+    if info.header and info.header ~= "" then
+        Tip:AddDoubleLine("Instant", info.header, 1, 1, 1, headerColor[1], headerColor[2], headerColor[3])
     end
     if info.description and info.description ~= "" then
         Tip:AddLine(info.description, 1, 0.82, 0)
     end
     if info.line and info.line ~= "" then
-        Tip:AddRule()
+        Tip:AddSmallLine("Upgrades", Tip.GOLD)
         Tip:AddSmallLine(info.line, Tip.GREEN)
     end
+    Tip:AddFooter(info.spec, info.school, info.aoe)
     if stat and (stat.damage or 0) > 0 then
         local total = 0
         for _, other in pairs(run.stats) do
@@ -697,7 +697,7 @@ local function ShowMasteryTooltip()
     if mastery.next > 0 then
         GameTooltip:AddLine(mastery.xp .. " / " .. mastery.next .. " experience", 1, 1, 1)
     end
-    GameTooltip:AddLine("Runs as a " .. strlower(mastery.class) .. " earn Mastery experience for every minute you survive and every mini-boss and stage boss you kill. Harder difficulties earn more.", 1, 0.82, 0, 1)
+    GameTooltip:AddLine("Runs as a " .. strlower(mastery.class) .. " earn Mastery experience for every minute you survive and every mini-boss and floor boss you kill. Harder difficulties earn more.", 1, 0.82, 0, 1)
     if not mastery.trees then
         GameTooltip:AddLine("Your class's talent trees aren't available yet. The experience you earn is saved for them.", 0.6, 0.6, 0.6, 1)
     elseif mastery.unspent > 0 then
@@ -1091,6 +1091,10 @@ handlers["pw"] = function(f)
     info.school = f[12] or ""
     info.spec = f[13] or ""
     info.aoe = f[14] == "1"
+    info.radius = tonumber(f[15]) or 0
+    info.range = tonumber(f[16]) or 0
+    info.currentRadius = tonumber(f[17]) or 0
+    info.currentRange = tonumber(f[18]) or 0
     run.info[index] = info
     RefreshSlots()
     local slot = spellSlots[index]

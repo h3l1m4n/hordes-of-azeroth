@@ -541,11 +541,7 @@ local function ShowShelf()
     frame.close:ClearAllPoints()
     frame.close:SetPoint("CENTER", frame, "CENTER", 90, -190)
 
-    local hint = "Lock a card to keep it for the next visit at the same price. Press Escape to close."
-    if shop.seconds > 0 then
-        hint = hint .. " " .. shop.name .. " leaves in " .. shop.seconds .. " sec."
-    end
-    frame.hint:SetText(hint)
+    frame.hint:SetText("")
 
     shop.waitUntil = 0
     if bought then

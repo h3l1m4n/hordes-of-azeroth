@@ -108,8 +108,8 @@ namespace BonkTelegraphs
                 throw new InvalidOperationException("Creature model " + FelImpModelId + " is taken.");
 
             Builder builder = new Builder { Client = client, Files = files };
-            string stem = Path.ChangeExtension(models.GetString(model[ModelPathField]), null);
-            string felStem = Path.Combine(Path.GetDirectoryName(stem), "Fel" + Path.GetFileName(stem));
+            string stem = MpqPath.WithoutExtension(models.GetString(model[ModelPathField]));
+            string felStem = MpqPath.Join(MpqPath.Directory(stem), "Fel" + MpqPath.FileName(stem));
             files[felStem + ".m2"] = RecolourModel(builder, stem + ".m2", true);
 
             uint[] felModel = (uint[])model.Clone();
@@ -306,14 +306,14 @@ namespace BonkTelegraphs
                 return effectId;
 
             string path = builder.Effects.GetString(effect[EffectPathField]);
-            string stem = Path.ChangeExtension(path, null);
+            string stem = MpqPath.WithoutExtension(path);
             if (Array.Exists(ReplacedModels, model => string.Equals(model, stem, StringComparison.OrdinalIgnoreCase)))
             {
                 builder.EffectCopies[effectId] = effectId;
                 return effectId;
             }
 
-            string felStem = builder.Folder + builder.Prefix + Path.GetFileName(stem);
+            string felStem = builder.Folder + builder.Prefix + MpqPath.FileName(stem);
             if (builder.Models.Add(felStem))
                 builder.Files[felStem + ".m2"] = RecolourModel(builder, stem + ".m2");
 

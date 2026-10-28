@@ -136,8 +136,12 @@ local function RefreshShield(bar, maxHealth)
 end
 
 local function Refresh(bar)
-    local maxHealth = UnitHealthMax("player")
-    local share = maxHealth > 0 and UnitHealth("player") / maxHealth or 0
+    local health, maxHealth = UnitHealth("player"), UnitHealthMax("player")
+    if bar.shownHealth == health and bar.shownMax == maxHealth and bar.shownShield == shield then
+        return
+    end
+    bar.shownHealth, bar.shownMax, bar.shownShield = health, maxHealth, shield
+    local share = maxHealth > 0 and health / maxHealth or 0
     bar:SetValue(share)
     bar:SetStatusBarColor(COLOR[1], COLOR[2], COLOR[3])
     RefreshShield(bar, maxHealth)
@@ -158,11 +162,15 @@ driver:SetScript("OnUpdate", function()
         bar:Hide()
         return
     end
-    local worldScale = WorldFrame:GetEffectiveScale()
-    local scale = bar:GetEffectiveScale()
-    bar:ClearAllPoints()
-    bar:SetPoint("BOTTOM", WorldFrame, "BOTTOMLEFT", x * WorldFrame:GetWidth() * worldScale / scale + NUDGE_X,
-        y * WorldFrame:GetHeight() * worldScale / scale + LIFT)
+    local worldWidth = WorldFrame:GetWidth()
+    if bar.headX ~= x or bar.headY ~= y or bar.worldWidth ~= worldWidth or not bar:IsShown() then
+        bar.headX, bar.headY, bar.worldWidth = x, y, worldWidth
+        local worldScale = WorldFrame:GetEffectiveScale()
+        local scale = bar:GetEffectiveScale()
+        bar:ClearAllPoints()
+        bar:SetPoint("BOTTOM", WorldFrame, "BOTTOMLEFT", x * worldWidth * worldScale / scale + NUDGE_X,
+            y * WorldFrame:GetHeight() * worldScale / scale + LIFT)
+    end
     Refresh(bar)
     bar:Show()
 end)

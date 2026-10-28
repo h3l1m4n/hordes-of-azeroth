@@ -2,10 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Net;
+using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
-using System.Web.Script.Serialization;
 
 namespace HordesOfAzeroth.Launcher
 {
@@ -70,7 +69,7 @@ namespace HordesOfAzeroth.Launcher
             .OfType<System.Reflection.AssemblyMetadataAttribute>()
             .FirstOrDefault(a => a.Key == "Repository")?.Value ?? "jonhaldors/hordes-of-azeroth";
 
-        static string ManifestUrl => $"https://github.com/{Repository}/releases/latest/download/manifest.json";
+        static string ManifestUrl => $"https://github.com/{Repository}/releases/latest/download/{Platform.ManifestName}";
 
         readonly GameFolder m_folder;
 
@@ -87,22 +86,16 @@ namespace HordesOfAzeroth.Launcher
         {
             if (LocalSource != null)
             {
-                string json = File.ReadAllText(Path.Combine(LocalSource, "manifest.json"));
+                string json = File.ReadAllText(Path.Combine(LocalSource, Platform.ManifestName));
                 Directory.CreateDirectory(m_folder.LauncherData);
                 File.WriteAllText(CachedManifest, json, new UTF8Encoding(false));
                 return Parse(json);
             }
-            ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12;
-            using (WebClient client = new WebClient())
-            {
-                client.Headers[HttpRequestHeader.UserAgent] = "HordesOfAzerothLauncher";
-                client.Encoding = Encoding.UTF8;
-                string json = await client.DownloadStringTaskAsync(new Uri(ManifestUrl));
-                Manifest manifest = Parse(json);
-                Directory.CreateDirectory(m_folder.LauncherData);
-                File.WriteAllText(CachedManifest, json, new UTF8Encoding(false));
-                return manifest;
-            }
+            string text = await Web.Client.GetStringAsync(ManifestUrl);
+            Manifest manifest = Parse(text);
+            Directory.CreateDirectory(m_folder.LauncherData);
+            File.WriteAllText(CachedManifest, text, new UTF8Encoding(false));
+            return manifest;
         }
 
         public Manifest LoadCached()
@@ -111,7 +104,7 @@ namespace HordesOfAzeroth.Launcher
             {
                 return File.Exists(CachedManifest) ? Parse(File.ReadAllText(CachedManifest)) : null;
             }
-            catch (Exception e) when (e is IOException || e is ArgumentException || e is InvalidOperationException)
+            catch (Exception e) when (e is IOException || e is ArgumentException || e is InvalidOperationException || e is System.Text.Json.JsonException)
             {
                 return null;
             }
@@ -139,7 +132,7 @@ namespace HordesOfAzeroth.Launcher
 
         public static Manifest Parse(string json)
         {
-            Dictionary<string, object> root = (Dictionary<string, object>)new JavaScriptSerializer { MaxJsonLength = int.MaxValue }.DeserializeObject(json);
+            Dictionary<string, object> root = (Dictionary<string, object>)Json.Parse(json);
             Manifest manifest = new Manifest { Version = GameVersion.Parse(root["version"] as string) };
             if (root.TryGetValue("releaseNotes", out object notes) && notes is object[] list)
                 foreach (Dictionary<string, object> note in list.OfType<Dictionary<string, object>>())
